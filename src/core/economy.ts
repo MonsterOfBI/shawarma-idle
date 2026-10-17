@@ -5,7 +5,7 @@ import { LOCATIONS } from './locations';
 import { type BoxKind, type Pet, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 // Офлайн-доход начисляется не больше чем за 2 часа отсутствия.
 export const OFFLINE_CAP_SECONDS = 2 * 60 * 60;
@@ -106,8 +106,11 @@ export function normalize(raw: unknown, now: number): GameState {
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Record<string, any>;
   const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d);
+  // версия 7: сюжет начинается с коробки у помойки. Старые сохранения начинают путь заново,
+  // но питомцы, достижения, коллекция и покупки остаются.
+  const fresh = num(r.version, 0) < 7;
   const levels: Record<string, number> = {};
-  if (r.levels && typeof r.levels === 'object') {
+  if (!fresh && r.levels && typeof r.levels === 'object') {
     for (const [k, v] of Object.entries(r.levels)) {
       // версия 1: recipe → knife, helper → grill_helper
       const id = k === 'recipe' ? 'knife' : k === 'helper' ? 'grill_helper' : k;
@@ -116,13 +119,12 @@ export function normalize(raw: unknown, now: number): GameState {
   }
   return {
     version: SAVE_VERSION,
-    money: num(r.money, 0),
-    runEarned: num(r.runEarned, num(r.money, 0)),
+    money: fresh ? 0 : num(r.money, 0),
+    runEarned: fresh ? 0 : num(r.runEarned, num(r.money, 0)),
     lifetimeEarned: num(r.lifetimeEarned, num(r.money, 0)),
     taps: num(r.taps, 0),
     levels,
-    // версия 6: в начало сюжета добавилась «Коробка у помойки», старые точки сдвинулись на одну
-    location: Math.min(Math.floor(num(r.location, 0)) + (num(r.version, 0) < 6 ? 1 : 0), LOCATIONS.length - 1),
+    location: fresh ? 0 : Math.min(Math.floor(num(r.location, 0)), LOCATIONS.length - 1),
     boostUntil: num(r.boostUntil, 0),
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
     muted: !!r.muted,

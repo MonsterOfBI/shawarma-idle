@@ -42,13 +42,17 @@ button:disabled { cursor: default; }
 .ico svg { width: 100%; height: 100%; display: block; }
 .num { font-variant-numeric: tabular-nums; }
 
-/* Игра занимает весь экран. Меню — выдвижная шторка поверх улицы, открывается вкладками снизу. */
+/* Улица — главное, меню прокачки всегда под рукой, но не закрывает игру:
+   на телефоне снизу (40 % экрана), на компьютере колонкой справа. */
 #app {
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-areas: 'stage' 'tabs';
+  grid-template-rows: minmax(0, 1fr) minmax(0, 40%) auto;
+  grid-template-areas: 'stage' 'panel' 'tabs';
   position: relative;
+}
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  #app { grid-template-columns: minmax(0, 1fr) min(400px, 36vw); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: 'stage panel' 'stage tabs'; }
 }
 
 /* ================= сцена и шапка ================= */
@@ -175,10 +179,8 @@ button:disabled { cursor: default; }
 
 /* ================= панель ================= */
 #panel {
-  grid-area: stage; align-self: end; height: min(60%, 560px); min-height: 0; position: relative; z-index: 6; display: flex; flex-direction: column;
-  border-radius: 0; box-shadow: 0 -4px 0 var(--plum-0), 0 -18px 40px rgba(14, 7, 24, 0.45);
-  transform: translateY(calc(100% + 30px)); visibility: hidden;
-  transition: transform 0.32s cubic-bezier(.2, 1.1, .3, 1), visibility 0s linear 0.32s;
+  grid-area: panel; min-height: 0; position: relative; z-index: 6; display: flex; flex-direction: column;
+  box-shadow: 0 -4px 0 var(--plum-0);
   background:
     radial-gradient(rgba(255, 244, 220, 0.05) 1.2px, transparent 1.6px) 0 0 / 18px 18px,
     linear-gradient(180deg, var(--plum-2), var(--plum) 40%, var(--plum-1));
@@ -193,28 +195,13 @@ button:disabled { cursor: default; }
           mask: linear-gradient(#000, #000) 0 0 / 100% 6px no-repeat, radial-gradient(circle 12px at 12px 6px, #000 98%, transparent) 0 0 / 24px 18px repeat-x;
 }
 #panel::after { content: ''; position: absolute; left: 0; right: 0; top: -15px; height: 4px; background: var(--plum-0); z-index: 1; }
-#panel.open { transform: none; visibility: visible; transition: transform 0.32s cubic-bezier(.2, 1.1, .3, 1); }
-.panel-close {
-  position: absolute; z-index: 3; top: -30px; left: 50%; margin-left: -22px; width: 44px; height: 44px; border-radius: 50%;
-  display: grid; place-items: center; font-family: var(--display); font-weight: 900; font-size: 16px;
-  color: var(--plum); background: var(--cream); box-shadow: 0 0 0 2.5px var(--plum), 0 4px 0 2.5px var(--plum-0);
-}
-.panel-close:active { transform: translateY(2px); }
-/* на компьютере шторка выезжает справа */
 @media (min-aspect-ratio: 1/1) and (min-width: 700px) {
-  #panel {
-    align-self: stretch; justify-self: end; width: min(420px, 42vw); height: auto; margin: calc(env(safe-area-inset-top, 0px) + 64px) 12px 12px 0;
-    border-radius: 22px; overflow: hidden; padding-top: 18px; box-shadow: 0 0 0 3px var(--plum-0), 0 8px 0 3px var(--plum-0), 0 20px 50px rgba(14, 7, 24, 0.5);
-    transform: translateX(calc(100% + 40px));
-  }
+  #panel { box-shadow: -4px 0 0 var(--plum-0); padding-top: calc(env(safe-area-inset-top, 0px) + 18px); }
   #panel::before { top: 0; }
   #panel::after { display: none; }
-  .panel-close { top: 26px; left: auto; right: 12px; margin: 0; width: 36px; height: 36px; font-size: 13px; }
-  #panel-upgrades .panel-head, #panel .panel-head:first-child { padding-right: 44px; }
-  /* правые кнопки отъезжают от открытой шторки */
-  .side-right { transition: right 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1); }
-  #app.sheet-open .side-right { right: calc(min(420px, 42vw) + 26px); }
+  .tabs { padding-left: 8px; padding-right: 8px; box-shadow: -4px 0 0 var(--plum-0); }
 }
+
 
 .panel-body {
   flex: 1; min-height: 0; overflow-y: auto; padding: 14px 12px 18px; -webkit-overflow-scrolling: touch;

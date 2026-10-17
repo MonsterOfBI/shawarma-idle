@@ -53,8 +53,9 @@ interface PetSprite {
   slot: number;
 }
 
-// Где стоят питомцы на переднем плане: доли ширины экрана. Слева стоит маскот-зазывала.
-const PET_SLOTS = [0.66, 0.82, 0.95, 0.5];
+// Три лучших питомца стоят аккуратным рядком в правом нижнем углу, середина улицы свободна.
+// В левом нижнем углу — маскот-зазывала, если его наняли.
+const PET_SLOTS = [0.94, 0.85, 0.76];
 const MASCOT_X = 0.15;
 
 interface Bomber {
@@ -98,6 +99,7 @@ export class StallScene extends Phaser.Scene {
   private mascot!: Critter;
   private mascotBubble?: Phaser.GameObjects.Container;
   private mascotPhase = 0;
+  private mascotLevel = -1;
   private mascotJump = 0;
   private barkIn = 3500;
   private barkN = 0;
@@ -116,7 +118,6 @@ export class StallScene extends Phaser.Scene {
   private worldTimer = 0;
   private clock = 0;
   private moving = false;
-  private inset = 0; // справа открыта шторка меню (на ПК)
 
   constructor(cb: StallCallbacks) {
     super('stall');
@@ -133,7 +134,7 @@ export class StallScene extends Phaser.Scene {
     return Math.round(this.groundY - Math.max(44, this.scale.height * 0.14));
   }
   private get stallX() {
-    return Math.round((this.scale.width - this.inset) * 0.6);
+    return Math.round(this.scale.width * 0.6);
   }
   private get unit() {
     return Phaser.Math.Clamp(this.scale.height / 320, 0.55, 2);
@@ -228,12 +229,8 @@ export class StallScene extends Phaser.Scene {
       this.cb.onTap(p.worldX, p.worldY);
     });
 
-    this.mascot = drawMascot(this);
-    this.mascot.root.setDepth(8);
-    this.mascot.body.add(
-      this.add.text(0, -30, t('neon'), { fontFamily: DISPLAY_FONT, fontSize: '10px', fontStyle: '900', color: '#e4472b' }).setOrigin(0.5),
-    );
-    this.mascot.body.add(this.add.text(0, -19, '→ → →', { fontFamily: DISPLAY_FONT, fontSize: '7px', fontStyle: '900', color: '#2a1b3d' }).setOrigin(0.5));
+    this.buildMascot(0);
+    this.mascotLevel = -1; // первое значение придёт из сохранения без праздника
 
     this.rebuildStall();
     this.scale.on('resize', () => this.layout());
@@ -469,7 +466,7 @@ export class StallScene extends Phaser.Scene {
     const st = this.stall;
     const room = this.groundY - this.hudBottom - 10;
     const half = Math.max(-st.left, st.right);
-    this.stallScale = Math.min(this.unit, ((width - this.inset) * 0.39) / half, Math.max(50, room) / -st.top);
+    this.stallScale = Math.min(this.unit, (width * 0.39) / half, Math.max(50, room) / -st.top);
     const sx = this.stallX, gy = this.groundY, s = this.stallScale;
     st.root.setPosition(sx, gy).setScale(s);
     st.glow.setPosition(sx, gy).setScale(s);
@@ -492,7 +489,7 @@ export class StallScene extends Phaser.Scene {
     const my = Math.min(this.scale.height - 2 * u, this.groundY + 48 * u);
     this.mascot.root.setData({ s: ms, y0: my }).setPosition(Math.max(46 * u, this.scale.width * MASCOT_X), my).setScale(ms);
     for (const p of this.pets) {
-      const sc = this.critterScale(p.c) * (p.id === 'bombardiro' ? 0.55 : 0.9);
+      const sc = this.critterScale(p.c) * (p.id === 'bombardiro' ? 0.45 : 0.68);
       p.c.root.setData('s', sc).setData('y0', p.id === 'bombardiro' ? y - 26 * u : y);
       p.c.root.setPosition(this.scale.width * PET_SLOTS[p.slot], p.c.root.getData('y0')).setScale(sc);
     }
@@ -508,13 +505,6 @@ export class StallScene extends Phaser.Scene {
   }
 
   // ---------- API для контроллера ----------
-
-  /** Шторка меню закрыла часть экрана справа: ларёк переезжает в свободную часть. */
-  setInset(px: number) {
-    if (Math.abs(px - this.inset) < 1) return;
-    this.inset = px;
-    if (this.stall) this.layout();
-  }
 
   setLocation(index: number, animate = false) {
     if (index === this.location && this.stall) return;
@@ -813,9 +803,43 @@ export class StallScene extends Phaser.Scene {
     this.hints = keys;
   }
 
+  /** Уровень улучшения «Зазывала Тунг Тунг»: 0 — не нанят. */
+  setMascot(level: number) {
+    if (level === this.mascotLevel || !this.sys.isActive()) return;
+    const up = this.mascotLevel >= 0 && level > this.mascotLevel;
+    this.buildMascot(level);
+    this.placePets();
+    if (up) {
+      const m = this.mascot.root;
+      const sc = m.getData('s');
+      m.setScale(0.01);
+      this.tweens.add({ targets: m, scaleX: sc, scaleY: sc, duration: 520, ease: 'Back.out' });
+      this.confetti.emitParticleAt(m.x, m.y - 80 * this.unit, 40);
+      this.time.delayedCall(450, () => this.bark('barkHired'));
+    }
+  }
+
+  private buildMascot(level: number) {
+    this.mascotLevel = level;
+    this.mascotBubble?.destroy();
+    this.mascotBubble = undefined;
+    this.mascot?.root.destroy();
+    const lv = Phaser.Math.Clamp(level, 1, 3);
+    const m = drawMascot(this, lv);
+    m.root.setDepth(8).setVisible(level > 0);
+    const style = { fontFamily: DISPLAY_FONT, fontStyle: '900' };
+    if (lv === 1) {
+      m.body.add(this.add.text(0, -34, t('neonDump'), { ...style, fontSize: '9px', color: '#2a1b3d' }).setOrigin(0.5).setAngle(-4));
+    } else {
+      m.body.add(this.add.text(0, -30, t('neon'), { ...style, fontSize: '10px', color: lv >= 3 ? '#ffcf3f' : '#e4472b' }).setOrigin(0.5));
+      m.body.add(this.add.text(0, -19, '→ → →', { ...style, fontSize: '7px', color: lv >= 3 ? '#fff4dc' : '#2a1b3d' }).setOrigin(0.5));
+    }
+    this.mascot = m;
+  }
+
   private overMascot(x: number, y: number) {
     const m = this.mascot;
-    if (!m) return false;
+    if (!m || !m.root.visible) return false;
     const s = m.root.scaleY;
     return Math.abs(x - m.root.x) < (m.width / 2 + 14) * s && y < m.root.y + 6 * s && y > m.root.y - (m.top + 20) * s;
   }
@@ -862,7 +886,7 @@ export class StallScene extends Phaser.Scene {
     l?.setAngle(Math.sin(this.mascotPhase) * (yell ? 18 : 8));
     r?.setAngle(-Math.sin(this.mascotPhase) * (yell ? 18 : 8));
     this.barkIn -= delta;
-    if (this.barkIn <= 0 && !this.moving) {
+    if (this.barkIn <= 0 && !this.moving && m.root.visible) {
       this.barkIn = 7000 + Math.random() * 5000;
       this.bark();
     }
@@ -963,16 +987,16 @@ export class StallScene extends Phaser.Scene {
 
     // питомцы пританцовывают, в час пик быстрее
     for (const p of this.pets) {
-      p.phase += delta / (this.rush ? 150 : 260);
+      p.phase += delta / (this.rush ? 180 : 320);
       const hop = Math.abs(Math.sin(p.phase));
       const sc = p.c.root.getData('s');
-      p.c.body.y = -hop * 7;
-      p.c.root.setScale(sc * (1 + 0.05 * (1 - hop)), sc * (1 - 0.06 * (1 - hop)));
+      p.c.body.y = -hop * 4;
+      p.c.root.setScale(sc * (1 + 0.03 * (1 - hop)), sc * (1 - 0.03 * (1 - hop)));
       p.c.root.y = p.c.root.getData('y0');
-      p.c.body.setRotation(Math.sin(p.phase * 0.5) * 0.14);
+      p.c.body.setRotation(Math.sin(p.phase * 0.5) * 0.06);
       const [l, r] = p.c.legs;
-      l?.setAngle(Math.sin(p.phase) * 14);
-      r?.setAngle(-Math.sin(p.phase) * 14);
+      l?.setAngle(Math.sin(p.phase) * 8);
+      r?.setAngle(-Math.sin(p.phase) * 8);
       p.aura?.setAlpha(0.25 + 0.2 * Math.sin(this.clock / 300 + p.slot));
     }
 

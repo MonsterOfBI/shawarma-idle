@@ -15,6 +15,7 @@ const ICONS: Record<string, string> = {
   cashier: svg(`<rect x="6" y="14" width="20" height="12" rx="2" fill="${A}"/><rect x="9" y="7" width="14" height="7" fill="${C}"/><path d="M11 19 h10"/>`),
   lavash: svg(`<ellipse cx="16" cy="17" rx="11" ry="8" fill="${C}"/><path d="M9 15 q3 3 7 0 q3-3 7 0"/>`),
   second_spit: svg(`<path d="M7 7 h7 l-1.5 18 h-4 Z" fill="${M}"/><path d="M18 7 h7 l-1.5 18 h-4 Z" fill="${M}"/>`),
+  barker: svg(`<path d="M14 12 L26 6 v20 L14 20 Z" fill="${A}"/><rect x="6" y="12" width="8" height="8" rx="2" fill="${T}"/><path d="M9 20 l2 6"/><path d="M28 11 q2 5 0 10"/>`),
   sauce: svg(`<rect x="10" y="11" width="12" height="16" rx="3" fill="${T}"/><path d="M13 11 v-4 h6 v4"/><path d="M16 7 v-3"/>`),
   sign: svg(`<rect x="5" y="9" width="22" height="12" rx="2" fill="${P}"/><path d="M9 15 h14" stroke="${A}" stroke-width="3"/><path d="M11 21 v5 M21 21 v5"/>`),
   courier: svg(`<circle cx="9" cy="23" r="3.5" fill="${C}"/><circle cx="24" cy="23" r="3.5" fill="${C}"/><path d="M9 23 h11 l3-12 h3"/><rect x="6" y="11" width="9" height="8" fill="${A}"/>`),

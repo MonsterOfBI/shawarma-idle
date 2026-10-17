@@ -93,7 +93,6 @@ export class Game {
       claimDaily: () => void this.claimDaily(),
       openDaily: () => void this.openDaily(),
       claimQuest: (i) => void this.claimQuest(i),
-      sheet: (inset) => this.scene.setInset(inset),
     });
   }
 
@@ -116,6 +115,7 @@ export class Game {
     this.meetStaff();
     this.scene.setMet(this.state.met);
     this.scene.setPets(this.topPets());
+    this.scene.setMascot(this.state.levels.barker ?? 0);
     void this.scene.portraits(Object.keys(BRAINROT_BY_ID)).then((p) => this.ui.setPortraits(p));
     // звук и музыка просыпаются только после первого действия игрока
     const wake = () => {
@@ -159,6 +159,7 @@ export class Game {
     this.scene.setIncome(incomePerSecond(this.state, now));
     this.scene.setLook(this.state.levels);
     this.scene.setHints(this.hints(now));
+    this.scene.setMascot(this.state.levels.barker ?? 0);
     this.ui.render(this.state, now);
     if (now - this.lastSave > SAVE_EVERY_MS) void this.save();
   }
@@ -417,7 +418,7 @@ export class Game {
     sfx.move();
     this.scene.setLocation(this.state.location, true);
     this.scene.setLook(this.state.levels);
-    this.ui.closePanel();
+    this.ui.showTab('upgrades');
     const loc = LOCATIONS[this.state.location];
     this.ui.moveCard(loc.id, loc.mult);
     if (this.state.location === LOCATIONS.length - 1) setTimeout(() => this.ui.toast(t('storyEnd'), 'medal'), 2500);

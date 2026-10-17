@@ -364,6 +364,21 @@ function dump(p: Pen, c: Ctx) {
   p.poly([[w * 0.22 - 4 * u, gy - 12 * u], [w * 0.22, gy - 20 * u], [w * 0.22 + 4 * u, gy - 12 * u]], bag, 2);
   p.rect(w * 0.26, gy - 22 * u, 24 * u, 20 * u, nc(0xc49a62, 0x4a3a2a, n), 0, 2);
   p.line(w * 0.26 + 12 * u, gy - 22 * u, w * 0.26 + 12 * u, gy - 2 * u, 1.5, nc(0x8a6a3a, 0x2a2018, n));
+  // крыса выглядывает из-за мешка
+  const rat = nc(0x8a8494, 0x3a3448, n);
+  const peek = Math.max(0, Math.sin(clock / 1300)) * 6 * u;
+  p.ellipse(w * 0.1 + 16 * u, gy - 12 * u - peek, 16 * u, 12 * u, rat, 2);
+  p.circle(w * 0.1 + 10 * u, gy - 18 * u - peek, 4 * u, nc(0xf2a0b0, 0x5a3a48, n), 1.5);
+  p.g.fillStyle(OUTLINE, 1).fillCircle(w * 0.1 + 19 * u, gy - 14 * u - peek, 1.6 * u);
+  p.g.fillStyle(0xf2a0b0, 1).fillCircle(w * 0.1 + 24 * u, gy - 11 * u - peek, 1.5 * u);
+  // мухи кружат над баками
+  for (let k = 0; k < 7; k++) {
+    const a = clock / (180 + k * 23) + k * 1.9;
+    const fx = w * (0.06 + (k % 3) * 0.06) + Math.cos(a) * 16 * u;
+    const fy = gy - 70 * u + Math.sin(a * 1.7) * 10 * u - (k % 2) * 14 * u;
+    p.g.fillStyle(0x1a1424, 1).fillCircle(fx, fy, 1.6 * u);
+    p.g.fillStyle(0xffffff, 0.5).fillEllipse(fx - 1.5 * u, fy - 1.8 * u, 2.6 * u, 1.6 * u);
+  }
   // банка и рыбий скелет
   p.rect(w * 0.18, gy + 6 * u, 6 * u, 9 * u, nc(0xc8c8d8, 0x4a4a5a, n), 1, 1.5);
   p.g.lineStyle(1.5, nc(0xe8e0d0, 0x5a5468, n), 1).lineBetween(w * 0.05, gy + 14 * u, w * 0.05 + 18 * u, gy + 14 * u);

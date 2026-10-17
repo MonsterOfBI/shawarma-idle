@@ -316,6 +316,12 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     front.line(-W / 2 + 2, lowerTop + 4, W / 2 - 2, lowerTop + 4, 1.5, shade(body, -0.35));
     front.flat(0xe8d8a0, 0.9).fillRect(-W * 0.36, lowerTop + 1.5, 12, -lowerTop - 3);
     front.line(0, lowerTop + 6, 0, -3, 1.5, shade(body, -0.35));
+    // пятна, дыра под скотчем и подпорка из кирпичей
+    front.flat(0x8a6a3a, 0.35).fillEllipse(-W * 0.12, lowerTop + 26, 26, 14);
+    front.flat(0x8a6a3a, 0.3).fillEllipse(W * 0.34, -14, 18, 10);
+    front.ellipse(-W * 0.2, -18, 14, 10, 0x2a1b3d, 2);
+    front.g.fillStyle(0xe8d8a0, 0.9).fillRect(-W * 0.2 - 10, -21, 20, 5);
+    for (const bx of [-W / 2 + 6, W / 2 - 22]) front.rect(bx, -6, 16, 8, 0xb8553d, 1, 2);
     root.add(scene.add.text(W * 0.18, (lowerTop) / 2, t('neonDump'), { fontFamily: DISPLAY_FONT, fontSize: '13px', fontStyle: '900', color: '#3a2a4f' }).setOrigin(0.5).setAngle(-6).setAlpha(0.8));
   } else if (style === 'palace') {
     // золотые панели с камнями

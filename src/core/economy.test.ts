@@ -8,6 +8,7 @@ import {
   canRelocate,
   collectOffline,
   incomePerSecond,
+  isMaxed,
   newGame,
   normalize,
   offlineEarnings,
@@ -55,7 +56,7 @@ describe('экономика', () => {
   it('цены растут и остаются конечными', () => {
     for (const u of UPGRADES) {
       expect(upgradeCost(u, 1)).toBeGreaterThan(upgradeCost(u, 0));
-      expect(Number.isFinite(upgradeCost(u, 500))).toBe(true);
+      expect(Number.isFinite(upgradeCost(u, Math.min(500, u.maxLevel ?? 500)))).toBe(true);
     }
   });
 
@@ -105,18 +106,31 @@ describe('сохранения', () => {
   });
 
   it('сохранение первой версии переносится', () => {
-    const s = normalize({ money: 50, levels: { recipe: 2, helper: 1 }, lastSeen: 7 }, 9);
+    const s = normalize({ version: 7, money: 50, levels: { recipe: 2, helper: 1 }, lastSeen: 7 }, 9);
     expect(s.levels).toEqual({ knife: 2, grill_helper: 1 });
     expect(s.money).toBe(50);
     expect(s.lastSeen).toBe(7);
   });
 
-  it('старые сохранения сдвигаются на одну точку: в начало добавилась коробка у помойки', () => {
-    expect(normalize({ version: 5, location: 0 }, 0).location).toBe(1); // был ларёк у метро
-    expect(normalize({ version: 5, location: 4 }, 0).location).toBe(5); // была траттория
-    expect(normalize({ version: 6, location: 0 }, 0).location).toBe(0);
+  it('старые сохранения начинают сюжет с коробки у помойки, питомцы и покупки остаются', () => {
+    const s = normalize({ version: 6, location: 3, money: 5e9, runEarned: 6e9, levels: { knife: 40 }, pets: { gusini: { count: 2, mut: 0 } }, owned: { noAds: true } }, 0);
+    expect(s).toMatchObject({ location: 0, money: 0, runEarned: 0, levels: {} });
+    expect(s.pets.gusini.count).toBe(2);
+    expect(s.owned.noAds).toBe(true);
+    expect(normalize({ version: 7, location: 3, money: 5 }, 0)).toMatchObject({ location: 3, money: 5 });
     expect(LOCATIONS[0].id).toBe('dump');
     expect(LOCATIONS[LOCATIONS.length - 1].id).toBe('palace');
+  });
+
+  it('зазывала Тунг Тунг: три уровня по ×1,5 ко всему доходу, каждый заметно дороже', () => {
+    const base = { ...newGame(0), levels: { grill_helper: 10, knife: 5 } };
+    const def = UPGRADES.find((u) => u.id === 'barker')!;
+    expect(upgradeCost(def, 1)).toBe(upgradeCost(def, 0) * 30);
+    const one = { ...base, levels: { ...base.levels, barker: 1 } };
+    const three = { ...base, levels: { ...base.levels, barker: 3 } };
+    expect(incomePerSecond(one, 0) / incomePerSecond(base, 0)).toBeCloseTo(1.5);
+    expect(tapValue(three, 0) / tapValue(base, 0)).toBeCloseTo(3.375);
+    expect(isMaxed(three, def)).toBe(true);
   });
 });
 

@@ -11,6 +11,8 @@ export interface UpgradeDef {
   amount: number;
   target?: 'all' | 'tap';
   maxLevel?: number;
+  // рост цены за уровень, если не стандартный 1,15
+  growth?: number;
 }
 
 const GROWTH = 1.15;
@@ -21,6 +23,8 @@ export const UPGRADES: UpgradeDef[] = [
   { id: 'cashier', kind: 'helper', baseCost: 100, amount: 1 },
   { id: 'lavash', kind: 'tap', baseCost: 150, amount: 3 },
   { id: 'second_spit', kind: 'helper', baseCost: 1_100, amount: 8 },
+  // маскот-зазывала: появляется у ларька и на каждом уровне умножает весь доход в 1,5 раза
+  { id: 'barker', kind: 'mult', baseCost: 1_500, amount: 1.5, target: 'all', maxLevel: 3, growth: 30 },
   { id: 'sauce', kind: 'tap', baseCost: 2_000, amount: 15 },
   { id: 'sign', kind: 'mult', baseCost: 5_000, amount: 2, target: 'all', maxLevel: 1 },
   { id: 'courier', kind: 'helper', baseCost: 12_000, amount: 47 },
@@ -39,5 +43,5 @@ export const UPGRADES: UpgradeDef[] = [
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 
 export function upgradeCost(def: UpgradeDef, level: number): number {
-  return Math.ceil(def.baseCost * Math.pow(GROWTH, level));
+  return Math.ceil(def.baseCost * Math.pow(def.growth ?? GROWTH, level));
 }

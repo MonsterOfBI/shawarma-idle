@@ -417,14 +417,18 @@ const DRAW: Record<string, (scene: Phaser.Scene) => Critter> = {
 export const BRAINROT_IDS = Object.keys(DRAW);
 
 // Маскот-зазывала: Тунг Тунг с мегафоном, поднятой битой и щитом-рекламой на груди.
+// Уровень 1 — нищий: картонка и бумажный рупор. 2 — красная кепка и жёлтый мегафон. 3 — корона и всё золотое.
 // Надпись на щите добавляет сцена (текст на языке игрока). Щит: x −31…31, y −58…−14.
-export function drawMascot(scene: Phaser.Scene): Critter {
-  return assemble(scene, makeLegs(scene, { skin: 0xb07a4a, shoe: 0xe4472b, len: 14, spread: 10, width: 8, sole: WHITE, swoosh: true }), (p) => {
+export function drawMascot(scene: Phaser.Scene, level = 2): Critter {
+  const gold = 0xffcf3f;
+  const shoe = level >= 3 ? gold : level === 2 ? TOMATO : 0x6a5a4a;
+  return assemble(scene, makeLegs(scene, { skin: 0xb07a4a, shoe, len: 14, spread: 10, width: 8, sole: level >= 2 ? WHITE : undefined, swoosh: level >= 2 }), (p) => {
     // поднятая рука с битой
     p.line(16, -62, 38, -92, 8);
     p.line(16, -62, 38, -92, 4, 0xc08a5a);
-    p.poly([[34, -90], [41, -94], [70, -148], [58, -154]], 0xe8c48a);
+    p.poly([[34, -90], [41, -94], [70, -148], [58, -154]], level >= 3 ? gold : 0xe8c48a);
     p.flat(WHITE, 0.4).fillTriangle(60, -146, 64, -148, 42, -100);
+    if (level === 1) p.rect(52, -132, 10, 6, 0xc8c0b0, 1, 2); // пластырь на бите
     p.circle(38, -93, 5.5, 0xc08a5a, 2.6);
     // полено
     p.rect(-22, -118, 44, 104, 0xc08a5a, 14);
@@ -432,10 +436,23 @@ export function drawMascot(scene: Phaser.Scene): Critter {
     p.g.lineStyle(3.2, OUTLINE, 1).strokeRoundedRect(-22, -118, 44, 104, 14);
     p.ellipse(0, -116, 42, 12, 0xe3b585, 2.8);
     p.ellipse(0, -116, 26, 7, 0xd9a46a, 1.6);
-    // кепка козырьком набок
-    p.poly([[-20, -118], [-16, -134], [14, -136], [20, -118]], TOMATO, 2.8);
-    p.poly([[14, -122], [36, -120], [34, -114], [16, -116]], TOMATO, 2.6);
-    p.circle(-2, -136, 3, 0xffd86b, 2);
+    if (level === 2) {
+      // кепка козырьком набок
+      p.poly([[-20, -118], [-16, -134], [14, -136], [20, -118]], TOMATO, 2.8);
+      p.poly([[14, -122], [36, -120], [34, -114], [16, -116]], TOMATO, 2.6);
+      p.circle(-2, -136, 3, 0xffd86b, 2);
+    } else if (level >= 3) {
+      // корона
+      p.poly([[-20, -116], [-22, -146], [-10, -132], [0, -152], [10, -132], [22, -146], [20, -116]], gold, 2.8);
+      p.circle(0, -126, 4, TOMATO, 2);
+      p.circle(-12, -124, 3, 0x3d6fb6, 1.8);
+      p.circle(12, -124, 3, 0x2f9e5a, 1.8);
+      p.flat(WHITE, 0.5).fillRect(-16, -140, 3, 18);
+    } else {
+      // нищий: пучок соломы и заплатка
+      for (let i = -3; i <= 3; i++) p.line(i * 4, -120, i * 6, -132 - Math.abs(i) * 2, 2, 0xd9b45a);
+      p.rect(-18, -48, 12, 10, 0x8a8aa0, 1, 2);
+    }
     // глаза навыкате и брови домиком
     bigEye(p, -6, -92, 11, 0.15);
     bigEye(p, 15, -92, 11, 0.15);
@@ -445,21 +462,39 @@ export function drawMascot(scene: Phaser.Scene): Critter {
     p.ellipse(4, -70, 22, 14, MOUTH, 2.8);
     p.flat(WHITE).fillRect(-4, -76, 16, 3.5);
     p.flat(0xf28c8c).fillEllipse(4, -66, 10, 5);
+    if (level >= 3) {
+      // золотая цепь
+      p.g.lineStyle(3, gold, 1).beginPath().arc(2, -66, 22, Phaser.Math.DegToRad(30), Phaser.Math.DegToRad(150), false).strokePath();
+    }
     // щит-реклама на лямках
-    p.line(-20, -58, -18, -104, 3, 0x5a3a1a);
-    p.line(20, -58, 18, -104, 3, 0x5a3a1a);
-    p.rect(-31, -58, 62, 44, 0xfff4dc, 5, 3);
-    p.flat(TOMATO).fillRect(-29.5, -56.5, 59, 8);
-    p.line(-31, -48, 31, -48, 2);
+    const strap = level === 1 ? 0xc8b88a : 0x5a3a1a;
+    p.line(-20, -58, -18, -104, 3, strap);
+    p.line(20, -58, 18, -104, 3, strap);
+    if (level === 1) {
+      p.poly([[-31, -56], [30, -60], [31, -13], [-29, -15]], 0xc49a62, 3); // кривая картонка
+      p.line(-24, -22, -10, -18, 1.5, 0x8a6a3a);
+    } else {
+      p.rect(-31, -58, 62, 44, level >= 3 ? 0x7a1f3a : 0xfff4dc, 5, 3);
+      p.flat(level >= 3 ? gold : TOMATO).fillRect(-29.5, -56.5, 59, 8);
+      p.line(-31, -48, 31, -48, 2);
+      if (level >= 3) p.g.lineStyle(2, gold, 1).strokeRoundedRect(-28, -45, 56, 28, 3);
+    }
     // рука с мегафоном у рта
     p.line(-20, -60, -34, -66, 8);
     p.line(-20, -60, -34, -66, 4, 0xc08a5a);
-    p.poly([[-12, -76], [-12, -64], [-44, -54], [-44, -88]], 0xffd86b, 3);
-    p.ellipse(-44, -71, 10, 34, 0xffb02e, 3);
-    p.ellipse(-44, -71, 5, 24, 0x7a1f2b, 0);
-    p.rect(-30, -66, 7, 12, 0x5a5270, 2, 2.4);
-    p.flat(WHITE, 0.5).fillTriangle(-14, -74, -40, -84, -40, -80);
-  }, 132, 96, 136);
+    if (level === 1) {
+      // рупор из свёрнутой газеты
+      p.poly([[-12, -74], [-12, -66], [-42, -58], [-42, -84]], 0xe8e0d0, 3);
+      for (let i = 0; i < 3; i++) p.line(-18 - i * 7, -72 + i, -18 - i * 7, -66 - i, 1.2, 0x9a9aa8);
+    } else {
+      const col = level >= 3 ? gold : 0xffd86b;
+      p.poly([[-12, -76], [-12, -64], [-44, -54], [-44, -88]], col, 3);
+      p.ellipse(-44, -71, 10, 34, level >= 3 ? 0xffe9a8 : 0xffb02e, 3);
+      p.ellipse(-44, -71, 5, 24, 0x7a1f2b, 0);
+      p.rect(-30, -66, 7, 12, 0x5a5270, 2, 2.4);
+      p.flat(WHITE, 0.5).fillTriangle(-14, -74, -40, -84, -40, -80);
+    }
+  }, 132, 96, level >= 3 ? 152 : 136);
 }
 
 export function drawBrainrot(scene: Phaser.Scene, id: string): Critter {
