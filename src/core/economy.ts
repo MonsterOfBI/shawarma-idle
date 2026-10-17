@@ -15,6 +15,12 @@ export const BOOST_MAX_SECONDS = 60 * 60;
 // Комбо: тапы чаще чем раз в 0,7 с копят серию, серия до 50 даёт до ×2 к тапу.
 export const COMBO_WINDOW_MS = 700;
 export const COMBO_MAX = 50;
+// Критический тап: с шансом 6 % тап приносит в 10 раз больше.
+export const CRIT_CHANCE = 0.06;
+export const CRIT_MULT = 10;
+export function isCrit(r: number): boolean {
+  return r < CRIT_CHANCE;
+}
 // Час пик: тапы ×3 на 30 секунд.
 export const RUSH_MULT = 3;
 export const RUSH_SECONDS = 30;

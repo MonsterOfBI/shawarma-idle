@@ -10,59 +10,104 @@
     <div id="app">
       <main id="stage">
         <header id="hud">
-          <div class="hud-top">
-            <span id="place" class="place"></span>
+          <div class="hud-row">
+            <span id="place" class="ribbon"></span>
             <span class="hud-btns">
-              <button id="music" class="icon-btn" type="button"></button>
-              <button id="sound" class="icon-btn" type="button"></button>
+              <button id="music" class="round-btn" type="button"></button>
+              <button id="sound" class="round-btn" type="button"></button>
             </span>
           </div>
-          <div id="money" class="money">0 ₽</div>
-          <div class="rate"><span id="rate-sec"></span><span id="rate-tap"></span></div>
-          <button id="boost" class="boost" type="button"><span class="boost-ad" aria-hidden="true">▶</span><span id="boost-label"></span></button>
+          <div class="money-pill"><i id="money-coin" class="ico"></i><b id="money">0 ₽</b></div>
+          <div class="rate">
+            <span class="chip"><i id="ico-sec" class="ico"></i><span id="rate-sec"></span></span>
+            <span class="chip"><i id="ico-tap" class="ico"></i><span id="rate-tap"></span></span>
+          </div>
+          <div id="buffs" class="buffs"></div>
         </header>
+
+        <nav class="side side-left">
+          <button id="btn-daily" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden>!</b></button>
+          <button id="btn-quests" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+        </nav>
+        <nav class="side side-right">
+          <button id="boost" class="side-btn ad" type="button"><i class="ico"></i><span id="boost-label"></span></button>
+          <button id="btn-adbox" class="side-btn ad gold" type="button"><i class="ico"></i><span id="adbox-label"></span><b class="badge" hidden>!</b></button>
+        </nav>
         <div id="rush" class="rush" hidden><b id="rush-title"></b><span id="rush-text"></span></div>
         <div id="hint" class="hint"></div>
         <div id="toast" class="toast" hidden></div>
       </main>
 
       <section id="panel">
-        <nav class="tabs" role="tablist">
-          <button id="tab-upgrades" role="tab" type="button"></button>
-          <button id="tab-move" role="tab" type="button"></button>
-          <button id="tab-awards" role="tab" type="button"></button>
-          <button id="tab-shop" role="tab" type="button"></button>
-        </nav>
         <div id="panel-upgrades" class="panel-body">
-          <div id="buy-mode" class="buy-mode" role="radiogroup">
-            <button type="button" data-mode="x1"></button><button type="button" data-mode="x10"></button><button type="button" data-mode="max"></button>
-          </div>
-          <div id="upgrades" class="menu"></div>
-        </div>
-        <div id="panel-move" class="panel-body" hidden>
-          <div class="move">
-            <div class="move-now"><b id="move-now"></b><span id="move-mult" class="stamp-pill"></span></div>
-            <div id="move-next" class="ticket">
-              <b id="move-next-name" class="ticket-title"></b>
-              <span id="move-next-desc" class="ticket-desc"></span>
-              <span id="move-need" class="muted"></span>
-              <div class="bar"><div id="move-bar"></div></div>
-              <span id="move-progress" class="muted"></span>
-              <p id="move-warn"></p>
-              <button id="move-btn" class="primary" type="button"></button>
+          <div class="panel-head">
+            <h2 id="h-upgrades"></h2>
+            <div id="buy-mode" class="seg" role="radiogroup">
+              <button type="button" data-mode="x1"></button><button type="button" data-mode="x10"></button><button type="button" data-mode="max"></button>
             </div>
-            <p id="move-done" class="ticket" hidden></p>
           </div>
+          <div id="upgrades" class="list"></div>
         </div>
-        <div id="panel-awards" class="panel-body" hidden>
-          <div class="section-head"><h3 id="coll-title"></h3><span id="coll-count" class="stamp-pill"></span></div>
-          <p id="coll-note" class="awards-note"></p>
-          <div id="collection" class="collection"></div>
-          <div class="section-head"><h3 id="ach-title"></h3><span id="ach-count" class="stamp-pill"></span></div>
-          <p id="awards-note" class="awards-note"></p>
+
+        <div id="panel-pets" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-pets"></h2><span id="pets-count" class="pill"></span></div>
+          <div class="boxes">
+            <div class="card box-card">
+              <div class="crate"></div>
+              <b id="box-name"></b>
+              <span id="box-odds" class="small"></span>
+              <button id="box-buy" class="btn btn-red" type="button"></button>
+            </div>
+            <div class="card box-card gold">
+              <div class="crate gold"></div>
+              <b id="gbox-name"></b>
+              <span id="gbox-odds" class="small"></span>
+              <button id="gbox-buy" class="btn btn-amber" type="button"></button>
+            </div>
+          </div>
+          <div id="pet-bonus" class="banner"></div>
+          <div id="pets" class="pets"></div>
+        </div>
+
+        <div id="panel-quests" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-daily"></h2><span id="daily-streak" class="pill"></span></div>
+          <div id="daily-strip" class="daily"></div>
+          <button id="daily-claim" class="btn btn-red wide" type="button"></button>
+          <div class="panel-head"><h2 id="h-quests"></h2></div>
+          <div id="quests" class="list"></div>
+          <div class="panel-head"><h2 id="ach-title"></h2><span id="ach-count" class="pill"></span></div>
+          <p id="awards-note" class="note"></p>
           <div id="awards" class="awards"></div>
         </div>
-        <div id="panel-shop" class="panel-body" hidden><div id="shop" class="coupons"></div></div>
+
+        <div id="panel-move" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-move"></h2><span id="move-mult" class="pill"></span></div>
+          <p id="move-now" class="note"></p>
+          <div id="move-next" class="ticket">
+            <span id="move-kicker" class="kicker"></span>
+            <b id="move-next-name" class="ticket-title"></b>
+            <span id="move-next-desc" class="small"></span>
+            <div class="bar"><div id="move-bar"></div></div>
+            <span id="move-progress" class="small num"></span>
+            <p id="move-warn"></p>
+            <button id="move-btn" class="btn btn-red wide" type="button"></button>
+          </div>
+          <p id="move-done" class="ticket" hidden></p>
+          <div id="route" class="route"></div>
+        </div>
+
+        <div id="panel-shop" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-shop"></h2></div>
+          <div id="shop" class="list"></div>
+        </div>
+
+        <nav class="tabs" role="tablist">
+          <button id="tab-upgrades" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+          <button id="tab-pets" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+          <button id="tab-quests" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+          <button id="tab-move" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+          <button id="tab-shop" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+        </nav>
       </section>
 
       <div id="offline" class="modal" hidden>
@@ -74,22 +119,50 @@
           </div>
           <div class="receipt-total"><span id="offline-total-label"></span><b id="offline-text"></b></div>
           <div class="modal-btns">
-            <button id="offline-double" class="primary" type="button"></button>
-            <button id="offline-take" class="secondary" type="button"></button>
+            <button id="offline-double" class="btn btn-amber wide" type="button"></button>
+            <button id="offline-take" class="btn btn-ghost wide" type="button"></button>
           </div>
         </div>
       </div>
+
+      <div id="daily-modal" class="modal" hidden>
+        <div class="sheet">
+          <span class="kicker" id="dm-kicker"></span>
+          <h2 id="dm-title"></h2>
+          <div id="dm-strip" class="daily"></div>
+          <button id="dm-claim" class="btn btn-red wide" type="button"></button>
+          <button id="dm-close" class="btn btn-ghost wide" type="button"></button>
+        </div>
+      </div>
+
+      <div id="reveal" class="reveal" hidden>
+        <div class="rays"></div>
+        <div class="reveal-crate crate"></div>
+        <div class="reveal-card">
+          <span id="rv-rarity" class="rarity-tag"></span>
+          <img id="rv-img" alt="" />
+          <b id="rv-name"></b>
+          <span id="rv-info"></span>
+          <span id="rv-bonus" class="pill"></span>
+          <div class="modal-btns row">
+            <button id="rv-again" class="btn btn-red" type="button"></button>
+            <button id="rv-ok" class="btn btn-amber" type="button"></button>
+          </div>
+        </div>
+      </div>
+
       <div id="move-card" class="move-card" hidden>
         <div class="move-card-in">
-          <span id="move-card-kicker" class="move-card-kicker"></span>
+          <span id="move-card-kicker" class="kicker"></span>
           <b id="move-card-name"></b>
           <span id="move-card-desc"></span>
-          <span id="move-card-mult" class="stamp-pill"></span>
+          <span id="move-card-mult" class="pill"></span>
         </div>
       </div>
       <div id="loading" class="loading">
         <div class="loading-spit" aria-hidden="true"><i></i></div>
         <span>Шаурма-лавка</span>
+        <div class="loading-bar"><i></i></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

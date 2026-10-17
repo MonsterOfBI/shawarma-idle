@@ -44,6 +44,17 @@ interface Customer {
   talked: boolean;
 }
 
+interface PetSprite {
+  id: string;
+  c: Critter;
+  aura?: Phaser.GameObjects.Arc;
+  phase: number;
+  slot: number;
+}
+
+// Где стоят питомцы на переднем плане: доли ширины экрана.
+const PET_SLOTS = [0.8, 0.93, 0.67, 0.07];
+
 interface Bomber {
   c: Critter;
   y0: number;
@@ -79,6 +90,8 @@ export class StallScene extends Phaser.Scene {
   private confetti!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   private customers: Customer[] = [];
+  private pets: PetSprite[] = [];
+  private petKey = '';
   private bomber?: Bomber;
   private movers: Mover[] = [];
   private moverTimer = 1500;
@@ -429,7 +442,18 @@ export class StallScene extends Phaser.Scene {
     this.starList = Array.from({ length: 44 }, () => ({ x: r() * width, y: r() * this.horizonY * 0.75, r: 0.6 + r() * 1.4, tw: r() * 6 }));
     this.buildProps();
     this.customers.forEach((cu) => cu.c.root.setScale(this.critterScale(cu.c)));
+    this.placePets();
     this.redrawWorld();
+  }
+
+  private placePets() {
+    const u = this.unit;
+    const y = Math.min(this.scale.height - 4 * u, this.groundY + 40 * u);
+    for (const p of this.pets) {
+      const sc = this.critterScale(p.c) * 0.78;
+      p.c.root.setData('s', sc).setData('y0', p.id === 'bombardiro' ? y - 26 * u : y);
+      p.c.root.setPosition(this.scale.width * PET_SLOTS[p.slot], p.c.root.getData('y0')).setScale(sc);
+    }
   }
 
   private critterScale(c: Critter) {
@@ -487,6 +511,41 @@ export class StallScene extends Phaser.Scene {
     this.rebuildStall();
     this.layout();
     return !first;
+  }
+
+  // Лучшие брейнроты игрока танцуют перед ларьком. Мутация даёт золотое или алмазное сияние.
+  setPets(list: { id: string; mut: number }[]) {
+    const top = list.slice(0, PET_SLOTS.length);
+    const key = top.map((p) => `${p.id}:${p.mut}`).join(',');
+    if (key === this.petKey || !this.sys.isActive()) return;
+    const old = new Set(this.pets.map((p) => p.id));
+    this.petKey = key;
+    this.pets.forEach((p) => p.c.root.destroy());
+    this.pets = top.map((p, slot) => {
+      const c = drawBrainrot(this, p.id);
+      let aura: Phaser.GameObjects.Arc | undefined;
+      if (p.mut > 0) {
+        aura = this.add.circle(0, -c.height * 0.45, Math.max(40, c.height * 0.62), p.mut === 2 ? 0x7ff0ff : 0xffd86b, 0.4).setBlendMode(Phaser.BlendModes.ADD);
+        c.root.addAt(aura, 0);
+      }
+      c.root.setDepth(7.8);
+      return { id: p.id, c, aura, phase: slot * 1.7, slot };
+    });
+    this.placePets();
+    for (const p of this.pets) {
+      if (old.has(p.id)) continue;
+      const sc = p.c.root.getData('s');
+      p.c.root.setScale(0.01);
+      this.tweens.add({ targets: p.c.root, scale: sc, duration: 500, ease: 'Back.out' });
+      this.sparks.explode(18, p.c.root.x, p.c.root.y - 30 * this.unit);
+    }
+  }
+
+  // Критический тап: крупная розовая надпись и встряска.
+  crit(text: string, x: number, y: number) {
+    this.popText(text, x, y - 10 * this.unit, '#ff7ab8', 1.6);
+    this.sparks.explode(24, x, y);
+    this.cameras.main.shake(120, 0.005);
   }
 
   setMet(ids: string[]) {
@@ -556,13 +615,17 @@ export class StallScene extends Phaser.Scene {
     this.coins.explode(count, x, y);
   }
 
-  popText(text: string, x: number, y: number, color = '#fff4dc') {
-    const u = this.unit;
+  popText(text: string, x: number, y: number, color = '#fff4dc', size = 1) {
+    const u = this.unit * size;
     const pop = this.add
       .text(x + Phaser.Math.Between(-12, 12), y - 20, text, { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(19 * u)}px`, color, fontStyle: '800', stroke: '#2a1b3d', strokeThickness: Math.round(5 * u) })
       .setOrigin(0.5)
       .setDepth(12);
-    this.tweens.add({ targets: pop, y: pop.y - 70 * u, alpha: 0, duration: 800, ease: 'Cubic.out', onComplete: () => pop.destroy() });
+    if (size > 1) {
+      pop.setScale(0.4);
+      this.tweens.add({ targets: pop, scale: 1, duration: 200, ease: 'Back.out' });
+    }
+    this.tweens.add({ targets: pop, y: pop.y - 70 * u, alpha: 0, duration: 800 + (size > 1 ? 300 : 0), ease: 'Cubic.out', onComplete: () => pop.destroy() });
   }
 
   bigText(text: string, color = '#ffd86b') {
@@ -773,6 +836,21 @@ export class StallScene extends Phaser.Scene {
         this.serveTimer = 0;
         this.serve();
       }
+    }
+
+    // питомцы пританцовывают, в час пик быстрее
+    for (const p of this.pets) {
+      p.phase += delta / (this.rush ? 150 : 260);
+      const hop = Math.abs(Math.sin(p.phase));
+      const sc = p.c.root.getData('s');
+      p.c.body.y = -hop * 7;
+      p.c.root.setScale(sc * (1 + 0.05 * (1 - hop)), sc * (1 - 0.06 * (1 - hop)));
+      p.c.root.y = p.c.root.getData('y0');
+      p.c.body.setRotation(Math.sin(p.phase * 0.5) * 0.14);
+      const [l, r] = p.c.legs;
+      l?.setAngle(Math.sin(p.phase) * 14);
+      r?.setAngle(-Math.sin(p.phase) * 14);
+      p.aura?.setAlpha(0.25 + 0.2 * Math.sin(this.clock / 300 + p.slot));
     }
 
     // Бомбардиро

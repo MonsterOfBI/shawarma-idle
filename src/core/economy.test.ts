@@ -22,7 +22,7 @@ import {
 } from './economy';
 import { ACHIEVEMENTS, achievementMult, unlockAchievements } from './achievements';
 import { BRAINROTS, customerPool, meet, pickCustomer } from './brainrots';
-import { bulkAmount, bulkCost, buyN, canBuyN, maxAffordable } from './economy';
+import { CRIT_CHANCE, CRIT_MULT, bulkAmount, bulkCost, buyN, canBuyN, isCrit, maxAffordable } from './economy';
 import { UPGRADE_BY_ID } from './upgrades';
 import { formatNumber } from './format';
 import { LOCATIONS } from './locations';
@@ -243,6 +243,13 @@ describe('внешний вид ларька', () => {
 });
 
 describe('версия 2.0', () => {
+  it('критический тап: редкий и в 10 раз дороже', () => {
+    expect(isCrit(0.01)).toBe(true);
+    expect(isCrit(CRIT_CHANCE)).toBe(false);
+    const s = newGame(0);
+    expect(tap(s, 0, CRIT_MULT).money).toBe(tap(s, 0).money * 10);
+  });
+
   const seq = (...xs: number[]) => {
     let i = 0;
     return () => xs[i++ % xs.length];

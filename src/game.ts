@@ -3,6 +3,9 @@
 import Phaser from 'phaser';
 import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet } from './core/brainrots';
+import { canClaimDaily, claimDaily, dayKey } from './core/daily';
+import { type BoxKind, type Drop, PET_RARITY, RARITIES, petBonus } from './core/pets';
+import { claimQuest, ensureQuests } from './core/quests';
 import {
   type GameState,
   COMBO_WINDOW_MS,
@@ -12,9 +15,18 @@ import {
   addMoney,
   buyN,
   canBuyN,
-  catchGolden,
+  CRIT_MULT,
+  adBoxReady,
+  applyGolden,
+  boxCost,
+  buyBox,
+  canBuyBox,
   comboMult,
+  freeBox,
   goldenReward,
+  isCrit,
+  milestonesReached,
+  pickGoldenEffect,
   recordCombo,
   cashPackAmount,
   collectOffline,
@@ -30,6 +42,7 @@ import {
 import { unlockAchievements } from './core/achievements';
 import { formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
+import { UPGRADE_BY_ID } from './core/upgrades';
 import { lang, t } from './i18n';
 import type { Platform, ProductId } from './platform/platform';
 import { StallScene } from './scenes/StallScene';
@@ -57,6 +70,7 @@ export class Game {
   private nextRushAt = Date.now() + 90_000;
   private nextGoldenAt = Date.now() + 35_000;
   private medalQueue: string[] = [];
+  private revealing = false;
 
   constructor(private platform: Platform) {
     this.scene = new StallScene({
@@ -71,12 +85,17 @@ export class Game {
       relocate: () => void this.relocate(),
       purchase: (id) => void this.purchase(id),
       toggleSound: () => this.toggleSound(),
+      buyBox: () => void this.openBox('common', 'buy'),
+      adBox: () => void this.openBox('golden', 'ad'),
+      claimDaily: () => void this.claimDaily(),
+      openDaily: () => void this.openDaily(),
+      claimQuest: (i) => void this.claimQuest(i),
     });
   }
 
   async start() {
     const now = Date.now();
-    this.state = normalize(await this.platform.load(), now);
+    this.state = ensureQuests(normalize(await this.platform.load(), now), now, Math.random);
     setMuted(this.state.muted);
 
     new Phaser.Game({
@@ -92,6 +111,7 @@ export class Game {
     this.scene.setLook(this.state.levels);
     this.meetStaff();
     this.scene.setMet(this.state.met);
+    this.scene.setPets(this.topPets());
     void this.scene.portraits(Object.keys(BRAINROT_BY_ID)).then((p) => this.ui.setPortraits(p));
     // звук и музыка просыпаются только после первого действия игрока
     const wake = () => {
@@ -117,6 +137,8 @@ export class Game {
     this.platform.gameplayStart();
 
     setInterval(() => this.loop(), 100);
+    // подарок дня встречает игрока сразу после чека за офлайн
+    if (canClaimDaily(this.state, dayKey(new Date()))) void this.openDaily();
   }
 
   private loop() {
@@ -126,7 +148,7 @@ export class Game {
       void this.welcomeBack(now);
       return;
     }
-    this.state = tick(this.state, now);
+    this.state = ensureQuests(tick(this.state, now), now, Math.random);
     this.events(now);
     this.scene.setIncome(incomePerSecond(this.state, now));
     this.scene.setLook(this.state.levels);
@@ -205,30 +227,53 @@ export class Game {
     this.combo = now - this.lastTapAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
     this.lastTapAt = now;
     const rush = now < this.rushUntil;
-    const extra = comboMult(this.combo) * (rush ? RUSH_MULT : 1);
+    const crit = isCrit(Math.random());
+    const extra = comboMult(this.combo) * (rush ? RUSH_MULT : 1) * (crit ? CRIT_MULT : 1);
     const value = tapValue(this.state, now) * extra;
     this.state = recordCombo(tap(this.state, now, extra), this.combo);
     this.scene.serve();
-    this.scene.popText(`+${formatNumber(value, lang())} ₽`, x, y, rush ? '#ffb02e' : '#fff4dc');
-    this.scene.burst(x, y, 2 + Math.min(6, Math.floor(this.combo / 8)) + (rush ? 3 : 0));
+    const text = `+${formatNumber(value, lang())} ₽`;
+    if (crit) {
+      this.scene.crit(`${t('crit')} ${text}`, x, y);
+      sfx.crit();
+    } else this.scene.popText(text, x, y, now < this.state.tapFrenzyUntil ? '#ff9ccb' : rush ? '#ffb02e' : '#fff4dc');
+    this.scene.burst(x, y, 2 + Math.min(6, Math.floor(this.combo / 8)) + (rush ? 3 : 0) + (crit ? 8 : 0));
     this.scene.setCombo(this.combo, comboMult(this.combo));
     sfx.tap(this.combo);
   }
 
   private onGolden(x: number, y: number) {
     const now = Date.now();
+    // первый Бомбардиро всегда с мешком денег, дальше бывает лихорадка или бешеные тапы
+    const effect = this.state.goldenCaught === 0 ? 'bag' : pickGoldenEffect(Math.random());
     const reward = goldenReward(this.state, now);
-    this.state = catchGolden(this.state, now);
-    this.scene.popText(`+${formatNumber(reward, lang())} ₽`, x, y, '#ffd86b');
-    this.ui.toast(t('goldenToast', formatNumber(reward, lang())));
+    this.state = applyGolden(this.state, now, effect);
+    if (effect === 'bag') {
+      this.scene.popText(`+${formatNumber(reward, lang())} ₽`, x, y, '#ffd86b', 1.3);
+      this.ui.toast(t('goldenToast', formatNumber(reward, lang())), 'money');
+    } else if (effect === 'frenzy') {
+      this.scene.bigText(t('frenzyBig'), '#ffd86b');
+      this.ui.toast(t('frenzyToast'), 'medal');
+    } else {
+      this.scene.bigText(t('tapsBig'), '#ff9ccb');
+      this.ui.toast(t('tapsToast'), 'medal');
+    }
     sfx.golden();
+    this.ui.render(this.state, now);
     void this.save();
   }
 
   private buy(id: string, n: number) {
     if (!canBuyN(this.state, id, n)) return;
+    const before = milestonesReached(this.state.levels[id] ?? 0);
     this.state = buyN(this.state, id, n);
     sfx.buy();
+    const def = UPGRADE_BY_ID[id];
+    if (def && def.kind !== 'mult' && milestonesReached(this.state.levels[id] ?? 0) > before) {
+      this.ui.milestoneHit(id);
+      this.ui.toast(t('msToast', t(`up_${id}`)), 'medal');
+      sfx.achievement();
+    }
     const changed = this.scene.setLook(this.state.levels);
     this.scene.celebrate(changed);
     if (changed) navigator.vibrate?.(15);
@@ -251,6 +296,86 @@ export class Game {
   private meetStaff() {
     if ((this.state.levels.grill_helper ?? 0) > 0) this.meet('tungtung');
     if ((this.state.levels.cashier ?? 0) > 0) this.meet('ballerina');
+  }
+
+  // Лучшие четыре брейнрота по бонусу: они танцуют у ларька.
+  private topPets() {
+    return Object.entries(this.state.pets)
+      .filter(([id]) => PET_RARITY[id])
+      .sort((a, b) => petBonus(b[0], b[1]) - petBonus(a[0], a[1]))
+      .map(([id, p]) => ({ id, mut: p.mut }));
+  }
+
+  // Ящик: за деньги, за рекламу (золотой) или бесплатно (подарок, задание).
+  private async openBox(kind: BoxKind, how: 'buy' | 'ad' | 'free') {
+    if (this.revealing) return;
+    let now = Date.now();
+    let r: { state: GameState; drop: Drop } | null = null;
+    if (how === 'buy') r = buyBox(this.state, now, Math.random);
+    else if (how === 'free') r = freeBox(this.state, now, kind, Math.random);
+    else {
+      if (!adBoxReady(this.state, now)) {
+        this.ui.toast(t('boxWait', '…'));
+        return;
+      }
+      this.setPaused(true);
+      const ok = await this.platform.showRewarded();
+      this.setPaused(false);
+      if (!ok) {
+        this.ui.toast(t('adFail'));
+        return;
+      }
+      now = Date.now();
+      r = freeBox(this.state, now, kind, Math.random, true);
+    }
+    if (!r) return;
+    this.state = r.state;
+    void this.save();
+    this.revealing = true;
+    sfx.shake();
+    const again = how === 'buy' && canBuyBox(this.state, Date.now()) ? `${formatNumber(boxCost(this.state, Date.now()), lang())} ₽` : null;
+    const drop = r.drop;
+    const choice = await this.ui.reveal(drop, kind, again, () => {
+      sfx.reveal(RARITIES.indexOf(drop.rarity));
+      this.scene.setPets(this.topPets());
+      this.ui.render(this.state, Date.now());
+    });
+    this.revealing = false;
+    this.ui.render(this.state, Date.now());
+    if (choice === 'again') await this.openBox(kind, 'buy');
+  }
+
+  private async openDaily() {
+    const yes = await this.ui.daily(this.state, Date.now());
+    if (yes) await this.claimDaily();
+  }
+
+  private async claimDaily() {
+    const d = new Date();
+    const y = new Date(d);
+    y.setDate(d.getDate() - 1);
+    const r = claimDaily(this.state, Date.now(), dayKey(d), dayKey(y));
+    if (!r) return;
+    this.state = r.state;
+    sfx.claim();
+    if (r.money) {
+      this.ui.toast(t('dailyGot', formatNumber(r.money, lang())), 'money');
+      this.scene.celebrate(true);
+    }
+    void this.save();
+    this.ui.render(this.state, Date.now());
+    for (const kind of r.boxes) await this.openBox(kind, 'free');
+  }
+
+  private async claimQuest(i: number) {
+    const r = claimQuest(this.state, i, Date.now(), Math.random);
+    if (!r) return;
+    this.state = r.state;
+    sfx.claim();
+    if (r.money) this.ui.toast(t('questGot', formatNumber(r.money, lang())), 'money');
+    void this.save();
+    this.ui.render(this.state, Date.now());
+    if (r.box) await this.openBox(r.box, 'free');
   }
 
   private async boost() {

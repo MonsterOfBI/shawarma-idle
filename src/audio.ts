@@ -53,6 +53,24 @@ export const sfx = {
   move() {
     [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.2, 'triangle', 0.08, i * 0.12));
   },
+  // ящик трясётся: дробь из коротких щелчков, всё чаще
+  shake() {
+    for (let i = 0; i < 12; i++) beep(180 + i * 25, 0.05, 'square', 0.035, i * 0.085 - i * i * 0.002);
+  },
+  // открытие: чем редче брейнрот, тем длиннее и выше фанфара (rank 0..5)
+  reveal(rank: number) {
+    const base = [523, 587, 659, 784, 880, 1046][rank] ?? 523;
+    const steps = 3 + rank;
+    for (let i = 0; i < steps; i++) beep(base * Math.pow(1.122, i), 0.18 + rank * 0.03, i % 2 ? 'triangle' : 'sine', 0.07, i * 0.07);
+    if (rank >= 3) [0, 0.5].forEach((d) => beep(base * 2, 0.5, 'triangle', 0.05, steps * 0.07 + d));
+  },
+  crit() {
+    beep(1320, 0.07, 'square', 0.05);
+    beep(1760, 0.12, 'triangle', 0.06, 0.05);
+  },
+  claim() {
+    [659, 784, 1046, 1318].forEach((f, i) => beep(f, 0.12, 'triangle', 0.07, i * 0.06));
+  },
   reward() {
     [784, 988, 1175].forEach((f, i) => beep(f, 0.15, 'sine', 0.08, i * 0.09));
   },

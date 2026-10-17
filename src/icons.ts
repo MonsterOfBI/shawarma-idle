@@ -36,7 +36,28 @@ const ICONS: Record<string, string> = {
   combo: svg(`<path d="M18 3 L7 18 h8 l-2 11 L25 13 h-8 Z" fill="${A}"/>`),
   move: svg(`<path d="M4 20 L16 9 L28 20" /><rect x="8" y="20" width="16" height="7" fill="${T}"/><path d="M16 3 v6"/>`),
   lock: svg(`<rect x="8" y="14" width="16" height="12" rx="2" fill="${C}"/><path d="M11 14 v-3 a5 5 0 0 1 10 0 v3"/>`),
+  // интерфейс
+  coin: svg(`<circle cx="16" cy="16" r="12" fill="${A}"/><circle cx="16" cy="16" r="8" fill="#ffd86b" stroke="#c98a12"/><path d="M16 11 v10 M13 13.5 h5" stroke="#c98a12"/>`),
+  bolt: svg(`<path d="M18 3 L7 18 h8 l-2 11 L25 13 h-8 Z" fill="${A}"/>`),
+  finger: svg(`<path d="M12 27 v-11 a2 2 0 0 1 4 0 v-7 a2 2 0 0 1 4 0 v12 l3-2 a2 2 0 0 1 3 3 l-5 7 Z" fill="${C}"/>`),
+  gift: svg(`<rect x="5" y="13" width="22" height="14" rx="2" fill="${T}"/><rect x="3" y="9" width="26" height="6" rx="2" fill="${T}"/><path d="M16 9 v18" stroke="${A}" stroke-width="4"/><path d="M16 9 c-4-6-10-3-6 0 Z M16 9 c4-6 10-3 6 0 Z" fill="${A}"/>`),
+  list: svg(`<rect x="6" y="5" width="20" height="23" rx="3" fill="${C}"/><rect x="11" y="3" width="10" height="5" rx="2" fill="${A}"/><path d="M10 14 l2 2 3-4 M10 21 l2 2 3-4 M18 14 h5 M18 21 h5"/>`),
+  crate: svg(`<rect x="4" y="11" width="24" height="16" rx="2" fill="#c8813a"/><path d="M4 11 l3-5 h18 l3 5" fill="#e0a050"/><path d="M4 18 h24 M11 11 v16 M21 11 v16"/><rect x="13" y="15" width="6" height="5" rx="1" fill="${A}"/>`),
+  goldcrate: svg(`<rect x="4" y="11" width="24" height="16" rx="2" fill="${A}"/><path d="M4 11 l3-5 h18 l3 5" fill="#ffd86b"/><path d="M4 18 h24 M11 11 v16 M21 11 v16"/><rect x="13" y="15" width="6" height="5" rx="1" fill="${T}"/>`),
+  play: svg(`<circle cx="16" cy="16" r="12" fill="${P}"/><path d="M13 10 L23 16 L13 22 Z" fill="${A}" stroke="${A}"/>`),
+  truck: svg(`<rect x="3" y="9" width="17" height="13" rx="1" fill="${T}"/><path d="M20 13 h5 l4 5 v4 h-9 Z" fill="${C}"/><circle cx="9" cy="24" r="3" fill="${C}"/><circle cx="24" cy="24" r="3" fill="${C}"/>`),
+  bag: svg(`<path d="M6 11 h20 l-2 16 h-16 Z" fill="${A}"/><path d="M11 11 v-2 a5 5 0 0 1 10 0 v2"/>`),
+  up: svg(`<circle cx="16" cy="16" r="12" fill="${G}"/><path d="M16 23 V10 M10 15 l6-6 6 6" stroke="${C}" stroke-width="3"/>`),
+  music: svg(`<path d="M12 23 V8 l13-3 v15" /><circle cx="9" cy="23" r="3.5" fill="${C}"/><circle cx="22" cy="20" r="3.5" fill="${C}"/>`),
+  sound: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 11 a6 6 0 0 1 0 10 M24 7 a11 11 0 0 1 0 18"/>`),
+  mute: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 12 l7 8 M28 12 l-7 8"/>`),
+  frenzy: svg(`<path d="M18 3 L7 18 h8 l-2 11 L25 13 h-8 Z" fill="${T}"/>`),
+  x2: svg(`<circle cx="16" cy="16" r="12" fill="${A}"/><path d="M10 12 l6 8 M16 12 l-6 8 M19 13 a3 3 0 0 1 6 1 c0 3-6 4-6 7 h6"/>`),
 };
+
+export function ui(id: string): string {
+  return ICONS[id] ?? '';
+}
 
 export function icon(id: string): string {
   return ICONS[id] ?? ICONS.lock;
