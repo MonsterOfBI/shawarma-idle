@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE, lerpColor, rng, shade } from './draw';
 
-// Фоны пяти локаций. Рисуются в один Graphics и перерисовываются 10 раз в секунду,
+// Фоны семи локаций. Рисуются в один Graphics и перерисовываются 10 раз в секунду,
 // поэтому волны, светлячки и гирлянды двигаются. night — от 0 (день) до 1 (ночь).
 
 export interface Ctx {
@@ -294,7 +294,157 @@ function piazza(p: Pen, c: Ctx) {
     for (let sx = (row % 2) * 9 * u; sx < w; sx += 18 * u) p.g.fillStyle(shade(stone, (((sx + y) / u) % 7) * 0.012), 1).fillRoundedRect(sx, y, 16 * u, 9 * u, 3 * u);
 }
 
-export const BACKDROPS: Record<string, (p: Pen, c: Ctx) => void> = { metro, beach, jungle, desert, piazza };
+
+// ---------- коробка у помойки: дворы и гаражи ----------
+function dump(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n, clock } = c;
+  const r = rng(c.seed + 7);
+  // серые панельки вдалеке
+  let x = -20;
+  while (x < w + 20) {
+    const bw = (90 + r() * 60) * u;
+    const bh = (120 + r() * 90) * u;
+    const wall = nc(lerpColor(0xb8b4c4, 0xa8a4b8, r()), 0x2a2640, n);
+    p.rect(x, hy - 40 * u - bh, bw, bh, wall, 0, 2);
+    for (let yy = hy - 40 * u - bh + 12 * u; yy < hy - 50 * u; yy += 18 * u) p.g.fillStyle(shade(wall, -0.12), 1).fillRect(x, yy, bw, 1.5 * u);
+    windowsGrid(p, x, hy - 40 * u - bh, bw, bh - 10 * u, c, wall, r);
+    x += bw + (8 + r() * 30) * u;
+  }
+  // бетонный забор с граффити
+  const fence = nc(0xa8a090, 0x3a3448, n);
+  p.rect(-5, hy - 52 * u, w + 10, 52 * u, fence, 0, 2);
+  for (let fx = 0; fx < w; fx += 48 * u) p.line(fx, hy - 52 * u, fx, hy, 1.5, shade(fence, -0.25));
+  const tags = [TOMATO, 0x3d6fb6, 0x5e9c3a, 0xf28cb1, AMBER];
+  for (let i = 0; i < 4; i++) {
+    const tx = w * (0.12 + i * 0.24) + r() * 20 * u;
+    const col = nc(tags[i % tags.length], shade(tags[i % tags.length], -0.6), n);
+    p.g.lineStyle(4 * u, col, 0.9).beginPath();
+    p.g.moveTo(tx, hy - 20 * u);
+    for (let k = 1; k <= 6; k++) p.g.lineTo(tx + k * 9 * u, hy - 20 * u - Math.sin(k * 1.7 + i) * 12 * u);
+    p.g.strokePath();
+  }
+  // гаражи-ракушки
+  for (const gx of [w * 0.18, w * 0.42, w * 0.86]) {
+    const col = nc(lerpColor(0x7a8a6a, 0x8a6a5a, (gx / w) % 1), 0x2a2a38, n);
+    p.rect(gx - 34 * u, hy - 46 * u, 68 * u, 46 * u, col, 0, 2);
+    p.poly([[gx - 38 * u, hy - 46 * u], [gx, hy - 58 * u], [gx + 38 * u, hy - 46 * u]], shade(col, -0.15), 2);
+    for (let k = 0; k < 6; k++) p.line(gx - 26 * u, hy - 36 * u + k * 6 * u, gx + 26 * u, hy - 36 * u + k * 6 * u, 1.5, shade(col, -0.28));
+    p.flat(0x8a4a2a, 0.5).fillCircle(gx + 18 * u, hy - 30 * u, 6 * u); // ржавчина
+  }
+  // асфальт с трещинами и лужами
+  const asph = nc(0x8a8494, 0x2a263a, n);
+  p.g.fillStyle(asph, 1).fillRect(0, hy, w, h - hy);
+  p.g.fillStyle(shade(asph, -0.08), 1).fillRect(0, gy + 30 * u, w, h - gy);
+  p.g.lineStyle(1.5, shade(asph, -0.3), 1);
+  for (let i = 0; i < 7; i++) {
+    const cx = r() * w, cy = hy + 10 * u + r() * (h - hy - 20 * u);
+    p.g.beginPath().moveTo(cx, cy).lineTo(cx + 14 * u, cy + 5 * u).lineTo(cx + 22 * u, cy + 2 * u).lineTo(cx + 34 * u, cy + 8 * u);
+    p.g.strokePath();
+  }
+  const sky = n > 0.5 ? 0x5a5a9a : 0xbfd8f2;
+  for (const [px, py, pw] of [[0.3, 0.55, 70], [0.72, 0.3, 50], [0.92, 0.9, 60]]) {
+    const yy = hy + (gy - hy) * py + (py > 0.8 ? 30 * u : 0);
+    p.g.fillStyle(sky, 0.45).fillEllipse(w * px, yy, pw * u, 10 * u);
+    p.g.fillStyle(0xffffff, 0.35 + 0.2 * Math.sin(clock / 600 + px * 9)).fillEllipse(w * px - 10 * u, yy - 1 * u, 14 * u, 2 * u);
+  }
+  // мусорные баки слева
+  const bin = nc(0x3f7a4f, 0x1f3a2a, n);
+  for (const [bx, k] of [[w * 0.05, 1], [w * 0.15, 0.9]] as const) {
+    const bu = u * k;
+    p.rect(bx - 26 * bu, gy - 50 * bu, 52 * bu, 46 * bu, bin, 3 * bu, 2.5);
+    p.poly([[bx - 30 * bu, gy - 50 * bu], [bx + 30 * bu, gy - 50 * bu], [bx + 24 * bu, gy - 60 * bu], [bx - 22 * bu, gy - 64 * bu]], shade(bin, -0.15), 2.5);
+    p.circle(bx - 18 * bu, gy - 3 * bu, 4 * bu, OUTLINE, 0);
+    p.circle(bx + 18 * bu, gy - 3 * bu, 4 * bu, OUTLINE, 0);
+    p.line(bx - 18 * bu, gy - 40 * bu, bx + 18 * bu, gy - 40 * bu, 2, shade(bin, -0.3));
+  }
+  // мешки с мусором и коробки
+  const bag = nc(0x3a3448, 0x15121e, n);
+  p.ellipse(w * 0.1, gy - 4 * u, 34 * u, 24 * u, bag, 2.5);
+  p.ellipse(w * 0.22, gy - 2 * u, 28 * u, 20 * u, bag, 2.5);
+  p.poly([[w * 0.22 - 4 * u, gy - 12 * u], [w * 0.22, gy - 20 * u], [w * 0.22 + 4 * u, gy - 12 * u]], bag, 2);
+  p.rect(w * 0.26, gy - 22 * u, 24 * u, 20 * u, nc(0xc49a62, 0x4a3a2a, n), 0, 2);
+  p.line(w * 0.26 + 12 * u, gy - 22 * u, w * 0.26 + 12 * u, gy - 2 * u, 1.5, nc(0x8a6a3a, 0x2a2018, n));
+  // банка и рыбий скелет
+  p.rect(w * 0.18, gy + 6 * u, 6 * u, 9 * u, nc(0xc8c8d8, 0x4a4a5a, n), 1, 1.5);
+  p.g.lineStyle(1.5, nc(0xe8e0d0, 0x5a5468, n), 1).lineBetween(w * 0.05, gy + 14 * u, w * 0.05 + 18 * u, gy + 14 * u);
+  for (let k = 0; k < 4; k++) p.g.lineBetween(w * 0.05 + (4 + k * 4) * u, gy + 10 * u, w * 0.05 + (4 + k * 4) * u, gy + 18 * u);
+}
+
+// ---------- дворец шаурмы ----------
+function palace(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n, clock } = c;
+  const gold = nc(0xffcf3f, 0x9a7a2a, n);
+  const marble = nc(0xfbf3e2, 0x4a4460, n);
+  const pink = nc(0xf2c8c0, 0x4a3a58, n);
+  // дальний дворец во всю ширину
+  const wallTop = hy - 120 * u;
+  p.rect(-5, wallTop, w + 10, hy - wallTop, pink, 0, 2);
+  // арки в стене
+  for (let ax = 20 * u; ax < w; ax += 46 * u) {
+    p.rect(ax, wallTop + 40 * u, 24 * u, 60 * u, nc(0x8a5a8a, 0x1a1428, n), 12 * u, 2);
+    if (n > 0.25) p.g.fillStyle(0xffd27a, 0.5 * n).fillRoundedRect(ax + 3 * u, wallTop + 44 * u, 18 * u, 54 * u, 9 * u);
+  }
+  p.rect(-5, wallTop - 10 * u, w + 10, 12 * u, gold, 0, 2);
+  // купола-луковки
+  const dome = (dx: number, size: number, col: number) => {
+    const s2 = size * u;
+    const by = wallTop - 10 * u;
+    p.rect(dx - 22 * s2, by - 60 * s2, 44 * s2, 60 * s2, marble, 0, 2);
+    for (let k = -1; k <= 1; k++) p.rect(dx + k * 13 * s2 - 4 * s2, by - 46 * s2, 8 * s2, 22 * s2, nc(0x8a5a8a, 0x1a1428, n), 4 * s2, 1.5);
+    p.poly([[dx - 30 * s2, by - 60 * s2], [dx - 28 * s2, by - 86 * s2], [dx - 14 * s2, by - 108 * s2], [dx, by - 128 * s2], [dx + 14 * s2, by - 108 * s2], [dx + 28 * s2, by - 86 * s2], [dx + 30 * s2, by - 60 * s2]], col, 2.5);
+    p.g.fillStyle(0xffffff, 0.35).fillEllipse(dx - 12 * s2, by - 92 * s2, 8 * s2, 22 * s2);
+    p.line(dx, by - 128 * s2, dx, by - 146 * s2, 2.5, gold);
+    p.circle(dx, by - 148 * s2, 4 * s2, gold, 2);
+  };
+  dome(w * 0.12, 0.8, nc(0x5ab8a8, 0x1f4a4a, n));
+  dome(w * 0.88, 0.8, nc(0x5ab8a8, 0x1f4a4a, n));
+  dome(w * 0.32, 1, gold);
+  dome(w * 0.68, 1, gold);
+  dome(w * 0.5, 1.35, nc(0xe4472b, 0x5a1f28, n));
+  // фейерверк ночью
+  if (n > 0.35) {
+    const t = (clock % 3000) / 3000;
+    for (const [fx, fy, col, off] of [[0.25, 0.25, 0xffd86b, 0], [0.75, 0.2, 0xf28cb1, 0.5]] as const) {
+      const tt = (t + off) % 1;
+      const rad = tt * 40 * u;
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        p.g.fillStyle(col, (1 - tt) * n).fillCircle(w * fx + Math.cos(a) * rad, hy * fy + Math.sin(a) * rad + tt * tt * 20 * u, 2.5 * u);
+      }
+    }
+  }
+  // мраморный пол в шахматку
+  p.g.fillStyle(marble, 1).fillRect(0, hy, w, h - hy);
+  const sq = 26 * u;
+  for (let yy = hy, row = 0; yy < h; yy += sq * 0.6, row++)
+    for (let xx = (row % 2) * sq; xx < w; xx += sq * 2) p.g.fillStyle(nc(0xe8dcc4, 0x3a3450, n), 1).fillRect(xx, yy, sq, sq * 0.6);
+  // красная дорожка к ларьку
+  const carpet = nc(0xc8283a, 0x5a1424, n);
+  p.poly([[w * 0.5, hy], [w * 0.7, hy], [w * 0.82, h], [w * 0.38, h]], carpet, 0);
+  p.g.lineStyle(3 * u, gold, 1).lineBetween(w * 0.5, hy, w * 0.38, h);
+  p.g.lineStyle(3 * u, gold, 1).lineBetween(w * 0.7, hy, w * 0.82, h);
+  // колонны по краям
+  for (const cx of [w * 0.04, w * 0.24]) {
+    p.rect(cx - 14 * u, gy - 170 * u, 28 * u, 170 * u, marble, 0, 2.5);
+    for (let k = -1; k <= 1; k++) p.line(cx + k * 7 * u, gy - 160 * u, cx + k * 7 * u, gy - 10 * u, 1.5, shade(marble, -0.15));
+    p.rect(cx - 20 * u, gy - 180 * u, 40 * u, 12 * u, gold, 2, 2.5);
+    p.rect(cx - 20 * u, gy - 12 * u, 40 * u, 12 * u, gold, 2, 2.5);
+  }
+  // золотые вазы с пальмами
+  for (const vx of [w * 0.14, w * 0.96]) {
+    palm(p, vx, gy - 26 * u, 0.6, c, vx < w / 2 ? 1 : -1);
+    p.poly([[vx - 18 * u, gy - 30 * u], [vx + 18 * u, gy - 30 * u], [vx + 12 * u, gy], [vx - 12 * u, gy]], gold, 2.5);
+    p.g.fillStyle(0xffffff, 0.4).fillRect(vx - 10 * u, gy - 26 * u, 4 * u, 20 * u);
+  }
+  // искры золота в воздухе
+  for (let k = 0; k < 14; k++) {
+    const sx = ((k * 97 + clock / 30) % (w + 40)) - 20;
+    const sy = hy - 40 * u + Math.sin(clock / 900 + k) * 30 * u - (k % 5) * 20 * u;
+    p.g.fillStyle(0xfff0a0, 0.5 + 0.5 * Math.sin(clock / 300 + k)).fillCircle(sx, sy, 1.6 * u);
+  }
+}
+
+export const BACKDROPS: Record<string, (p: Pen, c: Ctx) => void> = { dump, metro, beach, jungle, desert, piazza, palace };
 
 // ---------- движущиеся объекты на фоне ----------
 
@@ -363,6 +513,51 @@ export function spawnMover(scene: Phaser.Scene, loc: string, c: Ctx): Mover {
     y = c.gy + 4 * u;
     speed = 0.1;
     bob = Math.random() * 6;
+  } else if (loc === 'dump') {
+    // ворона или бродячий кот
+    if (Math.random() < 0.55) {
+      root = container(scene, (p) => {
+        p.ellipse(0, 0, 30, 14, 0x2a2a3a);
+        p.poly([[-12, -2], [-4, -20], [6, -2]], 0x3a3a4a, 2);
+        p.circle(14, -4, 7, 0x2a2a3a);
+        p.poly([[19, -6], [28, -3], [19, -1]], 0x9a9aa8, 2);
+        p.poly([[-14, 0], [-26, -4], [-24, 4]], 0x2a2a3a, 2);
+        p.eye(15, -6, 2.2);
+      });
+      y = c.hy - 70 * u - Math.random() * 60 * u;
+      speed = 0.11;
+      bob = Math.random() * 6;
+    } else {
+      root = container(scene, (p) => {
+        p.ellipse(0, -14, 40, 18, 0x9a8a7a);
+        p.line(-18, -14, -30, -32, 4, OUTLINE);
+        p.line(-18, -14, -30, -32, 2, 0x9a8a7a);
+        for (const lx of [-12, -4, 8, 14]) p.line(lx, -8, lx, 0, 3.5);
+        p.circle(20, -22, 9, 0x9a8a7a);
+        p.poly([[14, -28], [16, -38], [21, -30]], 0x9a8a7a, 2);
+        p.poly([[22, -30], [27, -38], [28, -27]], 0x9a8a7a, 2);
+        p.eye(23, -23, 2.6);
+      });
+      y = c.gy - 2 * u;
+      speed = 0.07;
+    }
+  } else if (loc === 'palace') {
+    // золотой лимузин
+    root = container(scene, (p) => {
+      p.rect(-80, -34, 160, 22, 0xffcf3f, 8);
+      p.rect(-50, -50, 96, 18, 0xffcf3f, 8);
+      for (const wx of [-44, -18, 8]) p.rect(wx, -47, 22, 12, 0x2a1b3d, 3, 2);
+      p.line(-78, -22, 78, -22, 2, 0xb8902a);
+      p.circle(-52, -12, 9, OUTLINE, 0);
+      p.circle(52, -12, 9, OUTLINE, 0);
+      p.circle(-52, -12, 4, 0xffe9a8, 0);
+      p.circle(52, -12, 4, 0xffe9a8, 0);
+      p.rect(74, -30, 6, 6, 0xfff0b0, 2, 1.5);
+      p.poly([[-8, -50], [0, -60], [8, -50]], 0xe4472b, 2); // флажок с короной
+    });
+    lights = scene.add.ellipse(116, -26, 80, 22, 0xfff0b0, 0).setBlendMode(Phaser.BlendModes.ADD);
+    root.add(lights);
+    speed = 0.12;
   } else if (loc === 'piazza') {
     // веспа
     const col = Phaser.Utils.Array.GetRandom([0x8fd3c8, 0xf2a0b0, CREAM]);

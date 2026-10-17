@@ -100,6 +100,20 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     back.poly(rot([[-3, -46], [3, -46], [3, 46], [-3, 46]], -0.18, -W / 2 - 10, -54), TOMATO, 0);
   }
 
+  // магазинная тележка у коробки
+  if (style === 'dump') {
+    const tx = -W / 2 - 34;
+    back.poly([[tx - 26, -48], [tx + 22, -48], [tx + 16, -18], [tx - 20, -18]], 0xd8dde6, 2.5);
+    for (let i = 1; i < 5; i++) back.line(tx - 26 + i * 10, -48, tx - 21 + i * 8, -18, 1.5, 0x9a9aa8);
+    back.line(tx - 26, -34, tx + 19, -34, 1.5, 0x9a9aa8);
+    back.line(tx + 22, -48, tx + 30, -58, 3);
+    back.line(tx - 18, -18, tx - 16, -6, 2.5);
+    back.line(tx + 14, -18, tx + 12, -6, 2.5);
+    back.circle(tx - 16, -4, 4, OUTLINE, 0);
+    back.circle(tx + 12, -4, 4, OUTLINE, 0);
+    back.ellipse(tx - 6, -52, 30, 14, 0x3a3448, 2.5); // мешок с пожитками
+  }
+
   // самокат курьера у стены
   if (S.courier > 0) {
     const sx = -W / 2 - (style === 'beach' ? 40 : 22), sy = -2;
@@ -162,6 +176,22 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     upper.line(-W * 0.36, bodyTop + 44, -W * 0.39, bodyTop + 52, 1.5, shade(body, -0.3));
     upper.line(W * 0.44, bodyTop + 20, W * 0.41, bodyTop + 34, 1.5, shade(body, -0.3));
     for (const x of [-W * 0.4, -W * 0.15, W * 0.1, W * 0.35]) upper.rect(x - 5, bodyTop + 6, 10, 9, WOOD, 3, 2); // торцы балок
+  } else if (style === 'dump') {
+    // скотч крест-накрест и значки «верх» и «хрупкое»
+    upper.flat(0xe8d8a0, 0.9).fillRect(-W / 2 + 1.5, bodyTop + (lowerTop - bodyTop) * 0.5 - 6, W - 3, 12);
+    upper.flat(0xe8d8a0, 0.9).fillRect(-W * 0.36, bodyTop + 1.5, 12, lowerTop - bodyTop - 3);
+    for (const ax of [W * 0.3, W * 0.38]) {
+      upper.line(ax, bodyTop + 30, ax, bodyTop + 14, 2.5, 0x5a3a1a);
+      upper.line(ax - 4, bodyTop + 19, ax, bodyTop + 14, 2.5, 0x5a3a1a);
+      upper.line(ax + 4, bodyTop + 19, ax, bodyTop + 14, 2.5, 0x5a3a1a);
+    }
+  } else if (style === 'palace') {
+    // мраморные плиты, золотые пилястры и ромбы
+    for (let y = bodyTop + 2; y < lowerTop - 4; y += 22) upper.line(-W / 2 + 2, y, W / 2 - 2, y, 1, shade(body, -0.12));
+    for (const x of [-W / 2 + 10, W / 2 - 10]) {
+      upper.rect(x - 7, bodyTop, 14, lowerTop - bodyTop, 0xffcf3f, 0, 2);
+      upper.flat(0xfff0a0).fillRect(x - 4, bodyTop + 2, 3, lowerTop - bodyTop - 4);
+    }
   } else if (style === 'piazza') {
     for (let y = bodyTop + 2, row = 0; y < lowerTop - 6; y += 13, row++)
       for (let x = -W / 2 + 2 + (row % 2) * 12; x < W / 2 - 14; x += 24)
@@ -169,13 +199,17 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
   }
 
   // окно выдачи
-  const frame = style === 'metro' ? 0x9a9aa8 : style === 'piazza' ? 0xe8d8b8 : shade(body, -0.35);
-  if (style === 'piazza') {
+  const frame = style === 'metro' ? 0x9a9aa8 : style === 'piazza' ? 0xe8d8b8 : style === 'palace' ? 0xffcf3f : shade(body, -0.35);
+  if (style === 'piazza' || style === 'palace') {
     upper.rect(winL - 6, winT - 4, winW + 12, winH + 8, frame, 0, 3);
     upper.ellipse(winX, winT - 2, winW + 12, 44, frame, 3);
     upper.flat(frame).fillRect(winL - 4.5, winT - 4, winW + 9, 10);
     upper.ellipse(winX, winT, winW, 34, 0x3b2a4f, 0);
-    upper.circle(winX, winT - 20, 5, AMBER, 2); // замковый камень
+    if (style === 'palace') upper.poly(star(winX, winT - 20, 9, 4), TOMATO, 2);
+    else upper.circle(winX, winT - 20, 5, AMBER, 2); // замковый камень
+  } else if (style === 'dump') {
+    // вырезанное ножом окно с откинутым клапаном
+    upper.poly([[winL - 4, winT - 3], [winR + 3, winT - 6], [winR + 5, winT + winH + 4], [winL - 3, winT + winH + 6]], shade(body, -0.3), 2.5);
   } else upper.rect(winL - 5, winT - 5, winW + 10, winH + 10, frame, style === 'desert' ? 10 : 2, 3);
   upper.rect(winL, winT, winW, winH, 0x3b2a4f, style === 'desert' ? 8 : 0, 0);
   // полки с банками внутри
@@ -277,6 +311,21 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     front.rect(rx - rw / 2 + 5, ry + 5, rw - 10, rh - 10, 0xd9a03a, 0, 0);
     for (let i = 0; i < 5; i++) front.poly([[rx - rw / 2 + 8 + i * ((rw - 16) / 5), ry + rh / 2], [rx - rw / 2 + 8 + (i + 0.5) * ((rw - 16) / 5), ry + 8], [rx - rw / 2 + 8 + (i + 1) * ((rw - 16) / 5), ry + rh / 2], [rx - rw / 2 + 8 + (i + 0.5) * ((rw - 16) / 5), ry + rh - 8]], 0x2a6b8a, 1.5);
     for (let i = 0; i < 7; i++) front.line(rx - rw / 2 + 4 + i * (rw - 8) / 6, ry + rh, rx - rw / 2 + 4 + i * (rw - 8) / 6, ry + rh + 5, 2, 0xd9a03a);
+  } else if (style === 'dump') {
+    // коробка: клапаны внизу, скотч и надпись маркером
+    front.line(-W / 2 + 2, lowerTop + 4, W / 2 - 2, lowerTop + 4, 1.5, shade(body, -0.35));
+    front.flat(0xe8d8a0, 0.9).fillRect(-W * 0.36, lowerTop + 1.5, 12, -lowerTop - 3);
+    front.line(0, lowerTop + 6, 0, -3, 1.5, shade(body, -0.35));
+    root.add(scene.add.text(W * 0.18, (lowerTop) / 2, t('neonDump'), { fontFamily: DISPLAY_FONT, fontSize: '13px', fontStyle: '900', color: '#3a2a4f' }).setOrigin(0.5).setAngle(-6).setAlpha(0.8));
+  } else if (style === 'palace') {
+    // золотые панели с камнями
+    const n = 4, pw = (W - 24) / n;
+    for (let i = 0; i < n; i++) {
+      const px = -W / 2 + 12 + i * pw;
+      front.rect(px + 3, lowerTop + 8, pw - 6, -lowerTop - 16, 0xffe08a, 4, 2);
+      front.poly([[px + pw / 2, lowerTop + 14], [px + pw / 2 + 8, (lowerTop) / 2], [px + pw / 2, -14], [px + pw / 2 - 8, (lowerTop) / 2]], [TOMATO, 0x3d6fb6, 0x2f9e5a, 0xb04fbf][i], 2);
+      front.flat(WHITE, 0.6).fillCircle(px + pw / 2 - 2, (lowerTop) / 2 - 4, 2);
+    }
   } else if (style === 'piazza') {
     for (let y = lowerTop + 2, row = 0; y < -6; y += 13, row++)
       for (let x = -W / 2 + 2 + (row % 2) * 12; x < W / 2 - 14; x += 24) front.flat(shade(body, -0.26 + ((x + y) & 3) * 0.03)).fillRoundedRect(x, y, 22, 11, 2);
@@ -289,7 +338,7 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
   }
 
   // прилавок
-  front.rect(-W / 2 - 9, counterY - 3, W + 18, 9, style === 'jungle' ? 0xb07a4a : CREAM, 2);
+  front.rect(-W / 2 - 9, counterY - 3, W + 18, 9, style === 'jungle' ? 0xb07a4a : style === 'dump' ? WOOD : style === 'palace' ? 0xffcf3f : CREAM, 2);
   front.flat(shade(CREAM, -0.25)).fillRect(-W / 2 - 7, counterY + 4, W + 14, 2);
 
   // лаваш стопкой (растёт со стадией)
@@ -464,6 +513,40 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     }
     roofTop = ay - 30;
     eave = ay + 14;
+  } else if (style === 'dump') {
+    // синий тент, натянутый на палки и привязанный верёвками
+    for (const x of [-W / 2 - 8, W / 2 + 8]) top.rect(x - 3, ay - 34, 6, -ay + 34, WOOD, 1, 2);
+    const sag = 14;
+    top.g.fillStyle(roof, 1).beginPath();
+    top.g.moveTo(-W / 2 - 22, ay - 30);
+    for (let i = 0; i <= 10; i++) top.g.lineTo(-W / 2 - 22 + ((W + 44) * i) / 10, ay - 30 + Math.sin((i / 10) * Math.PI) * sag);
+    top.g.lineTo(W / 2 + 26, ay + 2);
+    for (let i = 10; i >= 0; i--) top.g.lineTo(-W / 2 - 22 + ((W + 44) * i) / 10 + (i % 2 ? 3 : -3), ay + 2 + Math.sin((i / 10) * Math.PI) * sag + (i % 2 ? 6 : 0));
+    top.g.closePath().fillPath();
+    top.g.lineStyle(3, OUTLINE, 1).strokePath();
+    for (let i = 1; i < 5; i++) top.line(-W / 2 + (W / 5) * i, ay - 28 + sag * 0.6, -W / 2 + (W / 5) * i + 6, ay + 4 + sag * 0.6, 1.5, shade(roof, -0.3));
+    top.flat(WHITE, 0.25).fillRect(-W / 2, ay - 22, W * 0.4, 4);
+    // заплатка и верёвки
+    top.rect(W * 0.18, ay - 18, 22, 14, 0xe4472b, 1, 2);
+    top.line(-W / 2 - 22, ay - 30, -W / 2 - 40, 0, 1.5, 0xc8b88a);
+    top.line(W / 2 + 26, ay - 30, W / 2 + 44, 0, 1.5, 0xc8b88a);
+    roofTop = ay - 34;
+    eave = ay + 10;
+  } else if (style === 'palace') {
+    // зубчатый карниз и три купола
+    top.rect(-W / 2 - 14, ay - 8, W + 28, 12, 0xffcf3f, 2);
+    for (let x = -W / 2 - 12; x < W / 2 + 10; x += 20) top.rect(x, ay - 20, 12, 12, body, 1, 2);
+    const domes: [number, number][] = [[-W * 0.38, 0.8], [W * 0.38, 0.8], [0, 1.6]];
+    for (const [dx, k] of domes) {
+      const dw = 70 * k, dh = 80 * k, by = ay - 20;
+      top.rect(dx - dw * 0.42, by - 14 * k, dw * 0.84, 14 * k, body, 0, 2);
+      top.poly([[dx - dw / 2, by - 14 * k], [dx - dw * 0.48, by - dh * 0.45], [dx - dw * 0.26, by - dh * 0.75], [dx, by - dh], [dx + dw * 0.26, by - dh * 0.75], [dx + dw * 0.48, by - dh * 0.45], [dx + dw / 2, by - 14 * k]], k === 1 ? 0xe4472b : 0xffcf3f, 2.5);
+      top.flat(WHITE, 0.35).fillEllipse(dx - dw * 0.2, by - dh * 0.45, dw * 0.12, dh * 0.3);
+      top.line(dx, by - dh, dx, by - dh - 14 * k, 2.5, 0xffcf3f);
+      top.circle(dx, by - dh - 16 * k, 4 * k + 1, 0xffcf3f, 2);
+    }
+    roofTop = ay - 20 - 128 - 26;
+    eave = ay + 8;
   } else {
     // черепичная крыша и зелёно-белая маркиза над окном
     top.poly([[-W / 2 - 16, ay + 4], [W / 2 + 16, ay + 4], [W / 2 - 6, ay - 30], [-W / 2 + 6, ay - 30]], 0xb8553d);
@@ -530,10 +613,12 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
 
   // вывеска
   const signW = Math.min(W * 0.8, 200), signH = 34;
-  const signY = roofTop - signH / 2 + 4;
+  const signY = style === 'palace' ? ay - 40 : roofTop - signH / 2 + 4;
   const sign = layer();
   if (look.tier >= 4) sign.rect(-signW / 2 - 5, signY - signH / 2 - 5, signW + 10, signH + 10, 0xffcf3f, 6, 2.5);
-  sign.rect(-signW / 2, signY - signH / 2, signW, signH, PLUMISH(style), 5, 3);
+  if (style === 'palace') sign.rect(-signW / 2 - 6, signY - signH / 2 - 6, signW + 12, signH + 12, 0xffcf3f, 8, 3);
+  if (style === 'dump') sign.poly([[-signW / 2, signY - signH / 2 + 3], [signW / 2, signY - signH / 2 - 2], [signW / 2 - 3, signY + signH / 2], [-signW / 2 + 2, signY + signH / 2 + 2]], PLUMISH(style), 3);
+  else sign.rect(-signW / 2, signY - signH / 2, signW, signH, PLUMISH(style), 5, 3);
   if (S.sign > 0) {
     // рамка из лампочек вокруг неоновой вывески
     for (let i = 0; i < 10; i++) {
@@ -546,8 +631,9 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     }
   }
   const label = scene.add
-    .text(0, signY + 1, t('neon'), { fontFamily: DISPLAY_FONT, fontSize: '18px', fontStyle: '900', color: S.sign > 0 ? '#ffd86b' : '#d8c8a8' })
+    .text(0, signY + 1, style === 'dump' && S.sign === 0 ? t('neonDump') : t('neon'), { fontFamily: DISPLAY_FONT, fontSize: '18px', fontStyle: '900', color: S.sign > 0 ? '#ffd86b' : style === 'dump' ? '#2a1b3d' : '#d8c8a8' })
     .setOrigin(0.5);
+  if (style === 'dump') label.setAngle(-3);
   if (S.sign > 0) {
     label.setShadow(0, 0, '#ff9d2e', 10, false, true);
     addGlow(label);
@@ -604,5 +690,7 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
 }
 
 function PLUMISH(style: string) {
+  if (style === 'dump') return 0xd8b07a;
+  if (style === 'palace') return 0x7a1f3a;
   return style === 'piazza' ? 0x2f4a3a : style === 'jungle' ? 0x3a2a1a : 0x2a1b3d;
 }

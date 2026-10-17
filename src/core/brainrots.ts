@@ -14,17 +14,17 @@ export interface BrainrotDef {
 export const BRAINROTS: BrainrotDef[] = [
   { id: 'tralalero', home: 0, role: 'customer' },
   { id: 'chimpanzini', home: 0, role: 'customer' },
-  { id: 'cappuccino', home: 0, role: 'customer' },
+  { id: 'cappuccino', home: 1, role: 'customer' },
   { id: 'tungtung', home: 0, role: 'staff' },
   { id: 'ballerina', home: 0, role: 'staff' },
   { id: 'bombardiro', home: 0, role: 'event' },
-  { id: 'trippi', home: 1, role: 'customer' },
+  { id: 'trippi', home: 2, role: 'customer' },
   { id: 'boneca', home: 1, role: 'customer' },
-  { id: 'patapim', home: 2, role: 'customer' },
-  { id: 'lirili', home: 3, role: 'customer' },
-  { id: 'frigo', home: 3, role: 'customer' },
-  { id: 'vaca', home: 4, role: 'customer' },
-  { id: 'gusini', home: 4, role: 'customer' },
+  { id: 'patapim', home: 3, role: 'customer' },
+  { id: 'lirili', home: 4, role: 'customer' },
+  { id: 'frigo', home: 4, role: 'customer' },
+  { id: 'vaca', home: 5, role: 'customer' },
+  { id: 'gusini', home: 5, role: 'customer' },
 ];
 
 export const BRAINROT_BY_ID: Record<string, BrainrotDef> = Object.fromEntries(BRAINROTS.map((b) => [b.id, b]));

@@ -15,12 +15,15 @@ import {
   addMoney,
   buyN,
   canBuyN,
+  isMaxed,
+  isVisible,
   CRIT_MULT,
   adBoxReady,
   applyGolden,
   boxCost,
   buyBox,
   canBuyBox,
+  canRelocate,
   comboMult,
   freeBox,
   goldenReward,
@@ -42,7 +45,7 @@ import {
 import { unlockAchievements } from './core/achievements';
 import { formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
-import { UPGRADE_BY_ID } from './core/upgrades';
+import { UPGRADES, UPGRADE_BY_ID } from './core/upgrades';
 import { lang, t } from './i18n';
 import type { Platform, ProductId } from './platform/platform';
 import { StallScene } from './scenes/StallScene';
@@ -90,6 +93,7 @@ export class Game {
       claimDaily: () => void this.claimDaily(),
       openDaily: () => void this.openDaily(),
       claimQuest: (i) => void this.claimQuest(i),
+      sheet: (inset) => this.scene.setInset(inset),
     });
   }
 
@@ -137,6 +141,8 @@ export class Game {
     this.platform.gameplayStart();
 
     setInterval(() => this.loop(), 100);
+    // начало сюжета: только у совсем нового игрока
+    if (this.state.lifetimeEarned === 0 && this.state.location === 0) setTimeout(() => this.ui.toast(t('storyStart'), 'medal'), 1200);
     // подарок дня встречает игрока сразу после чека за офлайн
     if (canClaimDaily(this.state, dayKey(new Date()))) void this.openDaily();
   }
@@ -152,8 +158,21 @@ export class Game {
     this.events(now);
     this.scene.setIncome(incomePerSecond(this.state, now));
     this.scene.setLook(this.state.levels);
+    this.scene.setHints(this.hints(now));
     this.ui.render(this.state, now);
     if (now - this.lastSave > SAVE_EVERY_MS) void this.save();
+  }
+
+  // о чём маскот напоминает в первую очередь
+  private hints(now: number): string[] {
+    const s = this.state;
+    const out: string[] = [];
+    if (canRelocate(s)) out.push('barkMove');
+    if (adBoxReady(s, now) || canBuyBox(s, now)) out.push('barkBox');
+    if (canClaimDaily(s, dayKey(new Date()))) out.push('barkDaily');
+    // новичку подсказываем про улучшения, опытному не надоедаем
+    if (s.bought < 10 && UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1))) out.push('barkUp');
+    return out;
   }
 
   private async welcomeBack(now: number) {
@@ -398,9 +417,10 @@ export class Game {
     sfx.move();
     this.scene.setLocation(this.state.location, true);
     this.scene.setLook(this.state.levels);
-    this.ui.showTab('upgrades');
+    this.ui.closePanel();
     const loc = LOCATIONS[this.state.location];
     this.ui.moveCard(loc.id, loc.mult);
+    if (this.state.location === LOCATIONS.length - 1) setTimeout(() => this.ui.toast(t('storyEnd'), 'medal'), 2500);
     await this.save();
     // полноэкранная реклама только в этой логичной паузе и только без покупки «Без рекламы»
     if (!this.state.owned.noAds) {

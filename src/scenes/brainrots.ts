@@ -416,6 +416,52 @@ const DRAW: Record<string, (scene: Phaser.Scene) => Critter> = {
 
 export const BRAINROT_IDS = Object.keys(DRAW);
 
+// Маскот-зазывала: Тунг Тунг с мегафоном, поднятой битой и щитом-рекламой на груди.
+// Надпись на щите добавляет сцена (текст на языке игрока). Щит: x −31…31, y −58…−14.
+export function drawMascot(scene: Phaser.Scene): Critter {
+  return assemble(scene, makeLegs(scene, { skin: 0xb07a4a, shoe: 0xe4472b, len: 14, spread: 10, width: 8, sole: WHITE, swoosh: true }), (p) => {
+    // поднятая рука с битой
+    p.line(16, -62, 38, -92, 8);
+    p.line(16, -62, 38, -92, 4, 0xc08a5a);
+    p.poly([[34, -90], [41, -94], [70, -148], [58, -154]], 0xe8c48a);
+    p.flat(WHITE, 0.4).fillTriangle(60, -146, 64, -148, 42, -100);
+    p.circle(38, -93, 5.5, 0xc08a5a, 2.6);
+    // полено
+    p.rect(-22, -118, 44, 104, 0xc08a5a, 14);
+    p.flat(0xa8743f).fillRoundedRect(8, -112, 10, 92, 5);
+    p.g.lineStyle(3.2, OUTLINE, 1).strokeRoundedRect(-22, -118, 44, 104, 14);
+    p.ellipse(0, -116, 42, 12, 0xe3b585, 2.8);
+    p.ellipse(0, -116, 26, 7, 0xd9a46a, 1.6);
+    // кепка козырьком набок
+    p.poly([[-20, -118], [-16, -134], [14, -136], [20, -118]], TOMATO, 2.8);
+    p.poly([[14, -122], [36, -120], [34, -114], [16, -116]], TOMATO, 2.6);
+    p.circle(-2, -136, 3, 0xffd86b, 2);
+    // глаза навыкате и брови домиком
+    bigEye(p, -6, -92, 11, 0.15);
+    bigEye(p, 15, -92, 11, 0.15);
+    brow(p, -18, -110, -2, -106, 3.8);
+    brow(p, 4, -106, 24, -110, 3.8);
+    // орущий рот
+    p.ellipse(4, -70, 22, 14, MOUTH, 2.8);
+    p.flat(WHITE).fillRect(-4, -76, 16, 3.5);
+    p.flat(0xf28c8c).fillEllipse(4, -66, 10, 5);
+    // щит-реклама на лямках
+    p.line(-20, -58, -18, -104, 3, 0x5a3a1a);
+    p.line(20, -58, 18, -104, 3, 0x5a3a1a);
+    p.rect(-31, -58, 62, 44, 0xfff4dc, 5, 3);
+    p.flat(TOMATO).fillRect(-29.5, -56.5, 59, 8);
+    p.line(-31, -48, 31, -48, 2);
+    // рука с мегафоном у рта
+    p.line(-20, -60, -34, -66, 8);
+    p.line(-20, -60, -34, -66, 4, 0xc08a5a);
+    p.poly([[-12, -76], [-12, -64], [-44, -54], [-44, -88]], 0xffd86b, 3);
+    p.ellipse(-44, -71, 10, 34, 0xffb02e, 3);
+    p.ellipse(-44, -71, 5, 24, 0x7a1f2b, 0);
+    p.rect(-30, -66, 7, 12, 0x5a5270, 2, 2.4);
+    p.flat(WHITE, 0.5).fillTriangle(-14, -74, -40, -84, -40, -80);
+  }, 132, 96, 136);
+}
+
 export function drawBrainrot(scene: Phaser.Scene, id: string): Critter {
   return (DRAW[id] ?? DRAW.tralalero)(scene);
 }

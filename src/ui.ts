@@ -49,6 +49,8 @@ export interface UiActions {
   claimDaily(): void;
   openDaily(): void;
   claimQuest(i: number): void;
+  /** сколько пикселей справа закрыла шторка (на ПК), чтобы сцена сдвинула ларёк */
+  sheet(inset: number): void;
 }
 
 export type Tab = 'upgrades' | 'pets' | 'quests' | 'move' | 'shop';
@@ -108,6 +110,7 @@ export class Ui {
   private purchasesAvailable = false;
   private moveArmed = false;
   private tab: Tab = 'upgrades';
+  private open = false;
   private mode: BuyMode = 'x1';
   private shownMoney = -1;
   private lastState?: GameState;
@@ -251,15 +254,38 @@ export class Ui {
     });
 
     $('#h-shop').textContent = t('hShop');
-    this.showTab('upgrades');
+    $('#panel-close').setAttribute('aria-label', t('close'));
+    $('#panel-close').addEventListener('click', () => this.closePanel());
+    // клавиша Esc тоже закрывает шторку
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.closePanel(); });
+    this.syncPanel();
   }
 
+  /** Открыть вкладку в шторке. Повторное нажатие на открытую вкладку прячет шторку. */
   showTab(id: Tab) {
+    if (this.open && this.tab === id) return this.closePanel();
     this.tab = id;
+    this.open = true;
+    this.syncPanel();
+  }
+
+  closePanel() {
+    if (!this.open) return;
+    this.open = false;
+    this.syncPanel();
+  }
+
+  private syncPanel() {
+    const panel = $('#panel');
+    panel.classList.toggle('open', this.open);
+    panel.setAttribute('aria-hidden', String(!this.open));
+    $('#app').classList.toggle('sheet-open', this.open);
     for (const x of TABS) {
-      $(`#tab-${x}`).setAttribute('aria-selected', String(x === id));
-      $(`#panel-${x}`).hidden = x !== id;
+      $(`#tab-${x}`).setAttribute('aria-selected', String(this.open && x === this.tab));
+      $(`#panel-${x}`).hidden = x !== this.tab;
     }
+    const side = window.matchMedia('(min-aspect-ratio: 1/1) and (min-width: 700px)').matches;
+    this.actions.sheet(this.open && side ? Math.min(420, window.innerWidth * 0.42) + 12 : 0);
     if (this.lastState) this.render(this.lastState, Date.now());
   }
 
@@ -331,6 +357,7 @@ export class Ui {
     this.renderSide(s, now);
     this.renderBadges(s, now);
 
+    if (!this.open) return;
     if (this.tab === 'upgrades') this.renderUpgrades(s, now);
     if (this.tab === 'pets') this.renderPets(s, now);
     if (this.tab === 'quests') this.renderQuests(s, now);
@@ -391,7 +418,7 @@ export class Ui {
   private renderBadges(s: GameState, now: number) {
     const set = (tab: Tab, text: string) => {
       const b = $(`#tab-${tab}`).querySelector('.badge') as HTMLElement;
-      b.hidden = !text || this.tab === tab;
+      b.hidden = !text || (this.open && this.tab === tab);
       b.textContent = text;
     };
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));

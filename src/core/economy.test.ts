@@ -110,6 +110,14 @@ describe('сохранения', () => {
     expect(s.money).toBe(50);
     expect(s.lastSeen).toBe(7);
   });
+
+  it('старые сохранения сдвигаются на одну точку: в начало добавилась коробка у помойки', () => {
+    expect(normalize({ version: 5, location: 0 }, 0).location).toBe(1); // был ларёк у метро
+    expect(normalize({ version: 5, location: 4 }, 0).location).toBe(5); // была траттория
+    expect(normalize({ version: 6, location: 0 }, 0).location).toBe(0);
+    expect(LOCATIONS[0].id).toBe('dump');
+    expect(LOCATIONS[LOCATIONS.length - 1].id).toBe('palace');
+  });
 });
 
 describe('числа', () => {
@@ -208,8 +216,8 @@ describe('баланс', () => {
     const ids = (l: number) => customerPool(l).map((p) => p.id);
     expect(ids(0)).toContain('tralalero');
     expect(ids(0)).not.toContain('vaca');
-    expect(ids(4)).toContain('vaca');
-    expect(ids(4)).toContain('tralalero');
+    expect(ids(5)).toContain('vaca');
+    expect(ids(6)).toContain('tralalero');
     for (let l = 0; l < LOCATIONS.length; l++) expect(ids(l).length).toBeGreaterThan(0);
     expect(ids(0)).toContain(pickCustomer(0, 0.999));
   });

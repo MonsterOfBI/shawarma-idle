@@ -33,7 +33,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   at('golden_10', (s) => s.goldenCaught, 10),
   at('taps_10k', (s) => s.taps, 10000),
   at('earn_1t', (s) => s.lifetimeEarned, 1e12),
-  at('move_4', (s) => s.location, 4),
+  at('move_4', (s) => s.location, 6),
 ];
 
 export function achievementMult(s: GameState): number {

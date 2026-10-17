@@ -5,7 +5,7 @@ import { LOCATIONS } from './locations';
 import { type BoxKind, type Pet, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 // Офлайн-доход начисляется не больше чем за 2 часа отсутствия.
 export const OFFLINE_CAP_SECONDS = 2 * 60 * 60;
@@ -121,7 +121,8 @@ export function normalize(raw: unknown, now: number): GameState {
     lifetimeEarned: num(r.lifetimeEarned, num(r.money, 0)),
     taps: num(r.taps, 0),
     levels,
-    location: Math.min(Math.floor(num(r.location, 0)), LOCATIONS.length - 1),
+    // версия 6: в начало сюжета добавилась «Коробка у помойки», старые точки сдвинулись на одну
+    location: Math.min(Math.floor(num(r.location, 0)) + (num(r.version, 0) < 6 ? 1 : 0), LOCATIONS.length - 1),
     boostUntil: num(r.boostUntil, 0),
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
     muted: !!r.muted,
