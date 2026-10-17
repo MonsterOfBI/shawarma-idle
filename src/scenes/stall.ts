@@ -231,14 +231,14 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
   // работники за прилавком: ноги прячутся за нижней панелью
   const addStaff = (id: string, x: number, hat: number) => {
     const c = drawBrainrot(scene, id);
-    const sc = 64 / c.height;
+    const sc = 76 / c.height;
     c.root.setPosition(x, counterY + 8).setScale(sc);
     c.root.setData('y0', counterY + 8);
     if (hat >= 2) {
       // поварской колпак
       const g = scene.add.graphics();
       const p = new Pen(g, 2.5);
-      const top = -c.height - 4;
+      const top = -c.top - 4;
       p.rect(-10, top, 20, 8, WHITE, 2);
       p.circle(-7, top - 6, 7, WHITE);
       p.circle(7, top - 6, 7, WHITE);

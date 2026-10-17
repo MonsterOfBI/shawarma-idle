@@ -450,19 +450,19 @@ export class StallScene extends Phaser.Scene {
     const u = this.unit;
     const y = Math.min(this.scale.height - 4 * u, this.groundY + 40 * u);
     for (const p of this.pets) {
-      const sc = this.critterScale(p.c) * 0.78;
+      const sc = this.critterScale(p.c) * (p.id === 'bombardiro' ? 0.55 : 0.9);
       p.c.root.setData('s', sc).setData('y0', p.id === 'bombardiro' ? y - 26 * u : y);
       p.c.root.setPosition(this.scale.width * PET_SLOTS[p.slot], p.c.root.getData('y0')).setScale(sc);
     }
   }
 
   private critterScale(c: Critter) {
-    return this.unit * (68 / Math.max(70, c.height)) * Math.min(1.1, this.stallScale / this.unit + 0.15);
+    return this.unit * (92 / Math.max(70, c.height)) * Phaser.Math.Clamp(this.stallScale / this.unit + 0.35, 0.8, 1.12);
   }
 
   private queueX(i: number) {
     const left = this.stallX + (this.stall?.left ?? -120) * this.stallScale - 18 * this.unit;
-    return left - i * 42 * this.unit;
+    return left - i * 54 * this.unit;
   }
 
   // ---------- API для контроллера ----------
@@ -703,7 +703,7 @@ export class StallScene extends Phaser.Scene {
             const size = 120;
             const c = drawBrainrot(this, id);
             const wide = id === 'bombardiro';
-            const sc = wide ? 0.82 : Math.min(1, 100 / c.height);
+            const sc = Math.min(108 / c.height, 114 / c.width);
             c.root.setScale(sc);
             const rt = this.add.renderTexture(-500, -500, size, size).setVisible(false);
             rt.draw(c.root, size / 2 + (wide ? 4 : -2), wide ? size / 2 + 6 : size - 8);
