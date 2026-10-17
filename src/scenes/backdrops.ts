@@ -96,6 +96,23 @@ function metro(p: Pen, c: Ctx) {
     p.g.lineBetween(0, y, w, y);
     for (let x = (row % 2) * 18 * u; x < w; x += 36 * u) p.g.lineBetween(x, y - 14 * u, x, y);
   }
+  // средний класс: клумба, скамейка и припаркованная машинка
+  const bed = gy + 16 * u;
+  p.rect(w * 0.02, bed, w * 0.22, 10 * u, nc(0x9a9aa8, 0x3a3448, n), 2, 2);
+  for (let fx = w * 0.03; fx < w * 0.23; fx += 9 * u) {
+    p.circle(fx, bed - 2 * u, 4 * u, nc(LEAF, 0x23401f, n), 1.5);
+    p.circle(fx + 2 * u, bed - 6 * u, 3 * u, nc([TOMATO, 0xf28cb1, AMBER, WHITE][Math.round(fx / u) % 4], 0x4a3a58, n), 1.5);
+  }
+  const car = nc(0x3d6fb6, 0x1f2f4a, n), cx = w * 0.9, cy = hy + (gy - hy) * 0.78;
+  p.rect(cx - 40 * u, cy - 26 * u, 80 * u, 20 * u, car, 7 * u, 2.5);
+  p.rect(cx - 24 * u, cy - 42 * u, 46 * u, 18 * u, car, 7 * u, 2.5);
+  p.rect(cx - 19 * u, cy - 38 * u, 18 * u, 11 * u, nc(0xbfe3f2, 0x3a4a6a, n), 2, 2);
+  p.rect(cx + 2 * u, cy - 38 * u, 16 * u, 11 * u, nc(0xbfe3f2, 0x3a4a6a, n), 2, 2);
+  p.circle(cx - 24 * u, cy - 5 * u, 8 * u, OUTLINE, 0);
+  p.circle(cx + 24 * u, cy - 5 * u, 8 * u, OUTLINE, 0);
+  p.circle(cx - 24 * u, cy - 5 * u, 3.5 * u, 0x9a9aa8, 0);
+  p.circle(cx + 24 * u, cy - 5 * u, 3.5 * u, 0x9a9aa8, 0);
+  p.rect(cx - 30 * u, cy - 50 * u, 24 * u, 6 * u, nc(0x9a6a3e, 0x3a2a24, n), 1, 2); // багажник на крыше
   // знак метро
   const mx = w * 0.1;
   p.rect(mx - 2.5 * u, hy - 80 * u, 5 * u, 80 * u, nc(0x5a5270, 0x2a2440, n), 0, 2);
@@ -451,6 +468,47 @@ function palace(p: Pen, c: Ctx) {
     p.poly([[vx - 18 * u, gy - 30 * u], [vx + 18 * u, gy - 30 * u], [vx + 12 * u, gy], [vx - 12 * u, gy]], gold, 2.5);
     p.g.fillStyle(0xffffff, 0.4).fillRect(vx - 10 * u, gy - 26 * u, 4 * u, 20 * u);
   }
+  // бархатные канаты вдоль дорожки
+  for (const [x0, x1] of [[w * 0.47, w * 0.36], [w * 0.73, w * 0.84]] as const) {
+    const posts = 3;
+    for (let k = 0; k < posts; k++) {
+      const t = (k + 0.5) / posts;
+      const px = x0 + (x1 - x0) * t, py = hy + (h - hy) * t;
+      if (k < posts - 1) {
+        const t2 = (k + 1.5) / posts;
+        const qx = x0 + (x1 - x0) * t2, qy = hy + (h - hy) * t2;
+        p.g.lineStyle(4 * u, nc(0xb8283a, 0x4a1424, n), 1).beginPath().moveTo(px, py - 22 * u);
+        p.g.lineTo((px + qx) / 2, (py + qy) / 2 - 12 * u).lineTo(qx, qy - 22 * u).strokePath();
+      }
+      p.rect(px - 2.5 * u, py - 26 * u, 5 * u, 26 * u, gold, 1, 2);
+      p.circle(px, py - 28 * u, 4 * u, gold, 2);
+    }
+  }
+  // горы золотых монет и слитков
+  const pile = (x: number, base: number, s2: number) => {
+    const su = u * s2;
+    p.poly([[x - 46 * su, base], [x - 30 * su, base - 22 * su], [x - 8 * su, base - 38 * su], [x + 14 * su, base - 34 * su], [x + 34 * su, base - 18 * su], [x + 48 * su, base]], gold, 2.5);
+    for (let k = 0; k < 9; k++) {
+      const cx = x + (((k * 37) % 80) - 40) * su, cy = base - (((k * 23) % 28) + 6) * su;
+      p.ellipse(cx, cy, 12 * su, 5 * su, nc(0xffe08a, 0x8a6a2a, n), 1.5);
+    }
+    p.ellipse(x + 30 * su, base - 10 * su, 6 * su, 14 * su, nc(0xffe08a, 0x8a6a2a, n), 1.8); // монета на ребре
+    for (let k = 0; k < 3; k++) p.rect(x - 52 * su + k * 14 * su, base - 10 * su, 13 * su, 9 * su, nc(0xffd23f, 0x8a6a2a, n), 1, 2); // слитки
+    p.rect(x - 45 * su, base - 19 * su, 13 * su, 9 * su, nc(0xffd23f, 0x8a6a2a, n), 1, 2);
+    p.poly([[x + 2 * su, base - 44 * su], [x + 10 * su, base - 52 * su], [x + 18 * su, base - 44 * su], [x + 10 * su, base - 32 * su]], nc(0x8fe8ff, 0x3a6a8a, n), 2); // бриллиант
+    p.g.fillStyle(WHITE, 0.8).fillTriangle(x + 6 * su, base - 45 * su, x + 10 * su, base - 49 * su, x + 9 * su, base - 42 * su);
+  };
+  pile(w * 0.12, gy + 6 * u, 1);
+  pile(w * 0.93, gy + 12 * u, 0.9);
+  // золотая статуя Тунг Тунга на постаменте
+  const sx = w * 0.86, sb = hy - 4 * u;
+  p.rect(sx - 22 * u, sb - 30 * u, 44 * u, 30 * u, marble, 2, 2.5);
+  p.rect(sx - 26 * u, sb - 34 * u, 52 * u, 6 * u, gold, 1, 2);
+  p.rect(sx - 14 * u, sb - 100 * u, 28 * u, 66 * u, gold, 9 * u, 2.5);
+  p.circle(sx - 5 * u, sb - 80 * u, 6 * u, nc(0xfff0a0, 0x8a7a3a, n), 2);
+  p.circle(sx + 7 * u, sb - 80 * u, 6 * u, nc(0xfff0a0, 0x8a7a3a, n), 2);
+  p.line(sx + 14 * u, sb - 70 * u, sx + 30 * u, sb - 120 * u, 5 * u, gold);
+  p.g.fillStyle(WHITE, 0.4).fillRect(sx - 9 * u, sb - 94 * u, 4 * u, 50 * u);
   // искры золота в воздухе
   for (let k = 0; k < 14; k++) {
     const sx = ((k * 97 + clock / 30) % (w + 40)) - 20;

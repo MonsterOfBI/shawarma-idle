@@ -24,6 +24,7 @@ export interface StallParts {
   winGlow: Phaser.GameObjects.Rectangle;
   steam: { x: number; y: number }[];
   flag?: Phaser.GameObjects.Graphics;
+  rays?: Phaser.GameObjects.Graphics; // золотое сияние за дворцом, медленно вращается
   left: number;
   right: number;
   top: number;
@@ -83,6 +84,16 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
   if (annex) parts.right = W / 2 + annexW + 10;
 
   // ---------- задний план вокруг ларька ----------
+  if (style === 'palace') {
+    const rays = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      rays.fillStyle(0xffd86b, i % 2 ? 0.16 : 0.26).fillTriangle(0, 0, Math.cos(a - 0.09) * 420, Math.sin(a - 0.09) * 420, Math.cos(a + 0.09) * 420, Math.sin(a + 0.09) * 420);
+    }
+    rays.setPosition(0, -H * 0.9);
+    root.add(rays);
+    parts.rays = rays;
+  }
   const back = layer();
   // тень
   back.flat(0x000000, 0.2).fillEllipse(annex ? annexW / 2 : 0, 2, W + 70 + (annex ? annexW : 0), 20);
@@ -196,6 +207,15 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     for (let y = bodyTop + 2, row = 0; y < lowerTop - 6; y += 13, row++)
       for (let x = -W / 2 + 2 + (row % 2) * 12; x < W / 2 - 14; x += 24)
         upper.flat(shade(body, ((x + y) & 3) * 0.04 - 0.06)).fillRoundedRect(x, y, 22, 11, 2);
+  }
+
+  if (style === 'metro') {
+    // средний класс: кондиционер на стене и наклейка «оплата картой»
+    upper.rect(W / 2 - 34, bodyTop + 8, 28, 18, 0xe8e8f0, 3, 2.5);
+    for (let i = 0; i < 4; i++) upper.line(W / 2 - 30, bodyTop + 13 + i * 3, W / 2 - 10, bodyTop + 13 + i * 3, 1, 0x9a9aa8);
+    upper.rect(-W / 2 + 8, bodyTop + 10, 22, 15, 0x3d6fb6, 3, 2);
+    upper.flat(0xffcf3f).fillRect(-W / 2 + 11, bodyTop + 14, 6, 4);
+    upper.flat(WHITE).fillRect(-W / 2 + 11, bodyTop + 20, 16, 2);
   }
 
   // окно выдачи
@@ -322,6 +342,13 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
     front.ellipse(-W * 0.2, -18, 14, 10, 0x2a1b3d, 2);
     front.g.fillStyle(0xe8d8a0, 0.9).fillRect(-W * 0.2 - 10, -21, 20, 5);
     for (const bx of [-W / 2 + 6, W / 2 - 22]) front.rect(bx, -6, 16, 8, 0xb8553d, 1, 2);
+    // табличка «Подайте на лаваш» и консервная банка для мелочи
+    const tx = W / 2 + 34;
+    front.poly([[tx - 30, -34], [tx + 30, -38], [tx + 32, -6], [tx - 28, -4]], 0xd8b07a, 2.5);
+    root.add(scene.add.text(tx + 1, -21, t('dumpBeg'), { fontFamily: DISPLAY_FONT, fontSize: '7px', fontStyle: '900', color: '#2a1b3d', align: 'center', wordWrap: { width: 54 } }).setOrigin(0.5).setAngle(-4));
+    front.rect(tx + 34, -14, 12, 14, 0xc8c8d8, 1, 2);
+    front.flat(0xffcf3f).fillCircle(tx + 40, -15, 3);
+    parts.right = Math.max(parts.right, W / 2 + 84);
     root.add(scene.add.text(W * 0.18, (lowerTop) / 2, t('neonDump'), { fontFamily: DISPLAY_FONT, fontSize: '13px', fontStyle: '900', color: '#3a2a4f' }).setOrigin(0.5).setAngle(-6).setAlpha(0.8));
   } else if (style === 'palace') {
     // золотые панели с камнями
@@ -346,6 +373,21 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
   // прилавок
   front.rect(-W / 2 - 9, counterY - 3, W + 18, 9, style === 'jungle' ? 0xb07a4a : style === 'dump' ? WOOD : style === 'palace' ? 0xffcf3f : CREAM, 2);
   front.flat(shade(CREAM, -0.25)).fillRect(-W / 2 - 7, counterY + 4, W + 14, 2);
+
+  // во дворце на прилавке столбики золотых монет, перед ларьком сундуки с золотом
+  if (style === 'palace') {
+    for (const [cx, n] of [[W * 0.06, 5], [W * 0.13, 3], [W * 0.42, 4]] as const)
+      for (let i = 0; i < n; i++) front.ellipse(cx, counterY - 5 - i * 4, 14, 6, i % 2 ? 0xffd23f : 0xffe08a, 1.6);
+    for (const sx of [-W / 2 - 30, W / 2 + 30]) {
+      front.rect(sx - 18, -24, 36, 24, 0x8a5a33, 3, 2.5);
+      front.flat(0xffcf3f).fillRect(sx - 18, -14, 36, 3);
+      front.ellipse(sx, -26, 36, 14, 0xffcf3f, 2.5);
+      for (let k = -1; k <= 1; k++) front.ellipse(sx + k * 9, -31, 10, 5, 0xffe08a, 1.5);
+      front.poly([[sx + 6, -38], [sx + 11, -43], [sx + 16, -38], [sx + 11, -31]], 0x8fe8ff, 1.8);
+    }
+    parts.left = Math.min(parts.left, -W / 2 - 52);
+    parts.right = Math.max(parts.right, W / 2 + 52);
+  }
 
   // лаваш стопкой (растёт со стадией)
   const lav = [0, 2, 3, 4, 5, 7][S.lavash];
@@ -551,6 +593,8 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
       top.line(dx, by - dh, dx, by - dh - 14 * k, 2.5, 0xffcf3f);
       top.circle(dx, by - dh - 16 * k, 4 * k + 1, 0xffcf3f, 2);
     }
+    // бриллианты на шпилях
+    for (const [dx, k] of domes) top.poly([[dx, ay - 20 - 80 * k - 32 * k], [dx + 7 * k, ay - 20 - 80 * k - 24 * k], [dx, ay - 20 - 80 * k - 14 * k], [dx - 7 * k, ay - 20 - 80 * k - 24 * k]], 0x8fe8ff, 2);
     roofTop = ay - 20 - 128 - 26;
     eave = ay + 8;
   } else {

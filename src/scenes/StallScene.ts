@@ -99,6 +99,8 @@ export class StallScene extends Phaser.Scene {
   private mascot!: Critter;
   private mascotBubble?: Phaser.GameObjects.Container;
   private mascotPhase = 0;
+  private goldRain!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private rainTimer = 0;
   private mascotLevel = -1;
   private mascotJump = 0;
   private barkIn = 3500;
@@ -134,7 +136,7 @@ export class StallScene extends Phaser.Scene {
     return Math.round(this.groundY - Math.max(44, this.scale.height * 0.14));
   }
   private get stallX() {
-    return Math.round(this.scale.width * 0.6);
+    return Math.round(this.scale.width * (LOCATIONS[this.location]?.id === 'palace' ? 0.56 : 0.6));
   }
   private get unit() {
     return Phaser.Math.Clamp(this.scale.height / 320, 0.55, 2);
@@ -210,6 +212,20 @@ export class StallScene extends Phaser.Scene {
         emitting: false,
       })
       .setDepth(11);
+
+    // во дворце с неба падают монеты
+    this.goldRain = this.add
+      .particles(0, 0, 'coin', {
+        lifespan: 2600,
+        speedY: { min: 60, max: 140 },
+        speedX: { min: -20, max: 20 },
+        gravityY: 60,
+        rotate: { min: 0, max: 360 },
+        scale: { min: 0.5, max: 0.9 },
+        alpha: { start: 1, end: 0.2 },
+        emitting: false,
+      })
+      .setDepth(4.5);
 
     this.comboText = this.add
       .text(0, 0, '', { fontFamily: DISPLAY_FONT, fontSize: '20px', color: '#fff4dc', fontStyle: '800', stroke: '#2a1b3d', strokeThickness: 6 })
@@ -466,7 +482,11 @@ export class StallScene extends Phaser.Scene {
     const st = this.stall;
     const room = this.groundY - this.hudBottom - 10;
     const half = Math.max(-st.left, st.right);
-    this.stallScale = Math.min(this.unit, (width * 0.39) / half, Math.max(50, room) / -st.top);
+    // нищая коробка нарочно мелкая, дворец — во весь экран
+    const id = LOCATIONS[this.location].id;
+    const k = id === 'dump' ? 0.8 : 1;
+    const frac = id === 'palace' ? 0.47 : 0.39;
+    this.stallScale = k * Math.min(this.unit, (width * frac) / half, Math.max(50, room) / -st.top);
     const sx = this.stallX, gy = this.groundY, s = this.stallScale;
     st.root.setPosition(sx, gy).setScale(s);
     st.glow.setPosition(sx, gy).setScale(s);
@@ -931,6 +951,7 @@ export class StallScene extends Phaser.Scene {
     st.heaters.forEach((g) => g.setAlpha(flick));
     st.pulses.forEach((p, i) => (p as Phaser.GameObjects.Arc).setAlpha((0.2 + 0.4 * this.nightK) * (0.7 + 0.3 * Math.sin(this.clock / 350 + i))));
     st.bulbs.forEach((b, i) => b.setAlpha(0.6 + 0.4 * Math.sin(this.clock / 300 + i * 1.7) * (this.nightK > 0.2 ? 1 : 0.3)));
+    st.rays?.setRotation(this.clock / 9000);
     st.beams.forEach((b, i) => {
       b.setRotation(Math.sin(this.clock / 1600 + i * 2) * 0.35 + (i ? 0.15 : -0.15));
       b.setAlpha(this.nightK);
@@ -984,6 +1005,13 @@ export class StallScene extends Phaser.Scene {
     }
 
     this.animateMascot(delta);
+    if (LOCATIONS[this.location].id === 'palace') {
+      this.rainTimer -= delta;
+      if (this.rainTimer <= 0) {
+        this.rainTimer = 220 + Math.random() * 260;
+        this.goldRain.emitParticleAt(Math.random() * this.scale.width, -12, 1);
+      }
+    }
 
     // питомцы пританцовывают, в час пик быстрее
     for (const p of this.pets) {
