@@ -485,7 +485,7 @@ export class StallScene extends Phaser.Scene {
     const u = this.unit;
     const y = Math.min(this.scale.height - 4 * u, this.groundY + 40 * u);
     // маскот крупнее питомцев и стоит в самом низу слева
-    const ms = this.critterScale(this.mascot) * 1.12;
+    const ms = this.critterScale(this.mascot) * 0.98;
     const my = Math.min(this.scale.height - 2 * u, this.groundY + 48 * u);
     this.mascot.root.setData({ s: ms, y0: my }).setPosition(Math.max(46 * u, this.scale.width * MASCOT_X), my).setScale(ms);
     for (const p of this.pets) {

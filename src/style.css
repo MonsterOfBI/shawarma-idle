@@ -591,3 +591,42 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 #stage.tapfrenzy::after { opacity: 1; box-shadow: inset 0 0 70px 14px rgba(255, 122, 184, 0.7); animation: vignette 0.6s ease-in-out infinite alternate; }
 #stage.frenzy.tapfrenzy::after { box-shadow: inset 0 0 70px 14px rgba(255, 216, 107, 0.6), inset 0 0 140px 30px rgba(255, 122, 184, 0.4); }
 @keyframes vignette { from { opacity: 0.6; } to { opacity: 1; } }
+
+/* ================= компактное меню (v2.3) =================
+   Как у AdVenture Capitalist, Idle Miner и кликеров Яндекс Игр: на телефоне меню занимает
+   около трети экрана и показывает 3 строки улучшений, строка ~56 px, кнопка цены справа;
+   на компьютере — узкая колонка ~320 px. Улица остаётся главной. */
+#app { grid-template-rows: minmax(0, 1fr) minmax(0, clamp(190px, 33%, 300px)) auto; }
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  #app { grid-template-columns: minmax(0, 1fr) clamp(290px, 26vw, 340px); grid-template-rows: minmax(0, 1fr) auto; }
+}
+.panel-body { padding: 8px 8px 12px; }
+.panel-head { margin: 0 2px 8px; }
+.panel-head:not(:first-child) { margin-top: 14px; }
+.panel-head h2 { font-size: 14px; white-space: nowrap; }
+.seg button { padding: 4px 8px; font-size: 10.5px; }
+.list { gap: 8px; }
+.card { border-radius: 13px; box-shadow: 0 0 0 2px var(--plum-0), 0 3px 0 2px var(--plum-0); }
+.up { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 8px; padding: 6px 7px; }
+.up-icon { width: 38px; height: 38px; border-radius: 11px; box-shadow: inset 0 0 0 2px var(--plum); }
+.up-icon svg { width: 26px; height: 26px; }
+.up-name { font-size: 13px; }
+.up-desc { font-size: 11px; }
+.up-ms { margin-top: 2px; }
+.up-ms .bar { height: 5px; }
+.up-ms span { font-size: 8.5px; }
+.up .btn { min-width: 76px; min-height: 38px; font-size: 12px; padding: 4px 8px; border-radius: 11px; box-shadow: 0 0 0 2px var(--plum), 0 3px 0 2px var(--plum); }
+.up .btn small { font-size: 9px; }
+.up .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 0 0 2px var(--plum), 0 0 0 2px var(--plum); }
+.up .btn:disabled { box-shadow: 0 0 0 2px var(--plum), 0 2px 0 2px var(--plum); }
+.up .btn.done { box-shadow: 0 0 0 2px var(--plum); }
+/* нижние вкладки ниже и плотнее */
+.tabs { padding-top: 6px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5px); }
+.tabs button { padding: 3px 2px; gap: 1px; font-size: clamp(9.5px, 2.6vw, 11px); border-radius: 12px; }
+.tabs .ico { width: 22px; height: 22px; }
+.tabs button[aria-selected='true'] { transform: translateY(-3px); }
+.up-lv { right: -6px; bottom: -6px; min-width: 20px; height: 18px; padding: 0 4px; font-size: 9.5px; border-radius: 9px; }
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  .tabs { gap: 2px; padding-left: 4px; padding-right: 4px; }
+  .tabs button { font-size: 9.5px; letter-spacing: -0.02em; }
+}
