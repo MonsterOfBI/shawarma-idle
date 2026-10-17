@@ -7,30 +7,48 @@ import type { GameState } from './economy';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic' | 'god';
 export const RARITIES: Rarity[] = ['common', 'rare', 'epic', 'legendary', 'mythic', 'god'];
 
-// Бонус к доходу за питомца на первом уровне (0,05 = +5 %).
+// Бонус к доходу за питомца на первом уровне (0,03 = +3 %).
+// Урезан вдвое в версии 2.5: золотой ящик за рекламу раз в 4 минуты давал в среднем +40 % дохода навсегда,
+// и реклама обесценивала всю остальную прокачку. Теперь в среднем около +20 % за ящик.
 export const RARITY_BONUS: Record<Rarity, number> = {
-  common: 0.05,
-  rare: 0.12,
-  epic: 0.3,
-  legendary: 0.75,
-  mythic: 2,
-  god: 5,
+  common: 0.03,
+  rare: 0.07,
+  epic: 0.15,
+  legendary: 0.4,
+  mythic: 1,
+  god: 3,
 };
+// Каждый повтор питомца добавляет 30 % его базового бонуса.
+export const DUPLICATE_STEP = 0.3;
 
 export const PET_RARITY: Record<string, Rarity> = {
   gusini: 'common',
   boneca: 'common',
   trippi: 'common',
+  hotspot: 'common',
+  bobritto: 'common',
+  golubiro: 'common',
+  burbaloni: 'common',
   chimpanzini: 'rare',
   cappuccino: 'rare',
   frigo: 'rare',
+  trictrac: 'rare',
+  bananita: 'rare',
+  glorbo: 'rare',
   lirili: 'epic',
   patapim: 'epic',
   ballerina: 'epic',
+  orangutini: 'epic',
+  chicleteira: 'epic',
+  espresso: 'epic',
   tralalero: 'legendary',
   tungtung: 'legendary',
+  spaghetti: 'legendary',
+  graipuss: 'legendary',
   vaca: 'mythic',
+  cannelloni: 'mythic',
   bombardiro: 'god',
+  strawberry: 'god',
 };
 
 export type BoxKind = 'common' | 'golden';
@@ -64,7 +82,7 @@ export function petLevel(p: Pet): number {
 
 export function petBonus(id: string, p: Pet): number {
   const base = RARITY_BONUS[PET_RARITY[id] ?? 'common'];
-  return base * (1 + 0.5 * (p.count - 1)) * MUTATION_MULT[p.mut];
+  return base * (1 + DUPLICATE_STEP * (p.count - 1)) * MUTATION_MULT[p.mut];
 }
 
 export function petMult(s: GameState): number {

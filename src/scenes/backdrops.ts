@@ -316,19 +316,20 @@ function piazza(p: Pen, c: Ctx) {
 function dump(p: Pen, c: Ctx) {
   const { w, h, hy, gy, u, night: n, clock } = c;
   const r = rng(c.seed + 7);
-  // серые панельки вдалеке
+  // облезлые панельки вдалеке: когда-то крашенные в весёлые цвета
+  const panels = [0xf2b48a, 0x9fd3c8, 0xa9c4f0, 0xf2dc8a, 0xe8a8c0];
   let x = -20;
   while (x < w + 20) {
     const bw = (90 + r() * 60) * u;
     const bh = (120 + r() * 90) * u;
-    const wall = nc(lerpColor(0xb8b4c4, 0xa8a4b8, r()), 0x2a2640, n);
+    const wall = nc(lerpColor(panels[Math.floor(r() * panels.length)], 0xc8c0d0, 0.25), 0x2a2640, n);
     p.rect(x, hy - 40 * u - bh, bw, bh, wall, 0, 2);
     for (let yy = hy - 40 * u - bh + 12 * u; yy < hy - 50 * u; yy += 18 * u) p.g.fillStyle(shade(wall, -0.12), 1).fillRect(x, yy, bw, 1.5 * u);
     windowsGrid(p, x, hy - 40 * u - bh, bw, bh - 10 * u, c, wall, r);
     x += bw + (8 + r() * 30) * u;
   }
   // бетонный забор с граффити
-  const fence = nc(0xa8a090, 0x3a3448, n);
+  const fence = nc(0xc8bca0, 0x3a3448, n);
   p.rect(-5, hy - 52 * u, w + 10, 52 * u, fence, 0, 2);
   for (let fx = 0; fx < w; fx += 48 * u) p.line(fx, hy - 52 * u, fx, hy, 1.5, shade(fence, -0.25));
   const tags = [TOMATO, 0x3d6fb6, 0x5e9c3a, 0xf28cb1, AMBER];
@@ -342,14 +343,14 @@ function dump(p: Pen, c: Ctx) {
   }
   // гаражи-ракушки
   for (const gx of [w * 0.18, w * 0.42, w * 0.86]) {
-    const col = nc(lerpColor(0x7a8a6a, 0x8a6a5a, (gx / w) % 1), 0x2a2a38, n);
+    const col = nc(lerpColor(0x5fa86a, 0xd0704a, (gx / w) % 1), 0x2a2a38, n);
     p.rect(gx - 34 * u, hy - 46 * u, 68 * u, 46 * u, col, 0, 2);
     p.poly([[gx - 38 * u, hy - 46 * u], [gx, hy - 58 * u], [gx + 38 * u, hy - 46 * u]], shade(col, -0.15), 2);
     for (let k = 0; k < 6; k++) p.line(gx - 26 * u, hy - 36 * u + k * 6 * u, gx + 26 * u, hy - 36 * u + k * 6 * u, 1.5, shade(col, -0.28));
     p.flat(0x8a4a2a, 0.5).fillCircle(gx + 18 * u, hy - 30 * u, 6 * u); // ржавчина
   }
   // асфальт с трещинами и лужами
-  const asph = nc(0x8a8494, 0x2a263a, n);
+  const asph = nc(0x9a94a8, 0x2a263a, n);
   p.g.fillStyle(asph, 1).fillRect(0, hy, w, h - hy);
   p.g.fillStyle(shade(asph, -0.08), 1).fillRect(0, gy + 30 * u, w, h - gy);
   p.g.lineStyle(1.5, shade(asph, -0.3), 1);
@@ -365,7 +366,7 @@ function dump(p: Pen, c: Ctx) {
     p.g.fillStyle(0xffffff, 0.35 + 0.2 * Math.sin(clock / 600 + px * 9)).fillEllipse(w * px - 10 * u, yy - 1 * u, 14 * u, 2 * u);
   }
   // мусорные баки слева
-  const bin = nc(0x3f7a4f, 0x1f3a2a, n);
+  const bin = nc(0x2f9a5a, 0x1f3a2a, n);
   for (const [bx, k] of [[w * 0.05, 1], [w * 0.15, 0.9]] as const) {
     const bu = u * k;
     p.rect(bx - 26 * bu, gy - 50 * bu, 52 * bu, 46 * bu, bin, 3 * bu, 2.5);

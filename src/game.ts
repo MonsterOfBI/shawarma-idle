@@ -38,6 +38,7 @@ import {
   normalize,
   offlineEarnings,
   relocate,
+  locationMult,
   tap,
   tapValue,
   tick,
@@ -412,16 +413,16 @@ export class Game {
   }
 
   private async relocate() {
-    const before = this.state.location;
+    const before = this.state;
     this.state = relocate(this.state, Date.now());
-    if (this.state.location === before) return;
+    if (this.state === before) return;
     sfx.move();
     this.scene.setLocation(this.state.location, true);
     this.scene.setLook(this.state.levels);
     this.ui.showTab('upgrades');
     const loc = LOCATIONS[this.state.location];
-    this.ui.moveCard(loc.id, loc.mult);
-    if (this.state.location === LOCATIONS.length - 1) setTimeout(() => this.ui.toast(t('storyEnd'), 'medal'), 2500);
+    this.ui.moveCard(loc.id, locationMult(this.state), this.state.stars);
+    if (this.state.location === LOCATIONS.length - 1 && this.state.stars === 0) setTimeout(() => this.ui.toast(t('storyEnd'), 'medal'), 2500);
     await this.save();
     // полноэкранная реклама только в этой логичной паузе и только без покупки «Без рекламы»
     if (!this.state.owned.noAds) {

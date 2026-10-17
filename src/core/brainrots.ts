@@ -12,28 +12,51 @@ export interface BrainrotDef {
 }
 
 export const BRAINROTS: BrainrotDef[] = [
-  { id: 'tralalero', home: 0, role: 'customer' },
-  { id: 'chimpanzini', home: 0, role: 'customer' },
-  { id: 'cappuccino', home: 1, role: 'customer' },
+  // работники и событие — на всех точках
   { id: 'tungtung', home: 0, role: 'staff' },
   { id: 'ballerina', home: 0, role: 'staff' },
   { id: 'bombardiro', home: 0, role: 'event' },
+  // 0 — коробка у помойки: бродяги и бандиты
+  { id: 'chimpanzini', home: 0, role: 'customer' },
+  { id: 'boneca', home: 0, role: 'customer' },
+  { id: 'bobritto', home: 0, role: 'customer' },
+  // 1 — ларёк у метро: город, офис, уличные музыканты
+  { id: 'cappuccino', home: 1, role: 'customer' },
+  { id: 'hotspot', home: 1, role: 'customer' },
+  { id: 'golubiro', home: 1, role: 'customer' },
+  { id: 'trictrac', home: 1, role: 'customer' },
+  // 2 — пляж: морские
+  { id: 'tralalero', home: 2, role: 'customer' },
   { id: 'trippi', home: 2, role: 'customer' },
-  { id: 'boneca', home: 1, role: 'customer' },
+  { id: 'bananita', home: 2, role: 'customer' },
+  { id: 'burbaloni', home: 2, role: 'customer' },
+  // 3 — джунгли
   { id: 'patapim', home: 3, role: 'customer' },
+  { id: 'orangutini', home: 3, role: 'customer' },
+  { id: 'glorbo', home: 3, role: 'customer' },
+  // 4 — пустыня
   { id: 'lirili', home: 4, role: 'customer' },
   { id: 'frigo', home: 4, role: 'customer' },
+  { id: 'chicleteira', home: 4, role: 'customer' },
+  // 5 — итальянская площадь
   { id: 'vaca', home: 5, role: 'customer' },
   { id: 'gusini', home: 5, role: 'customer' },
+  { id: 'espresso', home: 5, role: 'customer' },
+  { id: 'spaghetti', home: 5, role: 'customer' },
+  // 6 — дворец: самые редкие звёзды
+  { id: 'strawberry', home: 6, role: 'customer' },
+  { id: 'cannelloni', home: 6, role: 'customer' },
+  { id: 'graipuss', home: 6, role: 'customer' },
 ];
 
 export const BRAINROT_BY_ID: Record<string, BrainrotDef> = Object.fromEntries(BRAINROTS.map((b) => [b.id, b]));
 
-// Кто стоит в очереди на локации: все посетители до неё, местные — втрое чаще.
+// Кто стоит в очереди на локации: у каждой точки свои персонажи.
+// Гости с прошлой точки иногда заглядывают (вес 1 против 8 у местных), остальные не приходят.
 export function customerPool(location: number): { id: string; weight: number }[] {
-  return BRAINROTS.filter((b) => b.role === 'customer' && b.home <= location).map((b) => ({
+  return BRAINROTS.filter((b) => b.role === 'customer' && (b.home === location || b.home === location - 1)).map((b) => ({
     id: b.id,
-    weight: b.home === location ? 3 : 1,
+    weight: b.home === location ? 8 : 1,
   }));
 }
 

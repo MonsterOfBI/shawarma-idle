@@ -7,8 +7,13 @@ import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrade
 
 export const SAVE_VERSION = 7;
 
-// Офлайн-доход начисляется не больше чем за 2 часа отсутствия.
-export const OFFLINE_CAP_SECONDS = 2 * 60 * 60;
+// Офлайн-доход начисляется не больше чем за 4 часа отсутствия
+// (игроки Яндекс Игр заходят 2–3 раза в день, за 2 часа они теряли бо́льшую часть дохода).
+export const OFFLINE_CAP_SECONDS = 4 * 60 * 60;
+// После дворца путь не кончается: каждая «звезда дворца» — новый переезд в расширенный дворец.
+// Порог растёт в 4 раза за звезду, доход — в 3 раза, поэтому каждая следующая звезда чуть дольше.
+export const STAR_MULT = 3;
+export const STAR_THRESHOLD_GROWTH = 4;
 // Буст ×2 за рекламу: 10 минут за просмотр, копится до часа.
 export const BOOST_SECONDS = 10 * 60;
 export const BOOST_MAX_SECONDS = 60 * 60;
@@ -42,6 +47,7 @@ export interface GameState {
   taps: number;
   levels: Record<string, number>;
   location: number; // индекс в LOCATIONS
+  stars: number; // звёзды дворца: сколько раз расширяли дворец после конца сюжета
   boostUntil: number; // мс; до этого момента доход ×2
   owned: { noAds: boolean; x2Forever: boolean };
   muted: boolean;
@@ -79,6 +85,7 @@ export function newGame(now: number): GameState {
     taps: 0,
     levels: {},
     location: 0,
+    stars: 0,
     boostUntil: 0,
     owned: { noAds: false, x2Forever: false },
     muted: false,
@@ -125,6 +132,7 @@ export function normalize(raw: unknown, now: number): GameState {
     taps: num(r.taps, 0),
     levels,
     location: fresh ? 0 : Math.min(Math.floor(num(r.location, 0)), LOCATIONS.length - 1),
+    stars: fresh ? 0 : Math.floor(num(r.stars, 0)),
     boostUntil: num(r.boostUntil, 0),
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
     muted: !!r.muted,
@@ -172,7 +180,7 @@ export function boostActive(state: GameState, now: number): boolean {
 }
 
 function multFor(state: GameState, now: number, includeBoost: boolean, target: 'all' | 'tap'): number {
-  let m = LOCATIONS[state.location].mult * achievementMult(state) * petMult(state);
+  let m = locationMult(state) * achievementMult(state) * petMult(state);
   if (state.owned.x2Forever) m *= 2;
   if (includeBoost && boostActive(state, now)) m *= 2;
   for (const u of UPGRADES) {
@@ -383,24 +391,45 @@ export function collectOffline(state: GameState, now: number, factor: number): G
   return { ...earn(state, offlineEarnings(state, now) * factor), lastSeen: now };
 }
 
+// Множитель точки с учётом звёзд дворца.
+export function locationMult(state: GameState): number {
+  return LOCATIONS[state.location].mult * Math.pow(STAR_MULT, state.stars);
+}
+
 export function nextLocation(state: GameState) {
   return LOCATIONS[state.location + 1];
 }
 
-export function canRelocate(state: GameState): boolean {
-  const next = nextLocation(state);
-  return !!next && state.runEarned >= next.threshold;
+// Куда ведёт следующий переезд: на новую точку сюжета или в следующую звезду дворца.
+export interface NextMove {
+  id: string;
+  star: number; // 0 — обычная точка, 1+ — номер звезды дворца
+  threshold: number;
+  mult: number;
 }
 
-// Переезд: деньги и улучшения сгорают, локация даёт постоянный множитель.
+export function nextMove(state: GameState): NextMove {
+  const next = nextLocation(state);
+  if (next) return { id: next.id, star: 0, threshold: next.threshold, mult: next.mult };
+  const last = LOCATIONS[LOCATIONS.length - 1];
+  const star = state.stars + 1;
+  return { id: last.id, star, threshold: last.threshold * Math.pow(STAR_THRESHOLD_GROWTH, star), mult: last.mult * Math.pow(STAR_MULT, star) };
+}
+
+export function canRelocate(state: GameState): boolean {
+  return state.runEarned >= nextMove(state).threshold;
+}
+
 export function relocate(state: GameState, now: number): GameState {
   if (!canRelocate(state)) return state;
+  const atEnd = !nextLocation(state);
   return {
     ...state,
     money: 0,
     runEarned: 0,
     levels: {},
-    location: state.location + 1,
+    location: atEnd ? state.location : state.location + 1,
+    stars: atEnd ? state.stars + 1 : state.stars,
     lastSeen: now,
   };
 }

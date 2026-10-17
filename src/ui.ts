@@ -23,7 +23,8 @@ import {
   level,
   milestonesReached,
   minutesOfIncome,
-  nextLocation,
+  nextMove,
+  locationMult,
   nextMilestone,
   MILESTONES,
   tapValue,
@@ -49,6 +50,11 @@ export interface UiActions {
   claimDaily(): void;
   openDaily(): void;
   claimQuest(i: number): void;
+}
+
+// Название точки; дворец со звёздами пишется как «Дворец шаурмы ★2».
+function placeName(id: string, star: number): string {
+  return star > 0 ? t('loc_star', star) : t(`loc_${id}`);
 }
 
 export type Tab = 'upgrades' | 'pets' | 'quests' | 'move' | 'shop';
@@ -277,11 +283,11 @@ export class Ui {
   }
 
   // Большая карточка при переезде на новую точку.
-  moveCard(locId: string, mult: number) {
+  moveCard(locId: string, mult: number, star = 0) {
     $('#move-card-kicker').textContent = t('moveCard');
-    $('#move-card-name').textContent = t(`loc_${locId}`);
-    $('#move-card-desc').textContent = t(`locd_${locId}`);
-    $('#move-card-mult').textContent = t('moveCardMult', mult);
+    $('#move-card-name').textContent = placeName(locId, star);
+    $('#move-card-desc').textContent = star ? t('locd_star') : t(`locd_${locId}`);
+    $('#move-card-mult').textContent = t('moveCardMult', fmt(mult));
     const card = $('#move-card');
     card.hidden = false;
     card.style.animation = 'none';
@@ -319,7 +325,7 @@ export class Ui {
     $('#money').textContent = `${fmt(Math.floor(this.shownMoney))} ₽`;
     $('#rate-sec').textContent = t('perSec', fmt(incomePerSecond(s, now)));
     $('#rate-tap').textContent = t('perTap', fmt(tapValue(s, now)));
-    $('#place').textContent = t(`loc_${LOCATIONS[s.location].id}`);
+    $('#place').textContent = placeName(LOCATIONS[s.location].id, s.stars);
     $('#hint').hidden = s.taps > 5;
     $('#sound').innerHTML = ui(s.muted ? 'mute' : 'sound');
     $('#sound').classList.toggle('off', s.muted);
@@ -599,28 +605,21 @@ export class Ui {
 
   private renderMove(s: GameState) {
     const cur = LOCATIONS[s.location];
-    const next = nextLocation(s);
-    $('#move-now').textContent = t('moveNow', t(`loc_${cur.id}`));
-    $('#move-mult').textContent = t('moveMult', cur.mult);
+    const next = nextMove(s);
+    $('#move-now').textContent = t('moveNow', placeName(cur.id, s.stars));
+    $('#move-mult').textContent = t('moveMult', fmt(locationMult(s)));
     [...$('#route').children].forEach((stop, i) => {
       stop.classList.toggle('passed', i < s.location);
       stop.classList.toggle('here', i === s.location);
     });
-    const box = $('#move-next');
-    if (!next) {
-      box.hidden = true;
-      $('#move-done').hidden = false;
-      $('#move-done').textContent = t('moveDone');
-      return;
-    }
-    box.hidden = false;
+    $('#move-next').hidden = false;
     $('#move-done').hidden = true;
-    $('#move-next-name').textContent = t(`loc_${next.id}`);
-    $('#move-next-desc').textContent = t(`locd_${next.id}`);
+    $('#move-next-name').textContent = placeName(next.id, next.star);
+    $('#move-next-desc').textContent = next.star ? t('locd_star') : t(`locd_${next.id}`);
     const p = Math.min(1, s.runEarned / next.threshold);
     $('#move-bar').style.width = `${(p * 100).toFixed(1)}%`;
     $('#move-progress').textContent = t('moveProgress', `${fmt(s.runEarned)} / ${fmt(next.threshold)} ₽`);
-    $('#move-warn').textContent = t('moveWarn', Math.round(next.mult / cur.mult));
+    $('#move-warn').textContent = t('moveWarn', Math.round(next.mult / locationMult(s)));
     const btn = $<HTMLButtonElement>('#move-btn');
     btn.disabled = !canRelocate(s);
     if (!this.moveArmed) btn.textContent = t('moveBtn');

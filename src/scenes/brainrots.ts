@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { DRAW2 } from './brainrots2';
 import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE } from './draw';
 
 // Итальянские брейнроты из фигур. Ноги внизу в точке (0, 0), смотрят вправо.
@@ -15,7 +16,7 @@ export interface Critter {
   top: number; // верх головы (для колпака повара)
 }
 
-interface LegStyle {
+export interface LegStyle {
   skin: number;
   shoe: number;
   len: number;
@@ -26,11 +27,11 @@ interface LegStyle {
   shoeLen?: number;
 }
 
-const MOUTH = 0x7a1f2b;
-const TONGUE = 0xf27a8a;
-const BLUSH = 0xff7a9a;
+export const MOUTH = 0x7a1f2b;
+export const TONGUE = 0xf27a8a;
+export const BLUSH = 0xff7a9a;
 
-function makeLegs(scene: Phaser.Scene, s: LegStyle): Phaser.GameObjects.Graphics[] {
+export function makeLegs(scene: Phaser.Scene, s: LegStyle): Phaser.GameObjects.Graphics[] {
   return [-1, 1].map((side) => {
     const g = scene.add.graphics();
     const p = new Pen(g, 3);
@@ -49,7 +50,7 @@ function makeLegs(scene: Phaser.Scene, s: LegStyle): Phaser.GameObjects.Graphics
   });
 }
 
-function assemble(scene: Phaser.Scene, legs: Phaser.GameObjects.Graphics[], draw: (p: Pen) => void, height: number, width = 80, top = height): Critter {
+export function assemble(scene: Phaser.Scene, legs: Phaser.GameObjects.Graphics[], draw: (p: Pen) => void, height: number, width = 80, top = height): Critter {
   const root = scene.add.container(0, 0);
   const body = scene.add.container(0, 0);
   const g = scene.add.graphics();
@@ -60,17 +61,17 @@ function assemble(scene: Phaser.Scene, legs: Phaser.GameObjects.Graphics[], draw
 }
 
 // мелкие штрихи, которые делают персонажей живыми
-function shine(p: Pen, x: number, y: number, w: number, h: number, a = 0.45) {
+export function shine(p: Pen, x: number, y: number, w: number, h: number, a = 0.45) {
   p.flat(WHITE, a).fillEllipse(x, y, w, h);
 }
-function blush(p: Pen, x: number, y: number, r = 4) {
+export function blush(p: Pen, x: number, y: number, r = 4) {
   p.flat(BLUSH, 0.55).fillEllipse(x, y, r * 2.2, r * 1.3);
 }
-function brow(p: Pen, x1: number, y1: number, x2: number, y2: number, w = 3.2) {
+export function brow(p: Pen, x1: number, y1: number, x2: number, y2: number, w = 3.2) {
   p.line(x1, y1, x2, y2, w);
 }
 // большие глаза с двумя бликами
-function bigEye(p: Pen, x: number, y: number, r: number, look = 0.3, iris = OUTLINE) {
+export function bigEye(p: Pen, x: number, y: number, r: number, look = 0.3, iris = OUTLINE) {
   p.circle(x, y, r, WHITE, 2.6);
   p.g.fillStyle(iris, 1).fillCircle(x + r * look, y + r * 0.05, r * 0.58);
   if (iris !== OUTLINE) p.g.fillStyle(OUTLINE, 1).fillCircle(x + r * look, y + r * 0.05, r * 0.32);
@@ -78,7 +79,7 @@ function bigEye(p: Pen, x: number, y: number, r: number, look = 0.3, iris = OUTL
   p.g.fillStyle(WHITE, 0.9).fillCircle(x + r * look - r * 0.18, y + r * 0.25, r * 0.09);
 }
 // широкий открытый рот с зубами и языком
-function grin(p: Pen, x: number, y: number, w: number, h: number) {
+export function grin(p: Pen, x: number, y: number, w: number, h: number) {
   p.poly([[x - w / 2, y], [x + w / 2, y - h * 0.15], [x + w * 0.35, y + h], [x - w * 0.3, y + h * 0.9]], MOUTH, 2.8);
   p.flat(TONGUE).fillEllipse(x, y + h * 0.75, w * 0.45, h * 0.35);
   p.flat(WHITE).fillRect(x - w / 2 + 3, y + 1, w - 7, Math.max(2.5, h * 0.2));
@@ -414,6 +415,7 @@ const DRAW: Record<string, (scene: Phaser.Scene) => Critter> = {
     }, 128, 84),
 };
 
+Object.assign(DRAW, DRAW2);
 export const BRAINROT_IDS = Object.keys(DRAW);
 
 // Маскот-зазывала: Тунг Тунг с мегафоном, поднятой битой и щитом-рекламой на груди.

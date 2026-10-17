@@ -17,17 +17,17 @@ export { DISPLAY_FONT };
 // Сутки в игре длятся 8 минут. Ключевые точки неба: [фаза, верх, низ, ночь 0..1].
 const DAY_SECONDS = 480;
 const SKY: [number, number, number, number][] = [
-  [0.0, 0x6fb7e8, 0xd4ecf2, 0],
-  [0.28, 0x6aa6e0, 0xf3dca6, 0],
-  [0.4, 0x4b3f8c, 0xff9a5a, 0.25],
-  [0.5, 0x2a1b3d, 0xb0457a, 0.7],
-  [0.6, 0x120c24, 0x2e2150, 1],
-  [0.88, 0x120c24, 0x2e2150, 1],
-  [0.95, 0x5a5aa0, 0xf7b38a, 0.35],
-  [1.0, 0x6fb7e8, 0xd4ecf2, 0],
+  [0.0, 0x3fa9f5, 0xbfe9ff, 0],
+  [0.3, 0x45a0ef, 0xffe0a0, 0],
+  [0.42, 0x6a4fc0, 0xff9a4a, 0.2],
+  [0.52, 0x3a2a80, 0xe0508a, 0.5],
+  [0.6, 0x1c2a66, 0x4a3a9a, 0.75],
+  [0.84, 0x1c2a66, 0x4a3a9a, 0.75],
+  [0.93, 0x6a6ad0, 0xffb07a, 0.3],
+  [1.0, 0x3fa9f5, 0xbfe9ff, 0],
 ];
-// игра начинается на закате: так ларёк сразу светится
-const DAY_START = 0.36;
+// игра начинается солнечным днём, закат наступает через пару минут
+const DAY_START = 0.12;
 const WALK_SPEED = 0.15; // пикселей за мс при масштабе 1
 
 export interface StallCallbacks {
@@ -162,6 +162,13 @@ export class StallScene extends Phaser.Scene {
 
   create() {
     this.makeTextures();
+    // сочнее цвета всей улицы: чуть больше насыщенности и контраста (только WebGL)
+    if (this.renderer.type === Phaser.WEBGL) {
+      const fx = this.cameras.main.postFX?.addColorMatrix();
+      fx?.saturate(0.28);
+      fx?.contrast(0.06, true);
+      fx?.brightness(1.05, true);
+    }
     this.sky = this.add.graphics().setDepth(0);
     this.stars = this.add.graphics().setDepth(0.5);
     this.backdrop = new Pen(this.add.graphics().setDepth(1), 2);
@@ -339,7 +346,7 @@ export class StallScene extends Phaser.Scene {
     this.drawSky(phase);
     this.backdrop.g.clear();
     BACKDROPS[LOCATIONS[this.location].id](this.backdrop, this.ctx());
-    this.night.setFillStyle(0x140a2a, 0.38 * this.nightK);
+    this.night.setFillStyle(0x1a1450, 0.2 * this.nightK);
     this.lampGlow.setAlpha(0.12 + 0.4 * this.nightK);
     this.stall?.winGlow.setAlpha(0.05 + 0.3 * this.nightK);
   }
@@ -520,7 +527,8 @@ export class StallScene extends Phaser.Scene {
   }
 
   private queueX(i: number) {
-    const left = this.stallX + (this.stall?.left ?? -120) * this.stallScale - 18 * this.unit;
+    // широкий дворец на телефоне занимает почти весь экран: первый гость всё равно встаёт у края
+    const left = Math.max(this.stallX + (this.stall?.left ?? -120) * this.stallScale - 18 * this.unit, 40 * this.unit);
     return left - i * 54 * this.unit;
   }
 

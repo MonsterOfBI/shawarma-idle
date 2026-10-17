@@ -6,6 +6,7 @@ import {
   buy,
   canBuy,
   canRelocate,
+  nextMove,
   collectOffline,
   incomePerSecond,
   isMaxed,
@@ -22,6 +23,7 @@ import {
   recordCombo,
 } from './economy';
 import { ACHIEVEMENTS, achievementMult, unlockAchievements } from './achievements';
+import { PET_RARITY } from './pets';
 import { BRAINROTS, customerPool, meet, pickCustomer } from './brainrots';
 import { CRIT_CHANCE, CRIT_MULT, bulkAmount, bulkCost, buyN, canBuyN, isCrit, maxAffordable } from './economy';
 import { UPGRADE_BY_ID } from './upgrades';
@@ -77,7 +79,7 @@ describe('экономика', () => {
     expect(s.boostUntil).toBe(60 * 60 * 1000);
   });
 
-  it('офлайн-доход ограничен двумя часами и не учитывает буст', () => {
+  it('офлайн-доход ограничен четырьмя часами и не учитывает буст', () => {
     const s = addBoost({ ...newGame(0), levels: { cashier: 1 } }, 0);
     expect(offlineEarnings(s, 24 * 3600 * 1000)).toBe(OFFLINE_CAP_SECONDS);
     expect(collectOffline(s, 24 * 3600 * 1000, 2).money).toBe(OFFLINE_CAP_SECONDS * 2);
@@ -93,9 +95,21 @@ describe('экономика', () => {
     expect(tapValue(r, 0)).toBe(LOCATIONS[1].mult);
   });
 
-  it('с последней локации переехать нельзя', () => {
-    const s = { ...newGame(0), location: LOCATIONS.length - 1, runEarned: 1e30 };
-    expect(canRelocate(s)).toBe(false);
+  it('после дворца можно расширять дворец звёздами без конца', () => {
+    const last = LOCATIONS.length - 1;
+    const s = { ...newGame(0), location: last, runEarned: LOCATIONS[last].threshold * 3 };
+    expect(canRelocate(s)).toBe(false); // первая звезда — в 4 раза дороже входа во дворец
+    const m1 = nextMove(s);
+    expect(m1.star).toBe(1);
+    expect(m1.mult).toBe(LOCATIONS[last].mult * 3);
+    const r = relocate({ ...s, runEarned: m1.threshold }, 0);
+    expect(r.location).toBe(last);
+    expect(r.stars).toBe(1);
+    expect(r.levels).toEqual({});
+    expect(tapValue(r, 0)).toBe(LOCATIONS[last].mult * 3);
+    expect(nextMove(r).threshold).toBe(m1.threshold * 4);
+    expect(normalize({ version: 7, location: last, stars: 2 }, 0).stars).toBe(2);
+    expect(normalize({ version: 7 }, 0).stars).toBe(0);
   });
 });
 
@@ -157,6 +171,15 @@ describe('баланс', () => {
   it('каждый следующий переезд занимает от 5 минут до полутора часов', () => {
     for (let loc = 1; loc < LOCATIONS.length - 1; loc++) {
       const minutes = secondsToEarn(LOCATIONS[loc + 1].threshold, 3, { ...newGame(0), location: loc }) / 60;
+      expect(minutes).toBeGreaterThan(5);
+      expect(minutes).toBeLessThan(90);
+    }
+  });
+
+  it('первые звёзды дворца тоже занимают от 5 минут до полутора часов', () => {
+    for (let stars = 0; stars < 3; stars++) {
+      const s = { ...newGame(0), location: LOCATIONS.length - 1, stars };
+      const minutes = secondsToEarn(nextMove(s).threshold, 3, s) / 60;
       expect(minutes).toBeGreaterThan(5);
       expect(minutes).toBeLessThan(90);
     }
@@ -226,12 +249,20 @@ describe('баланс', () => {
     expect(maxAffordable({ ...newGame(0), money: 1e9 }, def)).toBe(1);
   });
 
-  it('на каждой локации свои брейнроты, старые тоже заходят', () => {
+  it('на каждой локации свои брейнроты, гости с прошлой точки заходят редко', () => {
     const ids = (l: number) => customerPool(l).map((p) => p.id);
-    expect(ids(0)).toContain('tralalero');
+    expect(ids(0)).toContain('chimpanzini');
     expect(ids(0)).not.toContain('vaca');
     expect(ids(5)).toContain('vaca');
-    expect(ids(6)).toContain('tralalero');
+    expect(ids(6)).toContain('strawberry');
+    expect(ids(6)).not.toContain('chimpanzini'); // у каждой точки свои персонажи
+    // местные приходят гораздо чаще гостей с прошлой точки
+    const pool = customerPool(2);
+    const local = pool.filter((p) => p.id === 'tralalero')[0].weight;
+    const guest = pool.filter((p) => p.id === 'cappuccino')[0].weight;
+    expect(local).toBeGreaterThan(guest * 4);
+    // у каждого посетителя есть редкость питомца
+    for (const b of BRAINROTS) expect(PET_RARITY[b.id]).toBeDefined();
     for (let l = 0; l < LOCATIONS.length; l++) expect(ids(l).length).toBeGreaterThan(0);
     expect(ids(0)).toContain(pickCustomer(0, 0.999));
   });
@@ -298,10 +329,10 @@ describe('версия 2.0', () => {
     s = a.state;
     expect(s.met).toContain(a.drop.id);
     const m1 = petMult(s);
-    expect(m1).toBeCloseTo(1.05);
+    expect(m1).toBeCloseTo(1.03);
     const b = openBox(s, 'common', seq(0, 0, 0.5));
     expect(b.drop.isNew).toBe(false);
-    expect(petMult(b.state)).toBeCloseTo(1.075);
+    expect(petMult(b.state)).toBeCloseTo(1.039);
     const moved = relocate({ ...b.state, runEarned: 1e20 }, 0);
     expect(moved.pets).toEqual(b.state.pets);
   });
@@ -310,7 +341,7 @@ describe('версия 2.0', () => {
     const { openBox, petMult } = await import('./pets');
     const r = openBox(newGame(0), 'common', seq(0, 0, 0.001));
     expect(r.drop.mut).toBe(2);
-    expect(petMult(r.state)).toBeCloseTo(1.25);
+    expect(petMult(r.state)).toBeCloseTo(1.15);
   });
 
   it('ящик за деньги списывает цену и дорожает', async () => {
