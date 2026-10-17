@@ -2,6 +2,7 @@
 // и каждую секунду покупает улучшение с лучшей окупаемостью.
 
 import { type GameState, buy, canBuy, costOf, incomePerSecond, isMaxed, isVisible, newGame, tapValue, tick, tap } from './economy';
+import { unlockAchievements } from './achievements';
 import { UPGRADES } from './upgrades';
 
 function gainPerSecond(state: GameState, tapsPerSecond: number): number {
@@ -31,6 +32,7 @@ export function secondsToEarn(target: number, tapsPerSecond: number, start?: Gam
   for (let t = 1; t <= maxSeconds; t++) {
     for (let i = 0; i < tapsPerSecond; i++) s = tap(s, 0);
     s = { ...tick({ ...s, lastSeen: 0 }, 1000), lastSeen: 0 };
+    s = unlockAchievements(s).state;
     let id = bestUpgrade(s, tapsPerSecond);
     while (id && canBuy(s, id)) {
       s = buy(s, id);

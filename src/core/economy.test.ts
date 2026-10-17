@@ -15,7 +15,12 @@ import {
   tap,
   tapValue,
   tick,
+  catchGolden,
+  comboMult,
+  goldenReward,
+  recordCombo,
 } from './economy';
+import { ACHIEVEMENTS, achievementMult, unlockAchievements } from './achievements';
 import { formatNumber } from './format';
 import { LOCATIONS } from './locations';
 import { secondsToEarn } from './sim';
@@ -130,5 +135,44 @@ describe('баланс', () => {
       expect(minutes).toBeGreaterThan(5);
       expect(minutes).toBeLessThan(90);
     }
+  });
+
+  it('комбо даёт от ×1 до ×2 к тапу', () => {
+    expect(comboMult(0)).toBe(1);
+    expect(comboMult(25)).toBe(1.5);
+    expect(comboMult(500)).toBe(2);
+    expect(tap(newGame(0), 0, comboMult(50)).money).toBe(2);
+  });
+
+  it('лучшая серия запоминается', () => {
+    const s = recordCombo(recordCombo(newGame(0), 30), 10);
+    expect(s.bestCombo).toBe(30);
+  });
+
+  it('щедрый гость приносит деньги и считается', () => {
+    const s = catchGolden(newGame(0), 0);
+    expect(s.money).toBe(goldenReward(newGame(0), 0));
+    expect(s.goldenCaught).toBe(1);
+  });
+
+  it('достижения выдаются один раз и увеличивают доход', () => {
+    let s: GameState = { ...newGame(0), taps: 100, levels: { cashier: 1 } };
+    const before = incomePerSecond(s, 0);
+    const r = unlockAchievements(s);
+    expect(r.unlocked).toEqual(['taps_100']);
+    s = r.state;
+    expect(unlockAchievements(s).unlocked).toEqual([]);
+    expect(achievementMult(s)).toBeCloseTo(1.03);
+    expect(incomePerSecond(s, 0)).toBeCloseTo(before * 1.03);
+  });
+
+  it('у всех достижений разные id', () => {
+    expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(ACHIEVEMENTS.length);
+  });
+
+  it('старое сохранение получает пустые достижения', () => {
+    const s = normalize({ version: 2, money: 5, achievements: ['taps_100', 7] }, 0);
+    expect(s.achievements).toEqual(['taps_100']);
+    expect(normalize({ money: 1 }, 0).achievements).toEqual([]);
   });
 });

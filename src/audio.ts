@@ -33,8 +33,18 @@ function beep(freq: number, duration: number, type: OscillatorType, volume: numb
 }
 
 export const sfx = {
-  tap() {
-    beep(520 + Math.random() * 80, 0.06, 'triangle', 0.08);
+  // чем длиннее серия, тем выше звук тапа
+  tap(combo = 0) {
+    beep(440 + Math.min(combo, 50) * 9 + Math.random() * 30, 0.06, 'triangle', 0.08);
+  },
+  golden() {
+    [1046, 1318, 1568, 2093].forEach((f, i) => beep(f, 0.18, 'sine', 0.07, i * 0.06));
+  },
+  rush() {
+    [392, 523, 392, 523, 659].forEach((f, i) => beep(f, 0.1, 'square', 0.04, i * 0.09));
+  },
+  achievement() {
+    [523, 659, 784, 1046, 784, 1046].forEach((f, i) => beep(f, 0.16, 'triangle', 0.07, i * 0.08));
   },
   buy() {
     beep(660, 0.08, 'square', 0.05);

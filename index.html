@@ -8,17 +8,17 @@
   </head>
   <body>
     <div id="app">
-      <header id="hud">
-        <div class="hud-top">
-          <span id="place" class="place"></span>
-          <button id="sound" class="icon-btn" type="button"></button>
-        </div>
-        <div id="money" class="money">0 ₽</div>
-        <div id="rate" class="rate"></div>
-        <button id="boost" class="boost" type="button"><span class="boost-ad">▶</span><span id="boost-label"></span></button>
-      </header>
-
       <main id="stage">
+        <header id="hud">
+          <div class="hud-top">
+            <span id="place" class="place"></span>
+            <button id="sound" class="icon-btn" type="button"></button>
+          </div>
+          <div id="money" class="money">0 ₽</div>
+          <div class="rate"><span id="rate-sec"></span><span id="rate-tap"></span></div>
+          <button id="boost" class="boost" type="button"><span class="boost-ad" aria-hidden="true">▶</span><span id="boost-label"></span></button>
+        </header>
+        <div id="rush" class="rush" hidden><b id="rush-title"></b><span id="rush-text"></span></div>
         <div id="hint" class="hint"></div>
       </main>
 
@@ -26,38 +26,47 @@
         <nav class="tabs" role="tablist">
           <button id="tab-upgrades" role="tab" type="button"></button>
           <button id="tab-move" role="tab" type="button"></button>
+          <button id="tab-awards" role="tab" type="button"></button>
           <button id="tab-shop" role="tab" type="button"></button>
         </nav>
-        <div id="panel-upgrades" class="panel-body"><div id="upgrades" class="list"></div></div>
+        <div id="panel-upgrades" class="panel-body"><div id="upgrades" class="menu"></div></div>
         <div id="panel-move" class="panel-body" hidden>
           <div class="move">
-            <div class="move-now"><b id="move-now"></b><span id="move-mult" class="pill"></span></div>
-            <div id="move-next" class="card">
-              <b id="move-next-name"></b>
+            <div class="move-now"><b id="move-now"></b><span id="move-mult" class="stamp-pill"></span></div>
+            <div id="move-next" class="ticket">
+              <b id="move-next-name" class="ticket-title"></b>
               <span id="move-need" class="muted"></span>
               <div class="bar"><div id="move-bar"></div></div>
               <span id="move-progress" class="muted"></span>
               <p id="move-warn"></p>
               <button id="move-btn" class="primary" type="button"></button>
             </div>
-            <p id="move-done" class="card" hidden></p>
+            <p id="move-done" class="ticket" hidden></p>
           </div>
         </div>
-        <div id="panel-shop" class="panel-body" hidden><div id="shop" class="list"></div></div>
+        <div id="panel-awards" class="panel-body" hidden>
+          <p id="awards-note" class="awards-note"></p>
+          <div id="awards" class="awards"></div>
+        </div>
+        <div id="panel-shop" class="panel-body" hidden><div id="shop" class="coupons"></div></div>
       </section>
 
       <div id="toast" class="toast" hidden></div>
       <div id="offline" class="modal" hidden>
-        <div class="modal-card">
+        <div class="receipt">
           <h2 id="offline-title"></h2>
-          <p id="offline-text"></p>
+          <div class="receipt-lines">
+            <div><span id="offline-time-label"></span><span id="offline-time"></span></div>
+            <div><span id="offline-rate-label"></span><span id="offline-rate"></span></div>
+          </div>
+          <div class="receipt-total"><span id="offline-total-label"></span><b id="offline-text"></b></div>
           <div class="modal-btns">
             <button id="offline-double" class="primary" type="button"></button>
             <button id="offline-take" class="secondary" type="button"></button>
           </div>
         </div>
       </div>
-      <div id="loading" class="loading">🌯</div>
+      <div id="loading" class="loading"><span>Шаурма-лавка</span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

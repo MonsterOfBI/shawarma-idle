@@ -4,12 +4,20 @@ import Phaser from 'phaser';
 import { setAudioPaused, setMuted, sfx } from './audio';
 import {
   type GameState,
+  COMBO_WINDOW_MS,
+  RUSH_MULT,
+  RUSH_SECONDS,
   addBoost,
   addMoney,
   buy,
+  catchGolden,
+  comboMult,
+  goldenReward,
+  recordCombo,
   canBuy,
   cashPackAmount,
   collectOffline,
+  OFFLINE_CAP_SECONDS,
   incomePerSecond,
   normalize,
   offlineEarnings,
@@ -18,6 +26,7 @@ import {
   tapValue,
   tick,
 } from './core/economy';
+import { unlockAchievements } from './core/achievements';
 import { formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { lang, t } from './i18n';
@@ -28,6 +37,11 @@ import { Ui } from './ui';
 const SAVE_EVERY_MS = 10_000;
 // если вкладка была скрыта дольше минуты, считаем это отсутствием и показываем окно офлайн-дохода
 const AWAY_MS = 60_000;
+// щедрый гость приходит раз в 1–2,5 минуты, час пик раз в 2,5–5 минут
+const GOLDEN_MIN_MS = 60_000;
+const GOLDEN_SPREAD_MS = 90_000;
+const RUSH_MIN_MS = 150_000;
+const RUSH_SPREAD_MS = 150_000;
 
 export class Game {
   private state!: GameState;
@@ -36,9 +50,15 @@ export class Game {
   private paused = false;
   private modalOpen = false;
   private lastSave = 0;
+  private combo = 0;
+  private lastTapAt = 0;
+  private rushUntil = 0;
+  private nextRushAt = Date.now() + 90_000;
+  private nextGoldenAt = Date.now() + 35_000;
+  private medalQueue: string[] = [];
 
   constructor(private platform: Platform) {
-    this.scene = new StallScene({ onTap: (x, y) => this.onTap(x, y) });
+    this.scene = new StallScene({ onTap: (x, y) => this.onTap(x, y), onGolden: (x, y) => this.onGolden(x, y) });
     this.ui = new Ui({
       buy: (id) => this.buy(id),
       boost: () => void this.boost(),
@@ -63,6 +83,7 @@ export class Game {
     });
     await this.scene.ready;
     this.scene.setLocation(this.state.location);
+    this.scene.setLook(this.state.levels);
 
     const restored = await this.platform.restorePurchases();
     this.applyOwned(restored.owned);
@@ -89,7 +110,9 @@ export class Game {
       return;
     }
     this.state = tick(this.state, now);
+    this.events(now);
     this.scene.setIncome(incomePerSecond(this.state, now));
+    this.scene.setLook(this.state.levels);
     this.ui.render(this.state, now);
     if (now - this.lastSave > SAVE_EVERY_MS) void this.save();
   }
@@ -103,7 +126,8 @@ export class Game {
     }
     this.modalOpen = true;
     this.platform.gameplayStop();
-    const choice = await this.ui.offline(earned);
+    const away = Math.min((now - this.state.lastSeen) / 1000, OFFLINE_CAP_SECONDS);
+    const choice = await this.ui.offline(earned, away, incomePerSecond(this.state, now, false));
     let factor = 1;
     if (choice === 'double') {
       const ok = await this.platform.showRewarded();
@@ -119,14 +143,68 @@ export class Game {
     void this.save();
   }
 
+  // События улицы: час пик, щедрый гость, новые достижения.
+  private events(now: number) {
+    const rushLeft = (this.rushUntil - now) / 1000;
+    if (rushLeft <= 0 && now >= this.nextRushAt && this.state.taps > 40) {
+      this.rushUntil = now + RUSH_SECONDS * 1000;
+      this.nextRushAt = this.rushUntil + RUSH_MIN_MS + Math.random() * RUSH_SPREAD_MS;
+      this.scene.bigText(t('rushTitle'), '#ff8a5c');
+      sfx.rush();
+    }
+    this.ui.setRush(Math.max(0, rushLeft));
+    this.scene.setRush(rushLeft > 0);
+
+    if (now >= this.nextGoldenAt) {
+      this.nextGoldenAt = now + GOLDEN_MIN_MS + Math.random() * GOLDEN_SPREAD_MS;
+      this.scene.spawnGolden();
+    }
+
+    const r = unlockAchievements(this.state);
+    if (r.unlocked.length) {
+      this.state = r.state;
+      const idle = this.medalQueue.length === 0;
+      this.medalQueue.push(...r.unlocked);
+      if (idle) this.showMedals();
+      void this.save();
+    }
+  }
+
+  private showMedals() {
+    const id = this.medalQueue[0];
+    if (!id) return;
+    this.ui.toast(t('achUnlocked', t(`ach_${id}`)), 'medal');
+    sfx.achievement();
+    setTimeout(() => {
+      this.medalQueue.shift();
+      this.showMedals();
+    }, 2200);
+  }
+
   private onTap(x: number, y: number) {
     if (this.paused || this.modalOpen) return;
     const now = Date.now();
-    const value = tapValue(this.state, now);
-    this.state = tap(this.state, now);
+    this.combo = now - this.lastTapAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
+    this.lastTapAt = now;
+    const rush = now < this.rushUntil;
+    const extra = comboMult(this.combo) * (rush ? RUSH_MULT : 1);
+    const value = tapValue(this.state, now) * extra;
+    this.state = recordCombo(tap(this.state, now, extra), this.combo);
     this.scene.serve();
-    this.scene.popText(`+${formatNumber(value, lang())} ₽`, x, y);
-    sfx.tap();
+    this.scene.popText(`+${formatNumber(value, lang())} ₽`, x, y, rush ? '#ffb02e' : '#fff4dc');
+    this.scene.burst(x, y, 2 + Math.min(6, Math.floor(this.combo / 8)) + (rush ? 3 : 0));
+    this.scene.setCombo(this.combo, comboMult(this.combo));
+    sfx.tap(this.combo);
+  }
+
+  private onGolden(x: number, y: number) {
+    const now = Date.now();
+    const reward = goldenReward(this.state, now);
+    this.state = catchGolden(this.state, now);
+    this.scene.popText(`+${formatNumber(reward, lang())} ₽`, x, y, '#ffd86b');
+    this.ui.toast(t('goldenToast', formatNumber(reward, lang())));
+    sfx.golden();
+    void this.save();
   }
 
   private buy(id: string) {
@@ -155,6 +233,7 @@ export class Game {
     if (this.state.location === before) return;
     sfx.move();
     this.scene.setLocation(this.state.location);
+    this.scene.setLook(this.state.levels);
     this.ui.showTab('upgrades');
     this.ui.toast(t('movedTo', t(`loc_${LOCATIONS[this.state.location].id}`)));
     await this.save();

@@ -1,15 +1,22 @@
 // Чистая логика экономики: без Phaser и без браузера, чтобы её можно было тестировать.
 
+import { achievementMult } from './achievements';
 import { LOCATIONS } from './locations';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 // Офлайн-доход начисляется не больше чем за 2 часа отсутствия.
 export const OFFLINE_CAP_SECONDS = 2 * 60 * 60;
 // Буст ×2 за рекламу: 10 минут за просмотр, копится до часа.
 export const BOOST_SECONDS = 10 * 60;
 export const BOOST_MAX_SECONDS = 60 * 60;
+// Комбо: тапы чаще чем раз в 0,7 с копят серию, серия до 50 даёт до ×2 к тапу.
+export const COMBO_WINDOW_MS = 700;
+export const COMBO_MAX = 50;
+// Час пик: тапы ×3 на 30 секунд.
+export const RUSH_MULT = 3;
+export const RUSH_SECONDS = 30;
 
 export interface GameState {
   version: number;
@@ -23,6 +30,9 @@ export interface GameState {
   owned: { noAds: boolean; x2Forever: boolean };
   muted: boolean;
   lastSeen: number; // мс, Date.now()
+  achievements: string[]; // id полученных достижений, не сгорают при переезде
+  goldenCaught: number; // сколько щедрых гостей поймано
+  bestCombo: number; // лучшая серия тапов
 }
 
 export function newGame(now: number): GameState {
@@ -38,6 +48,9 @@ export function newGame(now: number): GameState {
     owned: { noAds: false, x2Forever: false },
     muted: false,
     lastSeen: now,
+    achievements: [],
+    goldenCaught: 0,
+    bestCombo: 0,
   };
 }
 
@@ -67,6 +80,9 @@ export function normalize(raw: unknown, now: number): GameState {
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
     muted: !!r.muted,
     lastSeen: num(r.lastSeen, now),
+    achievements: Array.isArray(r.achievements) ? r.achievements.filter((a: unknown) => typeof a === 'string') : [],
+    goldenCaught: Math.floor(num(r.goldenCaught, 0)),
+    bestCombo: Math.floor(num(r.bestCombo, 0)),
   };
 }
 
@@ -79,7 +95,7 @@ export function boostActive(state: GameState, now: number): boolean {
 }
 
 function multFor(state: GameState, now: number, includeBoost: boolean, target: 'all' | 'tap'): number {
-  let m = LOCATIONS[state.location].mult;
+  let m = LOCATIONS[state.location].mult * achievementMult(state);
   if (state.owned.x2Forever) m *= 2;
   if (includeBoost && boostActive(state, now)) m *= 2;
   for (const u of UPGRADES) {
@@ -128,8 +144,26 @@ function earn(state: GameState, amount: number): GameState {
   };
 }
 
-export function tap(state: GameState, now: number): GameState {
-  return { ...earn(state, tapValue(state, now)), taps: state.taps + 1 };
+// extra — множитель комбо и часа пика, считается в контроллере
+export function tap(state: GameState, now: number, extra = 1): GameState {
+  return { ...earn(state, tapValue(state, now) * extra), taps: state.taps + 1 };
+}
+
+export function comboMult(combo: number): number {
+  return 1 + Math.min(Math.max(combo, 0), COMBO_MAX) / COMBO_MAX;
+}
+
+export function recordCombo(state: GameState, combo: number): GameState {
+  return combo > state.bestCombo ? { ...state, bestCombo: combo } : state;
+}
+
+// Щедрый гость: примерно полторы минуты дохода или 40 тапов, смотря что больше.
+export function goldenReward(state: GameState, now: number): number {
+  return Math.max(25, Math.round(incomePerSecond(state, now) * 90 + tapValue(state, now) * 40));
+}
+
+export function catchGolden(state: GameState, now: number): GameState {
+  return { ...earn(state, goldenReward(state, now)), goldenCaught: state.goldenCaught + 1 };
 }
 
 export function buy(state: GameState, id: string): GameState {
