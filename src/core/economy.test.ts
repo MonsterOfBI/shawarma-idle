@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type GameState,
   OFFLINE_CAP_SECONDS,
   addBoost,
   buy,
@@ -60,7 +61,7 @@ describe('экономика', () => {
   });
 
   it('буст удваивает доход и копится не больше часа', () => {
-    let s = { ...newGame(0), levels: { cashier: 1 } };
+    let s: GameState = { ...newGame(0), levels: { cashier: 1 } };
     s = addBoost(s, 0);
     expect(incomePerSecond(s, 1000)).toBe(2);
     for (let i = 0; i < 10; i++) s = addBoost(s, 0);
@@ -106,9 +107,13 @@ describe('сохранения', () => {
 describe('числа', () => {
   it('сокращает большие числа', () => {
     expect(formatNumber(999, 'ru')).toBe('999');
+    expect(formatNumber(0.2, 'ru')).toBe('0,2');
+    expect(formatNumber(12.75, 'en')).toBe('12.7');
     expect(formatNumber(1234, 'ru')).toBe('1,23 тыс.');
     expect(formatNumber(2_500_000, 'en')).toBe('2.5M');
     expect(formatNumber(1e12, 'ru')).toBe('1 трлн');
+    expect(formatNumber(100_000, 'en')).toBe('100K');
+    expect(formatNumber(250_000_000, 'ru')).toBe('250 млн');
   });
 });
 

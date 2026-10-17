@@ -1,17 +1,14 @@
-import Phaser from 'phaser';
-import { localPlatform } from './platform/platform';
-import { StallScene } from './scenes/StallScene';
+import './style.css';
+import { Game } from './game';
+import { setLang } from './i18n';
+import { createLocalPlatform } from './platform/platform';
+import { createYandexPlatform } from './platform/yandex';
 
 async function start() {
-  const saved = await localPlatform.load();
-  new Phaser.Game({
-    type: Phaser.AUTO,
-    parent: 'game',
-    width: 420,
-    height: 640,
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: new StallScene(localPlatform, saved),
-  });
+  // На Яндекс Играх подключится их SDK, в браузере — локальная версия без рекламы и покупок.
+  const platform = (await createYandexPlatform()) ?? createLocalPlatform();
+  setLang(platform.lang);
+  await new Game(platform).start();
 }
 
 void start();
