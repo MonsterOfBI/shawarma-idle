@@ -241,3 +241,105 @@ describe('внешний вид ларька', () => {
     expect(tier({ knife: 150, grill_helper: 50 })).toBe(5);
   });
 });
+
+describe('версия 2.0', () => {
+  const seq = (...xs: number[]) => {
+    let i = 0;
+    return () => xs[i++ % xs.length];
+  };
+
+  it('вехи удваивают отдачу на 10, 25, 50 уровне', async () => {
+    const { milestoneMult, nextMilestone } = await import('./economy');
+    expect([9, 10, 24, 25, 50, 100].map(milestoneMult)).toEqual([1, 2, 2, 4, 8, 16]);
+    expect(nextMilestone(12)).toBe(25);
+    const s9 = incomePerSecond({ ...newGame(0), levels: { cashier: 9 } }, 0);
+    const s10 = incomePerSecond({ ...newGame(0), levels: { cashier: 10 } }, 0);
+    expect(s10 / s9).toBeCloseTo((10 / 9) * 2);
+  });
+
+  it('ящик даёт питомца, повтор качает его, бонус растёт и переживает переезд', async () => {
+    const { openBox, petMult, rollRarity } = await import('./pets');
+    expect(rollRarity('common', 0)).toBe('common');
+    expect(rollRarity('golden', 0)).toBe('rare');
+    expect(rollRarity('common', 0.9999)).toBe('god');
+    let s = newGame(0);
+    const a = openBox(s, 'common', seq(0, 0, 0.5));
+    expect(a.drop.isNew).toBe(true);
+    expect(a.drop.rarity).toBe('common');
+    s = a.state;
+    expect(s.met).toContain(a.drop.id);
+    const m1 = petMult(s);
+    expect(m1).toBeCloseTo(1.05);
+    const b = openBox(s, 'common', seq(0, 0, 0.5));
+    expect(b.drop.isNew).toBe(false);
+    expect(petMult(b.state)).toBeCloseTo(1.075);
+    const moved = relocate({ ...b.state, runEarned: 1e20 }, 0);
+    expect(moved.pets).toEqual(b.state.pets);
+  });
+
+  it('мутации: алмаз даёт ×5', async () => {
+    const { openBox, petMult } = await import('./pets');
+    const r = openBox(newGame(0), 'common', seq(0, 0, 0.001));
+    expect(r.drop.mut).toBe(2);
+    expect(petMult(r.state)).toBeCloseTo(1.25);
+  });
+
+  it('ящик за деньги списывает цену и дорожает', async () => {
+    const { boxCost, buyBox } = await import('./economy');
+    const s = { ...newGame(0), money: 1e6 };
+    const c = boxCost(s, 0);
+    const r = buyBox(s, 0, seq(0.1, 0.1, 0.9))!;
+    expect(r.state.money).toBe(1e6 - c);
+    expect(boxCost(r.state, 0)).toBeGreaterThan(c);
+    expect(buyBox(newGame(0), 0, Math.random)).toBeNull();
+  });
+
+  it('Бомбардиро: лихорадка ×7 к доходу, бешеные тапы ×10', async () => {
+    const { applyGolden } = await import('./economy');
+    const s = { ...newGame(0), levels: { cashier: 1, knife: 1 } };
+    const f = applyGolden(s, 0, 'frenzy');
+    expect(incomePerSecond(f, 1000) / incomePerSecond(s, 1000)).toBeCloseTo(7);
+    expect(incomePerSecond(f, 40_000)).toBeCloseTo(incomePerSecond(s, 40_000));
+    const t2 = applyGolden(s, 0, 'taps');
+    expect(tapValue(t2, 1000) / tapValue(s, 1000)).toBeCloseTo(10);
+    expect(t2.goldenCaught).toBe(1);
+  });
+
+  it('ежедневная награда: серия растёт, пропуск сбрасывает, дважды в день нельзя', async () => {
+    const { claimDaily } = await import('./daily');
+    let s = newGame(0);
+    const d1 = claimDaily(s, 0, '2026-10-17', '2026-10-16')!;
+    expect(d1.state.daily).toEqual({ streak: 1, last: '2026-10-17' });
+    expect(d1.money).toBeGreaterThan(0);
+    expect(claimDaily(d1.state, 0, '2026-10-17', '2026-10-16')).toBeNull();
+    const d2 = claimDaily(d1.state, 0, '2026-10-18', '2026-10-17')!;
+    expect(d2.state.daily.streak).toBe(2);
+    const d3 = claimDaily(d2.state, 0, '2026-10-19', '2026-10-18')!;
+    expect(d3.boxes).toEqual(['common']);
+    const late = claimDaily(d3.state, 0, '2026-10-25', '2026-10-24')!;
+    expect(late.state.daily.streak).toBe(1);
+  });
+
+  it('задания: три штуки, выполненное меняется на новое и даёт награду', async () => {
+    const { ensureQuests, claimQuest, questDone } = await import('./quests');
+    let s = ensureQuests(newGame(0), 0, seq(0, 0.5, 0.2, 0.5, 0.4, 0.5));
+    expect(s.quests).toHaveLength(3);
+    expect(new Set(s.quests.map((q) => q.kind)).size).toBe(3);
+    const i = s.quests.findIndex((q) => q.kind === 'taps');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(claimQuest(s, i, 0, Math.random)).toBeNull();
+    s = { ...s, taps: s.taps + s.quests[i].target };
+    expect(questDone(s, s.quests[i])).toBe(true);
+    const r = claimQuest(s, i, 0, Math.random)!;
+    expect(r.state.quests).toHaveLength(3);
+    expect(r.state.questsDone).toBe(1);
+  });
+
+  it('старое сохранение получает пустых питомцев, календарь и задания', () => {
+    const s = normalize({ money: 5, pets: { tralalero: { count: 2, mut: 9 }, bad: { count: 0 } } }, 0);
+    expect(s.pets).toEqual({ tralalero: { count: 2, mut: 2 } });
+    expect(s.daily).toEqual({ streak: 0, last: '' });
+    expect(s.quests).toEqual([]);
+    expect(s.bought).toBe(0);
+  });
+});

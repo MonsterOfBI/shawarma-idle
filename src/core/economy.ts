@@ -2,9 +2,10 @@
 
 import { achievementMult } from './achievements';
 import { LOCATIONS } from './locations';
+import { type BoxKind, type Pet, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 // Офлайн-доход начисляется не больше чем за 2 часа отсутствия.
 export const OFFLINE_CAP_SECONDS = 2 * 60 * 60;
@@ -17,6 +18,15 @@ export const COMBO_MAX = 50;
 // Час пик: тапы ×3 на 30 секунд.
 export const RUSH_MULT = 3;
 export const RUSH_SECONDS = 30;
+// Вехи как в AdVenture Capitalist: на этих уровнях улучшение начинает приносить вдвое больше.
+export const MILESTONES = [10, 25, 50, 100, 200, 300, 400, 500];
+// Эффекты Бомбардиро: «Лихорадка» — доход в секунду ×7 на 30 с, «Бешеные тапы» — тапы ×10 на 15 с.
+export const FRENZY_MULT = 7;
+export const FRENZY_SECONDS = 30;
+export const TAP_FRENZY_MULT = 10;
+export const TAP_FRENZY_SECONDS = 15;
+// Бесплатный золотой ящик за рекламу — не чаще раза в 4 минуты.
+export const AD_BOX_COOLDOWN_MS = 4 * 60 * 1000;
 
 export interface GameState {
   version: number;
@@ -35,6 +45,23 @@ export interface GameState {
   goldenCaught: number; // сколько щедрых гостей поймано
   bestCombo: number; // лучшая серия тапов
   met: string[]; // знакомые брейнроты для коллекции
+  pets: Record<string, Pet>; // брейнроты из ящиков, не сгорают при переезде
+  boxesOpened: number;
+  bought: number; // сколько уровней улучшений куплено за всё время (для заданий)
+  frenzyUntil: number; // мс; лихорадка дохода от Бомбардиро
+  tapFrenzyUntil: number; // мс; бешеные тапы от Бомбардиро
+  adBoxAt: number; // мс; когда снова можно взять ящик за рекламу
+  daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
+  quests: Quest[];
+  questsDone: number;
+}
+
+export type QuestKind = 'taps' | 'buy' | 'golden' | 'box' | 'earn' | 'combo';
+export interface Quest {
+  kind: QuestKind;
+  target: number;
+  start: number; // значение счётчика в момент выдачи
+  reward: { minutes?: number; box?: BoxKind };
 }
 
 export function newGame(now: number): GameState {
@@ -55,6 +82,15 @@ export function newGame(now: number): GameState {
     goldenCaught: 0,
     bestCombo: 0,
     met: [],
+    pets: {},
+    boxesOpened: 0,
+    bought: 0,
+    frenzyUntil: 0,
+    tapFrenzyUntil: 0,
+    adBoxAt: 0,
+    daily: { streak: 0, last: '' },
+    quests: [],
+    questsDone: 0,
   };
 }
 
@@ -89,7 +125,33 @@ export function normalize(raw: unknown, now: number): GameState {
     goldenCaught: Math.floor(num(r.goldenCaught, 0)),
     bestCombo: Math.floor(num(r.bestCombo, 0)),
     met: Array.isArray(r.met) ? r.met.filter((a: unknown) => typeof a === 'string') : [],
+    pets: normalizePets(r.pets),
+    boxesOpened: Math.floor(num(r.boxesOpened, 0)),
+    bought: Math.floor(num(r.bought, 0)),
+    frenzyUntil: num(r.frenzyUntil, 0),
+    tapFrenzyUntil: num(r.tapFrenzyUntil, 0),
+    adBoxAt: num(r.adBoxAt, 0),
+    daily: {
+      streak: Math.min(7, Math.floor(num(r.daily?.streak, 0))),
+      last: typeof r.daily?.last === 'string' ? r.daily.last : '',
+    },
+    quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],
+    questsDone: Math.floor(num(r.questsDone, 0)),
   };
+}
+
+function normalizePets(raw: unknown): Record<string, Pet> {
+  const out: Record<string, Pet> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, v] of Object.entries(raw as Record<string, any>)) {
+    const count = Math.floor(Number(v?.count));
+    if (count >= 1) out[id] = { count, mut: Math.min(2, Math.max(0, Math.floor(Number(v?.mut) || 0))) };
+  }
+  return out;
+}
+
+function validQuest(q: any): q is Quest {
+  return !!q && ['taps', 'buy', 'golden', 'box', 'earn', 'combo'].includes(q.kind) && q.target > 0 && typeof q.start === 'number' && !!q.reward;
 }
 
 export function level(state: GameState, id: string): number {
@@ -101,7 +163,7 @@ export function boostActive(state: GameState, now: number): boolean {
 }
 
 function multFor(state: GameState, now: number, includeBoost: boolean, target: 'all' | 'tap'): number {
-  let m = LOCATIONS[state.location].mult * achievementMult(state);
+  let m = LOCATIONS[state.location].mult * achievementMult(state) * petMult(state);
   if (state.owned.x2Forever) m *= 2;
   if (includeBoost && boostActive(state, now)) m *= 2;
   for (const u of UPGRADES) {
@@ -111,16 +173,35 @@ function multFor(state: GameState, now: number, includeBoost: boolean, target: '
   return m;
 }
 
+// Сколько вех пройдено и во сколько раз они умножают отдачу улучшения.
+export function milestonesReached(lv: number): number {
+  return MILESTONES.filter((m) => lv >= m).length;
+}
+export function milestoneMult(lv: number): number {
+  return Math.pow(2, milestonesReached(lv));
+}
+export function nextMilestone(lv: number): number | undefined {
+  return MILESTONES.find((m) => lv < m);
+}
+
+function output(u: UpgradeDef, lv: number): number {
+  return u.amount * lv * milestoneMult(lv);
+}
+
 export function tapValue(state: GameState, now: number): number {
   let base = 1;
-  for (const u of UPGRADES) if (u.kind === 'tap') base += u.amount * level(state, u.id);
-  return base * multFor(state, now, true, 'tap');
+  for (const u of UPGRADES) if (u.kind === 'tap') base += output(u, level(state, u.id));
+  let m = multFor(state, now, true, 'tap');
+  if (now < state.tapFrenzyUntil) m *= TAP_FRENZY_MULT;
+  return base * m;
 }
 
 export function incomePerSecond(state: GameState, now: number, includeBoost = true): number {
   let base = 0;
-  for (const u of UPGRADES) if (u.kind === 'helper') base += u.amount * level(state, u.id);
-  return base * multFor(state, now, includeBoost, 'all');
+  for (const u of UPGRADES) if (u.kind === 'helper') base += output(u, level(state, u.id));
+  let m = multFor(state, now, includeBoost, 'all');
+  if (includeBoost && now < state.frenzyUntil) m *= FRENZY_MULT;
+  return base * m;
 }
 
 export function costOf(state: GameState, def: UpgradeDef): number {
@@ -183,6 +264,7 @@ export function buyN(state: GameState, id: string, n: number): GameState {
     ...state,
     money: state.money - bulkCost(state, def, n),
     levels: { ...state.levels, [id]: level(state, id) + n },
+    bought: state.bought + n,
   };
 }
 
@@ -222,6 +304,49 @@ export function catchGolden(state: GameState, now: number): GameState {
   return { ...earn(state, goldenReward(state, now)), goldenCaught: state.goldenCaught + 1 };
 }
 
+// Бомбардиро сбрасывает одно из трёх: мешок денег, лихорадку дохода или бешеные тапы.
+export type GoldenEffect = 'bag' | 'frenzy' | 'taps';
+export function pickGoldenEffect(r: number): GoldenEffect {
+  return r < 0.55 ? 'bag' : r < 0.8 ? 'frenzy' : 'taps';
+}
+export function applyGolden(state: GameState, now: number, effect: GoldenEffect): GameState {
+  if (effect === 'bag') return catchGolden(state, now);
+  const s = { ...state, goldenCaught: state.goldenCaught + 1 };
+  if (effect === 'frenzy') return { ...s, frenzyUntil: now + FRENZY_SECONDS * 1000 };
+  return { ...s, tapFrenzyUntil: now + TAP_FRENZY_SECONDS * 1000 };
+}
+
+// Награда «деньгами за N минут»: доход в секунду плюс 3 тапа в секунду, не меньше 100 ₽.
+export function minutesOfIncome(state: GameState, now: number, minutes: number): number {
+  const per = incomePerSecond(state, now, false) + tapValue({ ...state, tapFrenzyUntil: 0 }, now) * 3;
+  return Math.max(100 * (state.location + 1), Math.round(per * 60 * minutes));
+}
+
+// ---------- ящики с брейнротами ----------
+
+// Обычный ящик стоит примерно 3 минуты дохода и дорожает с каждым открытым.
+export function boxCost(state: GameState, now: number): number {
+  return Math.round(minutesOfIncome(state, now, 3) * (1 + state.boxesOpened * 0.04) * 2);
+}
+
+export function canBuyBox(state: GameState, now: number): boolean {
+  return state.money >= boxCost(state, now);
+}
+
+export function buyBox(state: GameState, now: number, rand: () => number) {
+  if (!canBuyBox(state, now)) return null;
+  return openBox({ ...state, money: state.money - boxCost(state, now) }, 'common', rand);
+}
+
+export function adBoxReady(state: GameState, now: number): boolean {
+  return now >= state.adBoxAt;
+}
+
+export function freeBox(state: GameState, now: number, kind: BoxKind, rand: () => number, fromAd = false) {
+  const r = openBox(state, kind, rand);
+  return fromAd ? { ...r, state: { ...r.state, adBoxAt: now + AD_BOX_COOLDOWN_MS } } : r;
+}
+
 export function buy(state: GameState, id: string): GameState {
   if (!canBuy(state, id)) return state;
   const def = UPGRADE_BY_ID[id];
@@ -229,6 +354,7 @@ export function buy(state: GameState, id: string): GameState {
     ...state,
     money: state.money - costOf(state, def),
     levels: { ...state.levels, [id]: level(state, id) + 1 },
+    bought: state.bought + 1,
   };
 }
 
