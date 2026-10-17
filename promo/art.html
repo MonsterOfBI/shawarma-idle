@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- Источник иконки и обложки. Пересобрать: открыть в браузере с ?icon или ?cover и сделать скриншот нужного размера. -->
+<meta charset="utf-8">
+<style>
+  body{margin:0;background:#f4ede4;font-family:ui-rounded,'Nunito',system-ui,sans-serif;overflow:hidden}
+  .scene{position:relative;width:100vw;height:100vh}
+  .ground{position:absolute;left:0;right:0;bottom:0;height:22%;background:#e4d8c8}
+  .stall{position:absolute;bottom:22%;left:50%;transform:translateX(-50%);width:var(--w);height:calc(var(--w)*.6)}
+  .body{position:absolute;inset:0;background:#e2583e}
+  .win{position:absolute;left:8%;top:22%;width:50%;height:45%;background:#2b2a35}
+  .spit{position:absolute;left:30%;top:28%;width:6%;height:33%;background:#c8813a}
+  .counter{position:absolute;left:-3%;right:-3%;top:70%;height:6%;background:#f4ede4}
+  .sign{position:absolute;right:8%;top:30%;width:28%;height:30%;background:#f2b134;display:flex;align-items:center;justify-content:center}
+  .wrap{width:20%;height:70%;background:#f2e3b3;border:4px solid #c8813a;transform:rotate(-30deg)}
+  .awning{position:absolute;left:-6%;right:-6%;top:-20%;height:20%;display:flex}
+  .awning i{flex:1;background:#fff}.awning i:nth-child(even){background:#f2b134}
+  .p{position:absolute;bottom:22%;width:calc(var(--w)*.13)}
+  .p b{display:block;width:60%;margin:0 auto;aspect-ratio:1;border-radius:50%}
+  .p s{display:block;height:calc(var(--w)*.2)}
+  h1{position:absolute;left:0;right:0;top:5%;margin:0;text-align:center;font-weight:900;color:#2b2a35;font-size:calc(var(--w)*.24);letter-spacing:-.01em}
+</style>
+<div class="scene" id="s">
+  <h1 id="t">Шаурма-лавка</h1>
+  <div class="ground"></div>
+  <div class="p" style="left:calc(50% - var(--w)*.86)"><b style="background:#c68642"></b><s style="background:#8a4fbf"></s></div>
+  <div class="p" style="left:calc(50% - var(--w)*.7)"><b style="background:#f1c27d"></b><s style="background:#2f9e6b"></s></div>
+  <div class="stall"><div class="awning"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="body"></div><div class="win"></div><div class="spit"></div><div class="counter"></div><div class="sign"><div class="wrap"></div></div></div>
+</div>
+<script>
+  const icon = location.search.includes('icon');
+  document.documentElement.style.setProperty('--w', icon ? '66vw' : '36vw');
+  if (icon) { document.getElementById('t').remove(); document.querySelectorAll('.p').forEach(p => p.remove()); document.querySelector('.stall').style.bottom = '30%'; }
+  else { document.querySelector('.stall').style.left = '62%'; document.querySelectorAll('.p').forEach(p => p.style.left = `calc(${p.style.left.match(/- (.*)\)/)[0].replace('- ','62% - ')}`); }
+</script>

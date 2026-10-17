@@ -12,8 +12,10 @@ const SHIRTS = [0x3d6fb6, 0x2f9e6b, 0xe2583e, 0x8a4fbf, 0xf2b134, 0x4aa3a2, 0xd9
 
 interface Customer {
   body: Phaser.GameObjects.Container;
-  state: 'arriving' | 'waiting' | 'leaving';
+  state: 'queue' | 'leaving';
 }
+
+const WALK_SPEED = 0.16; // пикселей за мс при масштабе 1
 
 export interface StallCallbacks {
   onTap(x: number, y: number): void;
@@ -48,7 +50,7 @@ export class StallScene extends Phaser.Scene {
 
   private get unit() {
     // масштаб фигур под высоту области
-    return Phaser.Math.Clamp(this.scale.height / 300, 0.55, 1.4);
+    return Phaser.Math.Clamp(this.scale.height / 300, 0.55, 2);
   }
 
   create() {
@@ -101,10 +103,7 @@ export class StallScene extends Phaser.Scene {
     const u = this.unit;
     const fit = Math.min(u, (width * 0.55) / (LOCATIONS[this.location].width + 40));
     this.stall.setPosition(this.stallX, this.groundY).setScale(fit);
-    this.customers.forEach((cu, i) => {
-      cu.body.setY(this.groundY).setScale(u);
-      if (cu.state === 'waiting') cu.body.setX(this.queueX(i));
-    });
+    this.customers.forEach((cu) => cu.body.setY(this.groundY).setScale(u));
   }
 
   private queueX(i: number) {
@@ -129,8 +128,9 @@ export class StallScene extends Phaser.Scene {
 
   // Тап обслуживает первого в очереди.
   serve() {
-    const first = this.customers.find((c) => c.state === 'waiting');
-    if (!first) return;
+    // обслуживаем первого, только если он уже дошёл до прилавка
+    const first = this.customers.find((c) => c.state === 'queue');
+    if (!first || Math.abs(first.body.x - this.queueX(0)) > 4) return;
     first.state = 'leaving';
     const wrap = this.add.rectangle(0, -40, 10, 18, 0xf2e3b3).setStrokeStyle(2, 0xc8813a);
     first.body.add(wrap);
@@ -143,7 +143,6 @@ export class StallScene extends Phaser.Scene {
         this.customers = this.customers.filter((c) => c !== first);
       },
     });
-    this.restack();
   }
 
   popText(text: string, x: number, y: number, color = '#2b2a35') {
@@ -158,29 +157,21 @@ export class StallScene extends Phaser.Scene {
     const c = this.add.container(-40, this.groundY).setScale(u);
     c.add(this.add.rectangle(0, -22, 26, 40, Phaser.Utils.Array.GetRandom(SHIRTS)).setOrigin(0.5));
     c.add(this.add.circle(0, -54, 12, Phaser.Utils.Array.GetRandom(SKIN)));
-    const cu: Customer = { body: c, state: 'arriving' };
-    this.customers.push(cu);
-    const idx = this.customers.filter((x) => x.state !== 'leaving').length - 1;
-    this.tweens.add({
-      targets: c,
-      x: this.queueX(idx),
-      duration: 1200 + idx * 150,
-      ease: 'Sine.out',
-      onComplete: () => {
-        if (cu.state === 'arriving') cu.state = 'waiting';
-      },
-    });
-  }
-
-  private restack() {
-    this.customers
-      .filter((c) => c.state !== 'leaving')
-      .forEach((c, i) => this.tweens.add({ targets: c.body, x: this.queueX(i), duration: 300 }));
+    this.customers.push({ body: c, state: 'queue' });
   }
 
   update(_time: number, delta: number) {
-    const inLine = this.customers.filter((c) => c.state !== 'leaving').length;
-    if (inLine < this.wantQueue && Math.random() < delta / 700) this.spawnCustomer();
+    // каждый в очереди идёт к своему месту; места пересчитываются, когда кто-то уходит
+    const line = this.customers.filter((c) => c.state === 'queue');
+    line.forEach((c, i) => {
+      const dx = this.queueX(i) - c.body.x;
+      const step = WALK_SPEED * this.unit * delta;
+      c.body.x += Math.abs(dx) <= step ? dx : Math.sign(dx) * step;
+    });
+    const inLine = line.length;
+    // очередь не длиннее, чем помещается слева от ларька
+    const fits = this.queueX(inLine) > 16 * this.unit;
+    if (inLine < this.wantQueue && fits && Math.random() < delta / 700) this.spawnCustomer();
     if (this.serveEvery > 0) {
       this.serveTimer += delta;
       if (this.serveTimer >= this.serveEvery) {
