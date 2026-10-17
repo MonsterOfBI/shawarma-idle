@@ -21,6 +21,9 @@ import {
   recordCombo,
 } from './economy';
 import { ACHIEVEMENTS, achievementMult, unlockAchievements } from './achievements';
+import { BRAINROTS, customerPool, meet, pickCustomer } from './brainrots';
+import { bulkAmount, bulkCost, buyN, canBuyN, maxAffordable } from './economy';
+import { UPGRADE_BY_ID } from './upgrades';
 import { formatNumber } from './format';
 import { LOCATIONS } from './locations';
 import { secondsToEarn } from './sim';
@@ -174,5 +177,67 @@ describe('баланс', () => {
     const s = normalize({ version: 2, money: 5, achievements: ['taps_100', 7] }, 0);
     expect(s.achievements).toEqual(['taps_100']);
     expect(normalize({ money: 1 }, 0).achievements).toEqual([]);
+  });
+
+  it('пачка из 10 стоит как 10 покупок подряд', () => {
+    const def = UPGRADE_BY_ID.knife;
+    let one: GameState = { ...newGame(0), money: 1e6 };
+    for (let i = 0; i < 10; i++) one = buy(one, 'knife');
+    const ten = buyN({ ...newGame(0), money: 1e6 }, 'knife', 10);
+    expect(ten.levels.knife).toBe(10);
+    expect(ten.money).toBeCloseTo(one.money);
+    expect(bulkCost(newGame(0), def, 1)).toBe(10);
+  });
+
+  it('пачку нельзя купить без денег, а максимум считает доступное', () => {
+    const def = UPGRADE_BY_ID.knife;
+    const s: GameState = { ...newGame(0), money: 25 };
+    expect(canBuyN(s, 'knife', 10)).toBe(false);
+    expect(maxAffordable(s, def)).toBe(2); // 10 + 12 = 22
+    expect(bulkAmount(s, def, 'max')).toBe(2);
+    expect(bulkAmount(newGame(0), def, 'max')).toBe(1);
+  });
+
+  it('множитель нельзя купить пачкой дважды', () => {
+    const def = UPGRADE_BY_ID.sign;
+    expect(bulkAmount({ ...newGame(0), money: 1e9 }, def, 'x10')).toBe(1);
+    expect(maxAffordable({ ...newGame(0), money: 1e9 }, def)).toBe(1);
+  });
+
+  it('на каждой локации свои брейнроты, старые тоже заходят', () => {
+    const ids = (l: number) => customerPool(l).map((p) => p.id);
+    expect(ids(0)).toContain('tralalero');
+    expect(ids(0)).not.toContain('vaca');
+    expect(ids(4)).toContain('vaca');
+    expect(ids(4)).toContain('tralalero');
+    for (let l = 0; l < LOCATIONS.length; l++) expect(ids(l).length).toBeGreaterThan(0);
+    expect(ids(0)).toContain(pickCustomer(0, 0.999));
+  });
+
+  it('знакомство с брейнротом записывается один раз', () => {
+    let s = meet(newGame(0), 'tralalero');
+    s = meet(s, 'tralalero');
+    s = meet(s, 'unknown');
+    expect(s.met).toEqual(['tralalero']);
+    expect(new Set(BRAINROTS.map((b) => b.id)).size).toBe(BRAINROTS.length);
+    expect(normalize({ met: ['tralalero', 3] }, 0).met).toEqual(['tralalero']);
+    expect(normalize({}, 0).musicOff).toBe(false);
+    expect(normalize({ musicOff: true }, 0).musicOff).toBe(true);
+  });
+});
+
+describe('внешний вид ларька', () => {
+  it('первый уровень любого улучшения меняет ларёк', async () => {
+    const { lookOf, lookKey } = await import('./look');
+    const { UPGRADES } = await import('./upgrades');
+    const base = lookKey(lookOf({}));
+    for (const u of UPGRADES) expect(lookKey(lookOf({ [u.id]: 1 }))).not.toBe(base);
+  });
+  it('стадии и украшения растут по порогам', async () => {
+    const { stage, tier } = await import('./look');
+    expect([0, 1, 9, 10, 25, 50, 100, 400].map(stage)).toEqual([0, 1, 1, 2, 3, 4, 5, 5]);
+    expect(tier({ knife: 9 })).toBe(0);
+    expect(tier({ knife: 10 })).toBe(1);
+    expect(tier({ knife: 150, grill_helper: 50 })).toBe(5);
   });
 });

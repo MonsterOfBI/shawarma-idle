@@ -16,18 +16,18 @@ function audio(): AudioContext | null {
   return ctx;
 }
 
-function beep(freq: number, duration: number, type: OscillatorType, volume: number, delay = 0) {
+function beep(freq: number, duration: number, type: OscillatorType, volume: number, delay = 0, out?: AudioNode) {
   if (muted || paused) return;
   const a = audio();
   if (!a) return;
-  const t = a.currentTime + delay;
+  const t = a.currentTime + Math.max(0, delay);
   const osc = a.createOscillator();
   const gain = a.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, t);
   gain.gain.setValueAtTime(volume, t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-  osc.connect(gain).connect(a.destination);
+  osc.connect(gain).connect(out ?? a.destination);
   osc.start(t);
   osc.stop(t + duration);
 }
@@ -60,6 +60,71 @@ export const sfx = {
 
 export function setMuted(m: boolean) {
   muted = m;
+}
+
+// ---------- музыка: маленькая тарантелла по кругу, тоже без файлов ----------
+
+const NOTE: Record<string, number> = {};
+['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].forEach((n, i) => {
+  for (let o = 1; o <= 6; o++) NOTE[`${n}${o}`] = 440 * Math.pow(2, (i - 9 + (o - 4) * 12) / 12);
+});
+
+// 6/8, по шесть восьмых в такте
+const MELODY = [
+  'A4', 'C5', 'E5', 'A5', 'E5', 'C5',
+  'G#4', 'B4', 'E5', 'G#5', 'E5', 'B4',
+  'A4', 'C5', 'E5', 'A5', 'B5', 'C6',
+  'B5', 'A5', 'G#5', 'A5', 'E5', 'C5',
+  'D5', 'F5', 'A5', 'D6', 'A5', 'F5',
+  'C5', 'E5', 'A5', 'C6', 'A5', 'E5',
+  'B4', 'D5', 'E5', 'G#5', 'B5', 'D6',
+  'C6', 'B5', 'A5', 'E5', 'A4', '',
+];
+const BASS = ['A2', 'E3', 'E2', 'B2', 'A2', 'E3', 'E2', 'E3', 'D3', 'A2', 'A2', 'E3', 'E2', 'B2', 'A2', 'A2'];
+const STEP = 0.135; // секунды на восьмую
+
+let musicOn = false;
+let musicGain: GainNode | null = null;
+let step = 0;
+let nextAt = 0;
+let timer: ReturnType<typeof setInterval> | null = null;
+
+function scheduleMusic() {
+  const a = ctx;
+  if (!a || !musicGain || muted || paused || !musicOn || a.state !== 'running') return;
+  if (nextAt < a.currentTime) nextAt = a.currentTime + 0.05;
+  while (nextAt < a.currentTime + 0.25) {
+    const delay = nextAt - a.currentTime;
+    const note = MELODY[step % MELODY.length];
+    if (note) beep(NOTE[note], STEP * 0.9, 'triangle', 0.05, delay, musicGain);
+    if (step % 3 === 0) beep(NOTE[BASS[Math.floor(step / 3) % BASS.length]], STEP * 2.6, 'sine', 0.09, delay, musicGain);
+    if (step % 3 === 0) beep(2400, 0.03, 'square', 0.012, delay, musicGain);
+    step++;
+    nextAt += STEP;
+  }
+}
+
+// Включить или выключить музыку. Контекст звука создаётся только после действия игрока.
+export function setMusic(on: boolean) {
+  musicOn = on;
+  if (!on) {
+    if (musicGain && ctx) musicGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+    return;
+  }
+  const a = ctx;
+  if (!a) return;
+  if (!musicGain) {
+    musicGain = a.createGain();
+    musicGain.connect(a.destination);
+  }
+  musicGain.gain.setTargetAtTime(1, a.currentTime, 0.05);
+  if (!timer) timer = setInterval(scheduleMusic, 60);
+}
+
+// Первый тап: разбудить звук и, если можно, запустить музыку.
+export function unlockAudio(withMusic: boolean) {
+  audio();
+  if (withMusic) setMusic(true);
 }
 
 // Пауза от площадки (реклама, свёрнутая вкладка): звук обязан замолчать.

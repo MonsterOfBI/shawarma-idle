@@ -1,0 +1,420 @@
+import Phaser from 'phaser';
+import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE, lerpColor, rng, shade } from './draw';
+
+// Фоны пяти локаций. Рисуются в один Graphics и перерисовываются 10 раз в секунду,
+// поэтому волны, светлячки и гирлянды двигаются. night — от 0 (день) до 1 (ночь).
+
+export interface Ctx {
+  w: number;
+  h: number;
+  hy: number; // линия горизонта / основание дальнего плана
+  gy: number; // уровень земли, где стоят ларёк и посетители
+  u: number; // масштаб
+  night: number;
+  clock: number; // мс
+  seed: number;
+}
+
+const nc = (day: number, night: number, n: number) => lerpColor(day, night, n);
+
+function windowsGrid(p: Pen, x: number, top: number, bw: number, bh: number, c: Ctx, wall: number, r: () => number, shutters = false) {
+  const u = c.u;
+  const cols = Math.max(1, Math.floor(bw / (16 * u)));
+  const rows = Math.max(1, Math.floor((bh - 10 * u) / (20 * u)));
+  for (let i = 0; i < cols; i++)
+    for (let j = 0; j < rows; j++) {
+      const wx = x + (bw / cols) * (i + 0.5);
+      const wy = top + 10 * u + j * 20 * u;
+      const lit = r() < 0.15 + c.night * 0.6 && c.night > 0.2;
+      const col = lit ? lerpColor(0xffd27a, 0xffb347, r()) : shade(wall, 0.25);
+      p.g.fillStyle(col, lit ? 0.95 : 0.85).fillRect(wx - 3.5 * u, wy, 7 * u, 9 * u);
+      if (shutters) {
+        const sh = nc(0x3f7a4f, 0x1f3a2a, c.night);
+        p.g.fillStyle(sh, 1).fillRect(wx - 7.5 * u, wy - 1 * u, 3.2 * u, 11 * u);
+        p.g.fillStyle(sh, 1).fillRect(wx + 4.3 * u, wy - 1 * u, 3.2 * u, 11 * u);
+      }
+    }
+}
+
+function palm(p: Pen, x: number, base: number, size: number, c: Ctx, lean = 1) {
+  const u = c.u * size;
+  const trunk = nc(0x9a6a3e, 0x3a2a24, c.night);
+  const leaf = nc(0x4f9a3a, 0x1f3a2a, c.night);
+  let px = x, py = base;
+  for (let i = 0; i < 7; i++) {
+    const nx = px + lean * 3 * u, ny = py - 14 * u;
+    p.poly([[px - 6 * u, py], [px + 6 * u, py], [nx + 5 * u, ny], [nx - 5 * u, ny]], shade(trunk, i % 2 ? 0.08 : 0), 2);
+    px = nx;
+    py = ny;
+  }
+  const sway = Math.sin(c.clock / 900 + x) * 3 * u;
+  for (const [dx, dy] of [[-34, 10], [34, 12], [-24, -8], [26, -10], [0, -16]]) {
+    p.poly([[px, py], [px + dx * u * 0.55 + sway, py + dy * u * 0.4 - 10 * u], [px + dx * u + sway, py + dy * u], [px + dx * u * 0.4, py + 4 * u]], leaf, 2);
+  }
+  p.circle(px - 3 * u, py + 3 * u, 4 * u, nc(0x7a5a2a, 0x2a1f18, c.night), 2);
+  p.circle(px + 4 * u, py + 4 * u, 4 * u, nc(0x7a5a2a, 0x2a1f18, c.night), 2);
+}
+
+function cactus(p: Pen, x: number, base: number, size: number, c: Ctx) {
+  const u = c.u * size;
+  const col = nc(0x5e9c3a, 0x23401f, c.night);
+  p.rect(x - 22 * u, base - 46 * u, 10 * u, 22 * u, col, 5 * u, 2);
+  p.rect(x - 22 * u, base - 30 * u, 18 * u, 8 * u, col, 4 * u, 2);
+  p.rect(x + 12 * u, base - 56 * u, 10 * u, 26 * u, col, 5 * u, 2);
+  p.rect(x + 4 * u, base - 36 * u, 18 * u, 8 * u, col, 4 * u, 2);
+  p.rect(x - 8 * u, base - 74 * u, 16 * u, 74 * u, col, 8 * u, 2);
+  p.g.lineStyle(1.5, shade(col, -0.25), 1).lineBetween(x - 2 * u, base - 66 * u, x - 2 * u, base - 6 * u);
+  p.g.lineStyle(1.5, shade(col, -0.25), 1).lineBetween(x + 3 * u, base - 66 * u, x + 3 * u, base - 6 * u);
+  if (size > 0.9) p.circle(x, base - 76 * u, 4 * u, 0xf28cb1, 2);
+}
+
+// ---------- метро: вечерний город ----------
+function metro(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n } = c;
+  const r = rng(c.seed);
+  for (const far of [true, false]) {
+    let x = -10;
+    while (x < w + 10) {
+      const bw = (far ? 44 + r() * 50 : 56 + r() * 60) * u;
+      const bh = (far ? 70 : 40) * u + r() * (far ? 120 : 90) * u;
+      const wall = far ? nc(lerpColor(0xa7a3cf, 0xc9b6d8, r()), 0x2a2148, n) : nc(lerpColor(0x7d6f9e, 0x9a7fa8, r()), 0x1f1838, n);
+      p.rect(x, hy - bh, bw, bh, wall, 0, far ? 0 : 2);
+      if (!far) p.g.fillStyle(shade(wall, -0.15), 1).fillRect(x + bw * 0.8, hy - bh, bw * 0.2, bh);
+      windowsGrid(p, x, hy - bh, bw, bh, c, wall, r);
+      x += bw + (far ? 3 : 10 + r() * 26) * u;
+    }
+  }
+  // дорога и тротуар
+  p.g.fillStyle(nc(0x6e6a80, 0x24203a, n), 1).fillRect(0, hy, w, gy - hy);
+  p.g.fillStyle(nc(0xf4ecd8, 0x8a8298, n), 1);
+  for (let x = 0; x < w; x += 52 * u) p.g.fillRect(x, hy + (gy - hy) * 0.45, 26 * u, 3 * u);
+  p.rect(-5, gy - 6 * u, w + 10, 6 * u, nc(0xd8cfc0, 0x5a5270, n), 0, 2);
+  const tile = nc(0xe9d9bf, 0x4a3f63, n);
+  p.g.fillStyle(tile, 1).fillRect(0, gy, w, h - gy);
+  p.g.lineStyle(1, shade(tile, -0.12), 1);
+  for (let y = gy + 14 * u, row = 0; y < h; y += 14 * u, row++) {
+    p.g.lineBetween(0, y, w, y);
+    for (let x = (row % 2) * 18 * u; x < w; x += 36 * u) p.g.lineBetween(x, y - 14 * u, x, y);
+  }
+  // знак метро
+  const mx = w * 0.1;
+  p.rect(mx - 2.5 * u, hy - 80 * u, 5 * u, 80 * u, nc(0x5a5270, 0x2a2440, n), 0, 2);
+  p.circle(mx, hy - 88 * u, 16 * u, WHITE, 2.5);
+}
+
+// ---------- пляж Тралалеро ----------
+function beach(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n, clock } = c;
+  const sea = hy - 34 * u;
+  // остров вдалеке
+  p.ellipse(w * 0.78, sea, 160 * u, 40 * u, nc(0x6aa36a, 0x1f3a2a, n), 0);
+  p.g.fillStyle(nc(0x4f8a4f, 0x173022, n), 1).fillEllipse(w * 0.74, sea - 6 * u, 70 * u, 26 * u);
+  // море
+  const water = nc(0x2fa7c8, 0x1a2f5a, n);
+  p.g.fillStyle(water, 1).fillRect(0, sea, w, gy - sea);
+  for (let row = 0; row < 4; row++) {
+    const y = sea + 8 * u + row * ((gy - sea - 14 * u) / 4);
+    const off = ((clock / (40 + row * 14)) % (40 * u)) * (row % 2 ? 1 : -1);
+    p.g.lineStyle(2, nc(0xbfeaf2, 0x4a6a9a, n), 0.8);
+    for (let x = -40 * u + off; x < w + 40 * u; x += 40 * u) {
+      p.g.beginPath();
+      p.g.arc(x, y + 4 * u, 8 * u, Phaser.Math.DegToRad(200), Phaser.Math.DegToRad(340), false);
+      p.g.strokePath();
+    }
+  }
+  // лунная/солнечная дорожка
+  p.g.fillStyle(n > 0.5 ? 0xf3f0ff : 0xfff1b8, 0.25 + 0.2 * n).fillRect(w * 0.6, sea + 2 * u, 40 * u, gy - sea - 4 * u);
+  // пена у берега
+  const foam = Math.sin(clock / 700) * 4 * u;
+  p.g.fillStyle(nc(0xffffff, 0x8a9ac8, n), 0.9).fillRect(0, gy - 6 * u + foam * 0.3, w, 6 * u);
+  // песок
+  const sand = nc(0xf2d49b, 0x6a5a4a, n);
+  p.g.fillStyle(sand, 1).fillRect(0, gy, w, h - gy);
+  const r = rng(c.seed);
+  for (let i = 0; i < 60; i++) p.g.fillStyle(shade(sand, -0.12), 1).fillCircle(r() * w, gy + 6 * u + r() * (h - gy), 1.4 * u);
+  for (let i = 0; i < 4; i++) {
+    const sx = r() * w, sy = gy + 20 * u + r() * (h - gy - 30 * u);
+    p.ellipse(sx, sy, 10 * u, 7 * u, nc(0xf7b2a0, 0x6a4a4a, n), 1.5);
+  }
+  // пальмы и зонт
+  palm(p, w * 0.06, gy + 4 * u, 1.1, c, 1);
+  palm(p, w * 0.96, gy + 4 * u, 0.9, c, -1);
+  const ux = w * 0.2;
+  p.line(ux, gy + 10 * u, ux + 6 * u, gy - 60 * u, 3 * u, nc(0xeeeeee, 0x666666, n));
+  for (let i = 0; i < 6; i++) {
+    const a0 = Math.PI + (i / 6) * Math.PI, a1 = Math.PI + ((i + 1) / 6) * Math.PI;
+    const cx = ux + 6 * u, cy = gy - 56 * u, R = 40 * u;
+    p.poly([[cx, cy - 6 * u], [cx + Math.cos(a0) * R, cy + Math.sin(a0) * R * 0.45 + 8 * u], [cx + Math.cos(a1) * R, cy + Math.sin(a1) * R * 0.45 + 8 * u]], i % 2 ? nc(TOMATO, 0x5a2a2a, n) : nc(WHITE, 0x7a7a8a, n), 2);
+  }
+}
+
+// ---------- джунгли Патапима ----------
+function jungle(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n, clock } = c;
+  const r = rng(c.seed);
+  const tones = [nc(0x3f7a3a, 0x10261a, n), nc(0x4f9a3a, 0x163020, n), nc(0x6ab04a, 0x1d3a24, n)];
+  tones.forEach((col, layer) => {
+    const base = hy - 10 * u + layer * 22 * u;
+    for (let x = -30 * u; x < w + 40 * u; x += (34 + r() * 26) * u) {
+      const R = (26 + r() * 30) * u * (1 - layer * 0.15);
+      p.circle(x, base - R * 0.4, R, col, layer === 2 ? 2 : 0);
+    }
+    p.g.fillStyle(col, 1).fillRect(0, base, w, gy - base);
+  });
+  // стволы
+  for (let i = 0; i < 4; i++) {
+    const x = (w / 4) * i + r() * 40 * u;
+    p.rect(x, hy - 120 * u, 16 * u, gy - hy + 120 * u, nc(0x6a4a2a, 0x22180f, n), 4 * u, 2);
+  }
+  // лианы сверху
+  for (let i = 0; i < 6; i++) {
+    // лианы только по краям, чтобы не мешать надписям сверху
+    const x = i < 3 ? w * (0.02 + i * 0.07 + r() * 0.03) : w * (0.78 + (i - 3) * 0.07 + r() * 0.03);
+    const len = (40 + r() * 90) * u + hy * 0.25;
+    const sway = Math.sin(clock / 1200 + i) * 4 * u;
+    p.g.lineStyle(3 * u, nc(0x3f7a3a, 0x10261a, n), 1).lineBetween(x, 0, x + sway, len);
+    for (let k = 20 * u; k < len; k += 22 * u) p.ellipse(x + sway * (k / len) + 6 * u, k, 12 * u, 6 * u, nc(LEAF, 0x1d3a24, n), 1.5);
+  }
+  // деревянный настил
+  const plank = nc(0xb07a4a, 0x3a2a24, n);
+  p.g.fillStyle(plank, 1).fillRect(0, gy, w, h - gy);
+  for (let y = gy, i = 0; y < h; y += 12 * u, i++) {
+    p.g.lineStyle(2, shade(plank, -0.3), 1).lineBetween(0, y, w, y);
+    for (let x = (i % 2) * 40 * u; x < w; x += 80 * u) {
+      p.g.lineBetween(x, y, x, y + 12 * u);
+      p.g.fillStyle(shade(plank, -0.4), 1).fillCircle(x + 5 * u, y + 6 * u, 1.3 * u);
+    }
+  }
+  // светлячки ночью
+  if (n > 0.3) {
+    for (let i = 0; i < 18; i++) {
+      const fx = (r() * w + Math.sin(clock / 1500 + i) * 30 * u) % w;
+      const fy = hy - 40 * u + r() * (gy - hy + 30 * u) + Math.cos(clock / 1100 + i * 2) * 10 * u;
+      const a = (0.5 + 0.5 * Math.sin(clock / 300 + i * 3)) * (n - 0.3);
+      p.g.fillStyle(0xfff27a, a).fillCircle(fx, fy, 2.4 * u);
+      p.g.fillStyle(0xfff27a, a * 0.25).fillCircle(fx, fy, 6 * u);
+    }
+  }
+}
+
+// ---------- пустыня Лирили ----------
+function desert(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n } = c;
+  // столовые горы
+  const mesa = nc(0xc8704a, 0x3a2030, n);
+  p.poly([[w * 0.05, hy], [w * 0.1, hy - 70 * u], [w * 0.3, hy - 70 * u], [w * 0.36, hy]], mesa, 0);
+  p.poly([[w * 0.62, hy], [w * 0.68, hy - 50 * u], [w * 0.8, hy - 50 * u], [w * 0.86, hy]], shade(mesa, -0.1), 0);
+  p.poly([[w * 0.42, hy], [w * 0.5, hy - 46 * u], [w * 0.58, hy]], nc(0xe0a060, 0x4a3030, n), 2);
+  // дюны слоями
+  const dunes = [nc(0xe8b06a, 0x4a3540, n), nc(0xf2c27a, 0x5a4048, n)];
+  dunes.forEach((col, i) => {
+    const base = hy + i * 18 * u;
+    const pts: [number, number][] = [[0, gy]];
+    for (let x = 0; x <= w + 20; x += 20 * u) pts.push([x, base - Math.sin(x / (90 * u) + i * 2) * 14 * u - 8 * u]);
+    pts.push([w, gy]);
+    p.poly(pts, col, i === 1 ? 2 : 0);
+  });
+  // оазис
+  p.ellipse(w * 0.14, gy - 4 * u, 120 * u, 18 * u, nc(0x3fb6c8, 0x1a3a5a, n), 2);
+  palm(p, w * 0.08, gy - 2 * u, 0.9, c, 1);
+  cactus(p, w * 0.9, gy + 2 * u, 1, c);
+  cactus(p, w * 0.3, hy + 26 * u, 0.5, c);
+  // песок с рябью
+  const sand = nc(0xf5cf8a, 0x6a5040, n);
+  p.g.fillStyle(sand, 1).fillRect(0, gy, w, h - gy);
+  p.g.lineStyle(2, shade(sand, -0.12), 1);
+  for (let y = gy + 12 * u; y < h; y += 16 * u)
+    for (let x = ((y / u) % 30) * u; x < w; x += 60 * u) {
+      p.g.beginPath();
+      p.g.arc(x, y + 6 * u, 14 * u, Phaser.Math.DegToRad(220), Phaser.Math.DegToRad(320), false);
+      p.g.strokePath();
+    }
+}
+
+// ---------- итальянская площадь ----------
+function piazza(p: Pen, c: Ctx) {
+  const { w, h, hy, gy, u, night: n, clock } = c;
+  const r = rng(c.seed);
+  const walls = [0xe9b872, 0xd9825b, 0xf2c89a, 0xc8553d, 0xe8a0a0, 0xf0d8a8];
+  // колокольня и купол на заднем плане
+  const tower = nc(0xd9a06a, 0x3a2a38, n);
+  p.rect(w * 0.7, hy - 200 * u, 34 * u, 200 * u, tower, 0, 2);
+  p.rect(w * 0.7 + 8 * u, hy - 186 * u, 18 * u, 22 * u, nc(0x3a2a38, 0x140c1c, n), 9 * u, 2);
+  p.poly([[w * 0.7 - 4 * u, hy - 200 * u], [w * 0.7 + 17 * u, hy - 232 * u], [w * 0.7 + 38 * u, hy - 200 * u]], nc(0xb8553d, 0x3a1f28, n), 2);
+  p.circle(w * 0.36, hy - 120 * u, 40 * u, nc(0xc86a4a, 0x3a2030, n), 2);
+  p.rect(w * 0.36 - 3 * u, hy - 172 * u, 6 * u, 14 * u, nc(0xc86a4a, 0x3a2030, n), 0, 2);
+  // дома с ставнями
+  let x = -10;
+  while (x < w + 10) {
+    const bw = (60 + r() * 50) * u;
+    const bh = (90 + r() * 70) * u;
+    const wall = nc(walls[Math.floor(r() * walls.length)], 0x2e2240, n);
+    p.rect(x, hy - bh, bw, bh, wall, 0, 2);
+    p.rect(x - 3 * u, hy - bh - 6 * u, bw + 6 * u, 8 * u, nc(0xb8553d, 0x3a1f28, n), 0, 2);
+    windowsGrid(p, x, hy - bh + 8 * u, bw, bh - 30 * u, c, wall, r, true);
+    x += bw + 2 * u;
+  }
+  // гирлянда через площадь
+  const bulbs: [number, number][] = [];
+  p.g.lineStyle(1.5, OUTLINE, 1);
+  for (const [x0, x1, y0] of [[0, w * 0.5, hy - 80 * u], [w * 0.5, w, hy - 90 * u]] as const) {
+    p.g.beginPath();
+    for (let k = 0; k <= 20; k++) {
+      const t = k / 20;
+      const bx = x0 + (x1 - x0) * t;
+      const by = y0 + Math.sin(t * Math.PI) * 36 * u;
+      if (k === 0) p.g.moveTo(bx, by);
+      else p.g.lineTo(bx, by);
+      if (k % 2) bulbs.push([bx, by + 4 * u]);
+    }
+    p.g.strokePath();
+  }
+  bulbs.forEach(([bx, by], i) => {
+    const on = 0.5 + 0.5 * Math.sin(clock / 400 + i);
+    p.g.fillStyle(n > 0.2 ? 0xffd86b : 0xf2e8c8, 1).fillCircle(bx, by, 3 * u);
+    if (n > 0.2) p.g.fillStyle(0xffd86b, 0.25 * n * on).fillCircle(bx, by, 9 * u);
+  });
+  // фонтан
+  const fx = w * 0.1;
+  p.ellipse(fx, gy - 4 * u, 90 * u, 22 * u, nc(0xd8d0c0, 0x5a5268, n), 2);
+  p.ellipse(fx, gy - 8 * u, 70 * u, 12 * u, nc(0x5ab8d8, 0x2a4a7a, n), 0);
+  p.rect(fx - 5 * u, gy - 50 * u, 10 * u, 44 * u, nc(0xd8d0c0, 0x5a5268, n), 3 * u, 2);
+  const jet = Math.sin(clock / 200) * 2 * u;
+  p.g.lineStyle(3 * u, nc(0xbfeaf2, 0x6a8ab8, n), 0.9);
+  p.g.beginPath();
+  p.g.arc(fx - 16 * u, gy - 50 * u, 16 * u + jet, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false);
+  p.g.strokePath();
+  p.g.beginPath();
+  p.g.arc(fx + 16 * u, gy - 50 * u, 16 * u + jet, Phaser.Math.DegToRad(180), Phaser.Math.DegToRad(360), false);
+  p.g.strokePath();
+  // брусчатка
+  const stone = nc(0xc9b8a0, 0x4a4058, n);
+  p.g.fillStyle(shade(stone, -0.2), 1).fillRect(0, gy, w, h - gy);
+  for (let y = gy + 2 * u, row = 0; y < h; y += 11 * u, row++)
+    for (let sx = (row % 2) * 9 * u; sx < w; sx += 18 * u) p.g.fillStyle(shade(stone, (((sx + y) / u) % 7) * 0.012), 1).fillRoundedRect(sx, y, 16 * u, 9 * u, 3 * u);
+}
+
+export const BACKDROPS: Record<string, (p: Pen, c: Ctx) => void> = { metro, beach, jungle, desert, piazza };
+
+// ---------- движущиеся объекты на фоне ----------
+
+export interface Mover {
+  root: Phaser.GameObjects.Container;
+  speed: number; // доля ширины экрана в секунду
+  lights?: Phaser.GameObjects.Ellipse;
+  bob?: number;
+}
+
+function container(scene: Phaser.Scene, draw: (p: Pen) => void) {
+  const c = scene.add.container(0, 0);
+  const g = scene.add.graphics();
+  draw(new Pen(g, 2.5));
+  c.add(g);
+  return c;
+}
+
+const CAR_COLORS = [TOMATO, 0x3d6fb6, 0xf2f2f2, 0x5e9c3a, AMBER, 0x8a4fbf];
+
+export function spawnMover(scene: Phaser.Scene, loc: string, c: Ctx): Mover {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const u = c.u;
+  let root: Phaser.GameObjects.Container;
+  let y = c.hy + (c.gy - c.hy) * (dir > 0 ? 0.75 : 0.35);
+  let speed = 0.12 + Math.random() * 0.06;
+  let lights: Phaser.GameObjects.Ellipse | undefined;
+  let bob: number | undefined;
+  if (loc === 'beach') {
+    // парусник или плавник Тралалеро
+    if (Math.random() < 0.5) {
+      root = container(scene, (p) => {
+        p.poly([[-30, -6], [30, -6], [22, 6], [-22, 6]], WHITE);
+        p.line(0, -6, 0, -52, 2.5);
+        p.poly([[2, -50], [2, -10], [26, -10]], CREAM);
+        p.poly([[-2, -46], [-2, -10], [-20, -10]], TOMATO);
+      });
+      speed = 0.03;
+    } else {
+      root = container(scene, (p) => {
+        p.poly([[-10, 0], [6, -22], [10, 0]], 0x6f8fb3);
+      });
+      speed = 0.06;
+    }
+    y = c.hy - 20 * u + Math.random() * 20 * u;
+    bob = Math.random() * 6;
+  } else if (loc === 'jungle') {
+    // попугай
+    root = container(scene, (p) => {
+      p.ellipse(0, 0, 26, 14, TOMATO);
+      p.poly([[-12, 0], [-28, 6], [-12, 4]], 0x3d6fb6, 2);
+      p.poly([[-4, -2], [6, -18], [8, -2]], AMBER, 2);
+      p.circle(12, -4, 7, TOMATO);
+      p.poly([[17, -6], [24, -2], [17, 0]], AMBER, 2);
+      p.eye(13, -6, 2.4);
+    });
+    y = c.hy - 60 * u - Math.random() * 60 * u;
+    speed = 0.16;
+    bob = Math.random() * 6;
+  } else if (loc === 'desert') {
+    // перекати-поле
+    root = container(scene, (p) => {
+      p.g.lineStyle(2, 0x9a6a3e, 1);
+      for (let i = 0; i < 6; i++) p.g.strokeCircle(Math.cos(i) * 3, Math.sin(i) * 3, 10 + (i % 3) * 2);
+    });
+    y = c.gy + 4 * u;
+    speed = 0.1;
+    bob = Math.random() * 6;
+  } else if (loc === 'piazza') {
+    // веспа
+    const col = Phaser.Utils.Array.GetRandom([0x8fd3c8, 0xf2a0b0, CREAM]);
+    root = container(scene, (p) => {
+      p.circle(-16, -6, 7, OUTLINE, 0);
+      p.circle(18, -6, 7, OUTLINE, 0);
+      p.poly([[-26, -8], [-2, -8], [6, -28], [14, -28], [22, -8], [-26, -20]], col);
+      p.line(12, -28, 16, -42, 2.5);
+      p.line(10, -42, 22, -42, 2.5);
+      p.rect(-18, -38, 12, 22, 0x3d6fb6, 4);
+      p.circle(-12, -46, 7, 0xf1c27d);
+      p.rect(-20, -54, 16, 6, TOMATO, 3, 2);
+    });
+    lights = scene.add.ellipse(42, -20, 50, 14, 0xfff0b0, 0).setBlendMode(Phaser.BlendModes.ADD);
+    root.add(lights);
+    speed = 0.16;
+  } else {
+    // машина
+    const col = Phaser.Utils.Array.GetRandom(CAR_COLORS);
+    root = container(scene, (p) => {
+      p.rect(-48, -36, 96, 24, col, 8);
+      p.rect(-30, -54, 56, 22, col, 8);
+      p.rect(-24, -50, 20, 14, 0xbfe3f2, 3, 2);
+      p.rect(2, -50, 18, 14, 0xbfe3f2, 3, 2);
+      p.circle(-28, -12, 9, OUTLINE, 0);
+      p.circle(28, -12, 9, OUTLINE, 0);
+      p.circle(-28, -12, 4, 0x9a9aa8, 0);
+      p.circle(28, -12, 4, 0x9a9aa8, 0);
+      p.rect(42, -30, 6, 6, 0xfff0b0, 2, 1.5);
+    });
+    lights = scene.add.ellipse(84, -26, 80, 22, 0xfff0b0, 0).setBlendMode(Phaser.BlendModes.ADD);
+    root.add(lights);
+    speed = 0.18 + Math.random() * 0.08;
+  }
+  root.setPosition(dir > 0 ? -140 * u : c.w + 140 * u, y).setScale(u * (dir > 0 ? 1 : 0.85));
+  if (dir < 0) root.scaleX *= -1;
+  return { root, speed: dir * speed, lights, bob };
+}
+
+// Курьер на самокате ездит в любой локации, если нанят.
+export function spawnCourier(scene: Phaser.Scene, c: Ctx): Mover {
+  const root = container(scene, (p) => {
+    p.circle(-14, -6, 6, OUTLINE, 0);
+    p.circle(14, -6, 6, OUTLINE, 0);
+    p.line(-16, -10, 16, -10, 4, 0x5a5270);
+    p.line(12, -10, 16, -40, 3, 0x5a5270);
+    p.line(10, -40, 22, -40, 3, 0x5a5270);
+    p.rect(-14, -40, 14, 22, 0x5e9c3a, 4);
+    p.circle(-6, -48, 7, 0xffb08a);
+    p.rect(-24, -42, 16, 16, AMBER, 3);
+  });
+  const u = c.u;
+  root.setPosition(-80 * u, c.gy - 4 * u).setScale(u);
+  return { root, speed: 0.14 };
+}

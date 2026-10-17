@@ -4,7 +4,7 @@ import { achievementMult } from './achievements';
 import { LOCATIONS } from './locations';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 // Офлайн-доход начисляется не больше чем за 2 часа отсутствия.
 export const OFFLINE_CAP_SECONDS = 2 * 60 * 60;
@@ -29,10 +29,12 @@ export interface GameState {
   boostUntil: number; // мс; до этого момента доход ×2
   owned: { noAds: boolean; x2Forever: boolean };
   muted: boolean;
+  musicOff: boolean; // музыка выключена отдельно от звуков
   lastSeen: number; // мс, Date.now()
   achievements: string[]; // id полученных достижений, не сгорают при переезде
   goldenCaught: number; // сколько щедрых гостей поймано
   bestCombo: number; // лучшая серия тапов
+  met: string[]; // знакомые брейнроты для коллекции
 }
 
 export function newGame(now: number): GameState {
@@ -47,10 +49,12 @@ export function newGame(now: number): GameState {
     boostUntil: 0,
     owned: { noAds: false, x2Forever: false },
     muted: false,
+    musicOff: false,
     lastSeen: now,
     achievements: [],
     goldenCaught: 0,
     bestCombo: 0,
+    met: [],
   };
 }
 
@@ -79,10 +83,12 @@ export function normalize(raw: unknown, now: number): GameState {
     boostUntil: num(r.boostUntil, 0),
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
     muted: !!r.muted,
+    musicOff: !!r.musicOff,
     lastSeen: num(r.lastSeen, now),
     achievements: Array.isArray(r.achievements) ? r.achievements.filter((a: unknown) => typeof a === 'string') : [],
     goldenCaught: Math.floor(num(r.goldenCaught, 0)),
     bestCombo: Math.floor(num(r.bestCombo, 0)),
+    met: Array.isArray(r.met) ? r.met.filter((a: unknown) => typeof a === 'string') : [],
   };
 }
 
@@ -128,6 +134,56 @@ export function isMaxed(state: GameState, def: UpgradeDef): boolean {
 export function canBuy(state: GameState, id: string): boolean {
   const def = UPGRADE_BY_ID[id];
   return !!def && !isMaxed(state, def) && state.money >= costOf(state, def);
+}
+
+// Покупка пачкой: ×1, ×10 или сколько хватит денег.
+export type BuyMode = 'x1' | 'x10' | 'max';
+const BULK_LIMIT = 1000;
+
+// Сколько стоят n уровней подряд начиная с текущего.
+export function bulkCost(state: GameState, def: UpgradeDef, n: number): number {
+  let sum = 0;
+  const from = level(state, def.id);
+  for (let i = 0; i < n; i++) sum += upgradeCost(def, from + i);
+  return sum;
+}
+
+// Сколько уровней игрок может купить прямо сейчас.
+export function maxAffordable(state: GameState, def: UpgradeDef): number {
+  const from = level(state, def.id);
+  const cap = def.maxLevel !== undefined ? Math.max(0, def.maxLevel - from) : BULK_LIMIT;
+  let n = 0;
+  let sum = 0;
+  while (n < cap) {
+    const next = sum + upgradeCost(def, from + n);
+    if (next > state.money) break;
+    sum = next;
+    n++;
+  }
+  return n;
+}
+
+// Сколько уровней купит кнопка в этом режиме (для показа цены даже без денег).
+export function bulkAmount(state: GameState, def: UpgradeDef, mode: BuyMode): number {
+  const left = def.maxLevel !== undefined ? def.maxLevel - level(state, def.id) : BULK_LIMIT;
+  if (left <= 0) return 0;
+  if (mode === 'max') return Math.max(1, Math.min(left, maxAffordable(state, def)));
+  return Math.min(left, mode === 'x10' ? 10 : 1);
+}
+
+export function canBuyN(state: GameState, id: string, n: number): boolean {
+  const def = UPGRADE_BY_ID[id];
+  return !!def && n >= 1 && !isMaxed(state, def) && state.money >= bulkCost(state, def, n);
+}
+
+export function buyN(state: GameState, id: string, n: number): GameState {
+  if (!canBuyN(state, id, n)) return state;
+  const def = UPGRADE_BY_ID[id];
+  return {
+    ...state,
+    money: state.money - bulkCost(state, def, n),
+    levels: { ...state.levels, [id]: level(state, id) + n },
+  };
 }
 
 // Улучшение видно, когда игрок заработал хотя бы треть его цены (или уже купил его).

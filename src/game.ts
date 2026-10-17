@@ -1,7 +1,8 @@
 // Контроллер игры: держит состояние, крутит время, сохраняет, связывает сцену, интерфейс и площадку.
 
 import Phaser from 'phaser';
-import { setAudioPaused, setMuted, sfx } from './audio';
+import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
+import { BRAINROT_BY_ID, meet } from './core/brainrots';
 import {
   type GameState,
   COMBO_WINDOW_MS,
@@ -9,12 +10,12 @@ import {
   RUSH_SECONDS,
   addBoost,
   addMoney,
-  buy,
+  buyN,
+  canBuyN,
   catchGolden,
   comboMult,
   goldenReward,
   recordCombo,
-  canBuy,
   cashPackAmount,
   collectOffline,
   OFFLINE_CAP_SECONDS,
@@ -58,9 +59,14 @@ export class Game {
   private medalQueue: string[] = [];
 
   constructor(private platform: Platform) {
-    this.scene = new StallScene({ onTap: (x, y) => this.onTap(x, y), onGolden: (x, y) => this.onGolden(x, y) });
+    this.scene = new StallScene({
+      onTap: (x, y) => this.onTap(x, y),
+      onGolden: (x, y) => this.onGolden(x, y),
+      onServed: (id) => this.meet(id),
+    });
     this.ui = new Ui({
-      buy: (id) => this.buy(id),
+      buy: (id, n) => this.buy(id, n),
+      toggleMusic: () => this.toggleMusic(),
       boost: () => void this.boost(),
       relocate: () => void this.relocate(),
       purchase: (id) => void this.purchase(id),
@@ -84,6 +90,17 @@ export class Game {
     await this.scene.ready;
     this.scene.setLocation(this.state.location);
     this.scene.setLook(this.state.levels);
+    this.meetStaff();
+    this.scene.setMet(this.state.met);
+    void this.scene.portraits(Object.keys(BRAINROT_BY_ID)).then((p) => this.ui.setPortraits(p));
+    // звук и музыка просыпаются только после первого действия игрока
+    const wake = () => {
+      unlockAudio(!this.state.musicOff && !this.state.muted);
+      window.removeEventListener('pointerdown', wake);
+      window.removeEventListener('keydown', wake);
+    };
+    window.addEventListener('pointerdown', wake);
+    window.addEventListener('keydown', wake);
 
     const restored = await this.platform.restorePurchases();
     this.applyOwned(restored.owned);
@@ -158,6 +175,7 @@ export class Game {
     if (now >= this.nextGoldenAt) {
       this.nextGoldenAt = now + GOLDEN_MIN_MS + Math.random() * GOLDEN_SPREAD_MS;
       this.scene.spawnGolden();
+      if (this.state.goldenCaught === 0) this.ui.toast(t('goldenFirst'));
     }
 
     const r = unlockAchievements(this.state);
@@ -207,11 +225,32 @@ export class Game {
     void this.save();
   }
 
-  private buy(id: string) {
-    if (!canBuy(this.state, id)) return;
-    this.state = buy(this.state, id);
+  private buy(id: string, n: number) {
+    if (!canBuyN(this.state, id, n)) return;
+    this.state = buyN(this.state, id, n);
     sfx.buy();
+    const changed = this.scene.setLook(this.state.levels);
+    this.scene.celebrate(changed);
+    if (changed) navigator.vibrate?.(15);
+    this.meetStaff();
     this.ui.render(this.state, Date.now());
+  }
+
+  // Знакомство с брейнротом: новый попадает в коллекцию.
+  private meet(id: string) {
+    const next = meet(this.state, id);
+    if (next === this.state) return;
+    this.state = next;
+    this.scene.setMet(this.state.met);
+    this.ui.toast(t('collMet', t(`br_${id}`)), 'medal');
+    sfx.achievement();
+    void this.save();
+  }
+
+  // Нанятые работники сразу становятся знакомыми.
+  private meetStaff() {
+    if ((this.state.levels.grill_helper ?? 0) > 0) this.meet('tungtung');
+    if ((this.state.levels.cashier ?? 0) > 0) this.meet('ballerina');
   }
 
   private async boost() {
@@ -232,10 +271,11 @@ export class Game {
     this.state = relocate(this.state, Date.now());
     if (this.state.location === before) return;
     sfx.move();
-    this.scene.setLocation(this.state.location);
+    this.scene.setLocation(this.state.location, true);
     this.scene.setLook(this.state.levels);
     this.ui.showTab('upgrades');
-    this.ui.toast(t('movedTo', t(`loc_${LOCATIONS[this.state.location].id}`)));
+    const loc = LOCATIONS[this.state.location];
+    this.ui.moveCard(loc.id, loc.mult);
     await this.save();
     // полноэкранная реклама только в этой логичной паузе и только без покупки «Без рекламы»
     if (!this.state.owned.noAds) {
@@ -267,7 +307,15 @@ export class Game {
   private toggleSound() {
     this.state = { ...this.state, muted: !this.state.muted };
     setMuted(this.state.muted);
+    setMusic(!this.state.muted && !this.state.musicOff);
     this.ui.render(this.state, Date.now());
+  }
+
+  private toggleMusic() {
+    this.state = { ...this.state, musicOff: !this.state.musicOff };
+    setMusic(!this.state.muted && !this.state.musicOff);
+    this.ui.render(this.state, Date.now());
+    void this.save();
   }
 
   private setPaused(p: boolean) {

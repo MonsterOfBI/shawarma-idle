@@ -2,10 +2,14 @@
 // Обычный HTML и CSS: так проще делать прокрутку и раскладку под телефон и компьютер.
 
 import { ACHIEVEMENTS, ACHIEVEMENT_BONUS } from './core/achievements';
+import { BRAINROTS } from './core/brainrots';
 import {
+  type BuyMode,
   type GameState,
   boostActive,
-  canBuy,
+  bulkAmount,
+  bulkCost,
+  canBuyN,
   canRelocate,
   cashPackAmount,
   costOf,
@@ -24,7 +28,8 @@ import { awardIcon, icon } from './icons';
 import type { Product, ProductId } from './platform/platform';
 
 export interface UiActions {
-  buy(id: string): void;
+  buy(id: string, n: number): void;
+  toggleMusic(): void;
   boost(): void;
   relocate(): void;
   purchase(id: ProductId): void;
@@ -61,6 +66,11 @@ export class Ui {
   private purchasesAvailable = false;
   private moveArmed = false;
   private tab: Tab = 'upgrades';
+  private mode: BuyMode = 'x1';
+  private shownMoney = -1;
+  private cards = new Map<string, HTMLElement>();
+  private metKnown = new Set<string>();
+  private lastState?: GameState;
 
   constructor(private actions: UiActions) {
     document.title = t('title');
@@ -77,6 +87,22 @@ export class Ui {
     for (const id of TABS) $(`#tab-${id}`).addEventListener('click', () => this.showTab(id));
     $('#boost').addEventListener('click', () => actions.boost());
     $('#sound').addEventListener('click', () => actions.toggleSound());
+    $('#music').addEventListener('click', () => actions.toggleMusic());
+    $('#music').setAttribute('aria-label', t('music'));
+    $('#coll-title').textContent = t('collTitle');
+    $('#coll-note').textContent = t('collHint');
+    $('#ach-title').textContent = t('achTitle');
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#buy-mode button')) {
+      const mode = b.dataset.mode as BuyMode;
+      b.textContent = t(mode === 'x1' ? 'buyX1' : mode === 'x10' ? 'buyX10' : 'buyMax');
+      b.setAttribute('role', 'radio');
+      b.addEventListener('click', () => {
+        this.mode = mode;
+        this.syncMode();
+        if (this.lastState) this.renderUpgrades(this.lastState, Date.now());
+      });
+    }
+    this.syncMode();
     $('#move-btn').addEventListener('click', () => {
       if (!this.moveArmed) {
         this.moveArmed = true;
@@ -100,10 +126,27 @@ export class Ui {
       info.append(name, desc);
       const btn = el('button', 'sticker') as HTMLButtonElement;
       btn.type = 'button';
-      btn.addEventListener('click', () => actions.buy(u.id));
+      btn.addEventListener('click', () => {
+        if (this.lastState) actions.buy(u.id, bulkAmount(this.lastState, u, this.mode));
+      });
       root.append(ic, info, btn);
       list.append(root);
       this.rows.set(u.id, { root, icon: ic, lv, name, desc, btn, lastLevel: -1 });
+    }
+
+    const coll = $('#collection');
+    for (const b of BRAINROTS) {
+      const card = el('button', 'card unknown') as HTMLButtonElement;
+      card.type = 'button';
+      const img = document.createElement('img');
+      img.alt = '';
+      card.append(img, el('b', '', '???'));
+      if (b.role !== 'customer') card.append(el('i', '', b.role === 'staff' ? '★' : '✈'));
+      card.addEventListener('click', () => {
+        if (this.metKnown.has(b.id)) this.toast(`${t(`br_${b.id}`)}: «${t(`brs_${b.id}`)}»`);
+      });
+      coll.append(card);
+      this.cards.set(b.id, card);
     }
 
     const awards = $('#awards');
@@ -126,6 +169,32 @@ export class Ui {
     }
   }
 
+  private syncMode() {
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#buy-mode button')) b.setAttribute('aria-checked', String(b.dataset.mode === this.mode));
+  }
+
+  setPortraits(map: Record<string, string>) {
+    for (const [id, src] of Object.entries(map)) {
+      const img = this.cards.get(id)?.querySelector('img');
+      if (img) img.src = src;
+    }
+  }
+
+  // Большая карточка при переезде на новую точку.
+  moveCard(locId: string, mult: number) {
+    $('#move-card-kicker').textContent = t('moveCard');
+    $('#move-card-name').textContent = t(`loc_${locId}`);
+    $('#move-card-desc').textContent = t(`locd_${locId}`);
+    $('#move-card-mult').textContent = t('moveCardMult', mult);
+    const card = $('#move-card');
+    card.hidden = false;
+    card.style.animation = 'none';
+    void card.offsetWidth;
+    card.style.animation = '';
+    clearTimeout((card as any)._t);
+    (card as any)._t = setTimeout(() => (card.hidden = true), 2600);
+  }
+
   setProducts(products: Product[], available: boolean) {
     this.products = products;
     this.purchasesAvailable = available;
@@ -137,7 +206,12 @@ export class Ui {
   }
 
   render(s: GameState, now: number) {
-    $('#money').textContent = `${fmt(Math.floor(s.money))} ₽`;
+    this.lastState = s;
+    // деньги «добегают» до нового значения, а при трате сразу падают
+    if (this.shownMoney < 0 || s.money < this.shownMoney) this.shownMoney = s.money;
+    else this.shownMoney += (s.money - this.shownMoney) * 0.35 + 0.01;
+    if (Math.abs(s.money - this.shownMoney) < 1) this.shownMoney = s.money;
+    $('#money').textContent = `${fmt(Math.floor(this.shownMoney))} ₽`;
     $('#rate-sec').textContent = t('perSec', fmt(incomePerSecond(s, now)));
     $('#rate-tap').textContent = t('perTap', fmt(tapValue(s, now)));
     $('#place').textContent = t(`loc_${LOCATIONS[s.location].id}`);
@@ -147,6 +221,8 @@ export class Ui {
     $('#boost').classList.toggle('active', boosting);
     $('#boost-label').textContent = boosting ? t('boostActive', formatDuration((s.boostUntil - now) / 1000, lang())) : t('boostBtn');
     $('#sound').textContent = s.muted ? '🔇' : '🔊';
+    $('#music').textContent = '♪';
+    $('#music').classList.toggle('off', s.musicOff || s.muted);
 
     if (this.tab === 'upgrades') this.renderUpgrades(s, now);
     if (this.tab === 'move') this.renderMove(s);
@@ -157,6 +233,9 @@ export class Ui {
 
   private renderUpgrades(s: GameState, now: number) {
     let shownLocked = false;
+    // подсказка новичку: пульсирует первое улучшение, которое уже по карману
+    const fresh = Object.values(s.levels).every((v) => !v);
+    let pulsed = false;
     for (const u of UPGRADES) {
       const row = this.rows.get(u.id)!;
       const visible = isVisible(s, u);
@@ -203,9 +282,15 @@ export class Ui {
         row.desc.textContent = t(u.target === 'tap' ? 'multTap' : 'multAll', u.amount);
       }
       const maxed = isMaxed(s, u);
+      const n = bulkAmount(s, u, this.mode);
       row.btn.classList.toggle('done', maxed);
-      row.btn.textContent = maxed ? t('bought') : `${fmt(costOf(s, u))} ₽`;
-      row.btn.disabled = maxed || !canBuy(s, u.id);
+      if (maxed) row.btn.textContent = t('bought');
+      else if (n === 1 && this.mode === 'x1') row.btn.textContent = `${fmt(costOf(s, u))} ₽`;
+      else row.btn.innerHTML = `<small>×${n}</small>${fmt(bulkCost(s, u, n))} ₽`;
+      row.btn.disabled = maxed || !canBuyN(s, u.id, n);
+      const pulse = fresh && !pulsed && !row.btn.disabled;
+      if (pulse) pulsed = true;
+      row.btn.classList.toggle('pulse', pulse);
     }
   }
 
@@ -224,6 +309,7 @@ export class Ui {
     box.hidden = false;
     $('#move-done').hidden = true;
     $('#move-next-name').textContent = t('moveNext', t(`loc_${next.id}`));
+    $('#move-next-desc').textContent = t(`locd_${next.id}`);
     $('#move-need').textContent = t('moveNeed', fmt(next.threshold));
     const p = Math.min(1, s.runEarned / next.threshold);
     $('#move-bar').style.width = `${(p * 100).toFixed(1)}%`;
@@ -235,7 +321,23 @@ export class Ui {
   }
 
   private renderAwards(s: GameState) {
+    const met = new Set(s.met);
+    for (const b of BRAINROTS) {
+      const card = this.cards.get(b.id)!;
+      const known = met.has(b.id);
+      if (known === !card.classList.contains('unknown')) continue;
+      card.classList.toggle('unknown', !known);
+      card.querySelector('b')!.textContent = known ? t(`br_${b.id}`) : '???';
+      if (known && this.metKnown.size) {
+        card.classList.remove('fresh');
+        void card.offsetWidth;
+        card.classList.add('fresh');
+      }
+    }
+    this.metKnown = met;
+    $('#coll-count').textContent = t('collCount', met.size);
     const got = new Set(s.achievements);
+    $('#ach-count').textContent = t('achCount', got.size);
     const pct = Math.round(got.size * ACHIEVEMENT_BONUS * 100);
     const note = $('#awards-note');
     note.textContent = t('achBonus', pct);
