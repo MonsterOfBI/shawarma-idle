@@ -25,8 +25,10 @@ function windowsGrid(p: Pen, x: number, top: number, bw: number, bh: number, c: 
     for (let j = 0; j < rows; j++) {
       const wx = x + (bw / cols) * (i + 0.5);
       const wy = top + 10 * u + j * 20 * u;
-      const lit = r() < 0.15 + c.night * 0.6 && c.night > 0.2;
-      const col = lit ? lerpColor(0xffd27a, 0xffb347, r()) : shade(wall, 0.25);
+      // случайные числа берём всегда, иначе ночью сдвигается вся последовательность и дома «прыгают»
+      const roll = r(), tint = r();
+      const lit = roll < 0.15 + c.night * 0.6 && c.night > 0.2;
+      const col = lit ? lerpColor(0xffd27a, 0xffb347, tint) : shade(wall, 0.25);
       p.g.fillStyle(col, lit ? 0.95 : 0.85).fillRect(wx - 3.5 * u, wy, 7 * u, 9 * u);
       if (shutters) {
         const sh = nc(0x3f7a4f, 0x1f3a2a, c.night);

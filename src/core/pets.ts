@@ -47,6 +47,17 @@ export const PET_RARITY: Record<string, Rarity> = {
   graipuss: 'legendary',
   vaca: 'mythic',
   cannelloni: 'mythic',
+  timcheese: 'common',
+  tatasahur: 'common',
+  zibra: 'common',
+  svinino: 'rare',
+  crabchef: 'rare',
+  cacto: 'rare',
+  ballerino: 'rare',
+  tigrullini: 'epic',
+  rhino: 'epic',
+  cocofanto: 'legendary',
+  girafa: 'mythic',
   bombardiro: 'god',
   strawberry: 'god',
 };
@@ -55,8 +66,9 @@ export type BoxKind = 'common' | 'golden';
 
 // Шансы редкостей в процентах.
 export const BOX_ODDS: Record<BoxKind, Record<Rarity, number>> = {
-  common: { common: 62, rare: 26, epic: 9, legendary: 2.5, mythic: 0.45, god: 0.05 },
-  golden: { common: 0, rare: 48, epic: 33, legendary: 14, mythic: 4, god: 1 },
+  // версия 2.8: редкие чуть чаще (легендарный 2,5 → 3,2 %, мифический 0,45 → 0,65 %, божественный 0,05 → 0,15 %)
+  common: { common: 58, rare: 27.5, epic: 10.5, legendary: 3.2, mythic: 0.65, god: 0.15 },
+  golden: { common: 0, rare: 45, epic: 34, legendary: 15.5, mythic: 4.4, god: 1.1 },
 };
 
 // Мутации: 0 — обычный, 1 — золотой (×2), 2 — алмазный (×5).

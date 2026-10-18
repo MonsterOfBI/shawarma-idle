@@ -1,11 +1,12 @@
 // Чистая логика экономики: без Phaser и без браузера, чтобы её можно было тестировать.
 
 import { achievementMult } from './achievements';
-import { LOCATIONS } from './locations';
+import { LOCATIONS, LOCATION_FROM_V7 } from './locations';
+import { payOf } from './brainrots';
 import { type BoxKind, type Pet, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 // Офлайн-доход начисляется не больше чем за 4 часа отсутствия
 // (игроки Яндекс Игр заходят 2–3 раза в день, за 2 часа они теряли бо́льшую часть дохода).
@@ -131,7 +132,7 @@ export function normalize(raw: unknown, now: number): GameState {
     lifetimeEarned: num(r.lifetimeEarned, num(r.money, 0)),
     taps: num(r.taps, 0),
     levels,
-    location: fresh ? 0 : Math.min(Math.floor(num(r.location, 0)), LOCATIONS.length - 1),
+    location: fresh ? 0 : migrateLocation(num(r.version, 0), Math.floor(num(r.location, 0))),
     stars: fresh ? 0 : Math.floor(num(r.stars, 0)),
     boostUntil: num(r.boostUntil, 0),
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
@@ -155,6 +156,12 @@ export function normalize(raw: unknown, now: number): GameState {
     quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],
     questsDone: Math.floor(num(r.questsDone, 0)),
   };
+}
+
+// Версия 8: в сюжете пять точек вместо семи, номер точки из версии 7 переводится на новую карту.
+function migrateLocation(version: number, loc: number): number {
+  const mapped = version < 8 ? (LOCATION_FROM_V7[loc] ?? LOCATIONS.length - 1) : loc;
+  return Math.min(Math.max(0, mapped), LOCATIONS.length - 1);
 }
 
 function normalizePets(raw: unknown): Record<string, Pet> {
@@ -310,6 +317,28 @@ export function comboMult(combo: number): number {
 
 export function recordCombo(state: GameState, combo: number): GameState {
   return combo > state.bestCombo ? { ...state, bestCombo: combo } : state;
+}
+
+// ---------- чеки гостей ----------
+// Каждый обслуженный гость платит чек: пара секунд дохода плюс пара тапов, умноженные на его множитель
+// (у каждого брейнрота свой, см. payOf). Гостей обслуживают сами работники раз в несколько секунд,
+// а тапы игрока ускоряют очередь.
+export const CHECK_SECONDS = 2;
+export const CHECK_TAPS = 2;
+
+export function customerCheck(state: GameState, now: number, id: string): number {
+  const per = incomePerSecond(state, now) * CHECK_SECONDS + tapValue({ ...state, tapFrenzyUntil: 0 }, now) * CHECK_TAPS;
+  return Math.max(1, Math.round(per * payOf(id)));
+}
+
+export function serveCustomer(state: GameState, now: number, id: string): GameState {
+  return earn(state, customerCheck(state, now, id));
+}
+
+// Как часто работники сами обслуживают гостя: от 4,5 секунды в начале до 3 секунд у богатой точки.
+export function serveIntervalMs(state: GameState, now: number): number {
+  const ips = incomePerSecond(state, now, false);
+  return Math.round(Math.min(4500, Math.max(3000, 4500 - 250 * Math.log10(ips + 1))));
 }
 
 // Щедрый гость: примерно полторы минуты дохода или 40 тапов, смотря что больше.

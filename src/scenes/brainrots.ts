@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DRAW2 } from './brainrots2';
+import { DRAW3 } from './brainrots3';
 import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE } from './draw';
 
 // Итальянские брейнроты из фигур. Ноги внизу в точке (0, 0), смотрят вправо.
@@ -415,7 +416,7 @@ const DRAW: Record<string, (scene: Phaser.Scene) => Critter> = {
     }, 128, 84),
 };
 
-Object.assign(DRAW, DRAW2);
+Object.assign(DRAW, DRAW2, DRAW3);
 export const BRAINROT_IDS = Object.keys(DRAW);
 
 // Маскот-зазывала: Тунг Тунг с мегафоном, поднятой битой и щитом-рекламой на груди.

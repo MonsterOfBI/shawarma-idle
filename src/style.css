@@ -598,7 +598,9 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
    на компьютере — узкая колонка ~320 px. Улица остаётся главной. */
 #app { grid-template-rows: minmax(0, 1fr) minmax(0, clamp(190px, 33%, 300px)) auto; }
 @media (min-aspect-ratio: 1/1) and (min-width: 700px) {
-  #app { grid-template-columns: minmax(0, 1fr) clamp(290px, 26vw, 340px); grid-template-rows: minmax(0, 1fr) auto; }
+  #app { grid-template-columns: minmax(0, 1fr) clamp(310px, 28vw, 370px); grid-template-rows: minmax(0, 1fr) auto; }
+  /* v2.8: на компьютере все боковые кнопки одной колонкой справа: ×2, Ящик, затем Подарок и Задания */
+  .side-left { left: auto; right: max(10px, env(safe-area-inset-right, 0px)); top: calc(var(--side-top, 132px) + 148px); }
 }
 .panel-body { padding: 8px 8px 12px; }
 .panel-head { margin: 0 2px 8px; }

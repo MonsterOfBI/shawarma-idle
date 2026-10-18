@@ -23,9 +23,9 @@ import {
   recordCombo,
 } from './economy';
 import { ACHIEVEMENTS, achievementMult, unlockAchievements } from './achievements';
-import { PET_RARITY } from './pets';
-import { BRAINROTS, customerPool, meet, pickCustomer } from './brainrots';
-import { CRIT_CHANCE, CRIT_MULT, bulkAmount, bulkCost, buyN, canBuyN, isCrit, maxAffordable } from './economy';
+import { BOX_ODDS, PET_RARITY } from './pets';
+import { BRAINROTS, averagePay, customerPool, meet, payOf, pickCustomer } from './brainrots';
+import { CRIT_CHANCE, CRIT_MULT, bulkAmount, bulkCost, buyN, canBuyN, customerCheck, isCrit, maxAffordable, serveCustomer, serveIntervalMs } from './economy';
 import { UPGRADE_BY_ID } from './upgrades';
 import { formatNumber } from './format';
 import { LOCATIONS } from './locations';
@@ -131,7 +131,12 @@ describe('сохранения', () => {
     expect(s).toMatchObject({ location: 0, money: 0, runEarned: 0, levels: {} });
     expect(s.pets.gusini.count).toBe(2);
     expect(s.owned.noAds).toBe(true);
-    expect(normalize({ version: 7, location: 3, money: 5 }, 0)).toMatchObject({ location: 3, money: 5 });
+    // версия 7 жила на семи точках: пляж → метро, джунгли → пустыня, площадь и дворец сдвигаются
+    expect(normalize({ version: 7, location: 2, money: 5 }, 0)).toMatchObject({ location: 1, money: 5 });
+    expect(normalize({ version: 7, location: 3, money: 5 }, 0)).toMatchObject({ location: 2 });
+    expect(normalize({ version: 7, location: 6, stars: 2 }, 0)).toMatchObject({ location: 4, stars: 2 });
+    expect(normalize({ version: 8, location: 3 }, 0)).toMatchObject({ location: 3 });
+    expect(LOCATIONS.length).toBe(5);
     expect(LOCATIONS[0].id).toBe('dump');
     expect(LOCATIONS[LOCATIONS.length - 1].id).toBe('palace');
   });
@@ -162,17 +167,20 @@ describe('числа', () => {
 });
 
 describe('баланс', () => {
-  it('первый переезд занимает 6–20 минут активной игры', () => {
+  it('первый переезд занимает 10–25 минут активной игры', () => {
     const minutes = secondsToEarn(LOCATIONS[1].threshold, 3) / 60;
-    expect(minutes).toBeGreaterThan(6);
-    expect(minutes).toBeLessThan(20);
+    expect(minutes).toBeGreaterThan(10);
+    expect(minutes).toBeLessThan(25);
   });
 
-  it('каждый следующий переезд занимает от 5 минут до полутора часов', () => {
+  it('каждый следующий переезд занимает от 20 минут до 100 минут и дольше предыдущего', () => {
+    let prev = 0;
     for (let loc = 1; loc < LOCATIONS.length - 1; loc++) {
       const minutes = secondsToEarn(LOCATIONS[loc + 1].threshold, 3, { ...newGame(0), location: loc }) / 60;
-      expect(minutes).toBeGreaterThan(5);
-      expect(minutes).toBeLessThan(90);
+      expect(minutes).toBeGreaterThan(20);
+      expect(minutes).toBeLessThan(100);
+      expect(minutes).toBeGreaterThan(prev);
+      prev = minutes;
     }
   });
 
@@ -249,22 +257,46 @@ describe('баланс', () => {
     expect(maxAffordable({ ...newGame(0), money: 1e9 }, def)).toBe(1);
   });
 
-  it('на каждой локации свои брейнроты, гости с прошлой точки заходят редко', () => {
+  it('на каждой из пяти точек по семь своих брейнротов, гости с прошлой точки заходят редко', () => {
     const ids = (l: number) => customerPool(l).map((p) => p.id);
     expect(ids(0)).toContain('chimpanzini');
     expect(ids(0)).not.toContain('vaca');
-    expect(ids(5)).toContain('vaca');
-    expect(ids(6)).toContain('strawberry');
-    expect(ids(6)).not.toContain('chimpanzini'); // у каждой точки свои персонажи
+    expect(ids(3)).toContain('vaca');
+    expect(ids(4)).toContain('strawberry');
+    expect(ids(4)).not.toContain('chimpanzini'); // у каждой точки свои персонажи
+    for (let l = 0; l < LOCATIONS.length; l++) expect(BRAINROTS.filter((b) => b.role === 'customer' && b.home === l).length).toBe(7);
     // местные приходят гораздо чаще гостей с прошлой точки
-    const pool = customerPool(2);
-    const local = pool.filter((p) => p.id === 'tralalero')[0].weight;
-    const guest = pool.filter((p) => p.id === 'cappuccino')[0].weight;
+    const pool = customerPool(1);
+    const local = pool.filter((p) => p.id === 'trictrac')[0].weight;
+    const guest = pool.filter((p) => p.id === 'boneca')[0].weight;
     expect(local).toBeGreaterThan(guest * 4);
     // у каждого посетителя есть редкость питомца
     for (const b of BRAINROTS) expect(PET_RARITY[b.id]).toBeDefined();
-    for (let l = 0; l < LOCATIONS.length; l++) expect(ids(l).length).toBeGreaterThan(0);
     expect(ids(0)).toContain(pickCustomer(0, 0.999));
+  });
+
+  it('каждый гость платит свой чек: богатые больше, но приходят реже', () => {
+    const s = { ...newGame(0), levels: { grill_helper: 10, knife: 5 } };
+    const pays = BRAINROTS.filter((b) => b.role === 'customer').map((b) => payOf(b.id));
+    expect(new Set(pays).size).toBeGreaterThan(8); // чеки действительно разные
+    expect(customerCheck(s, 0, 'bobritto')).toBeGreaterThan(customerCheck(s, 0, 'boneca') * 2);
+    expect(customerCheck(newGame(0), 0, 'timcheese')).toBeGreaterThanOrEqual(1);
+    const before = s.money;
+    expect(serveCustomer(s, 0, 'bobritto').money).toBe(before + customerCheck(s, 0, 'bobritto'));
+    const pool = customerPool(0);
+    expect(pool.find((p) => p.id === 'bobritto')!.weight).toBeLessThan(pool.find((p) => p.id === 'boneca')!.weight);
+    for (let l = 0; l < LOCATIONS.length; l++) expect(averagePay(l)).toBeGreaterThan(0.7);
+    // работники обслуживают гостя раз в 3–4,5 секунды
+    expect(serveIntervalMs(newGame(0), 0)).toBe(4500);
+    expect(serveIntervalMs({ ...newGame(0), levels: { food_truck: 100 } }, 0)).toBeGreaterThanOrEqual(3000);
+  });
+
+  it('шансы ящиков складываются в 100 %, редкие стали чуть чаще', () => {
+    for (const kind of ['common', 'golden'] as const) {
+      expect(Object.values(BOX_ODDS[kind]).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
+    }
+    expect(BOX_ODDS.common.legendary).toBeGreaterThan(2.5);
+    expect(BOX_ODDS.golden.legendary).toBeGreaterThan(14);
   });
 
   it('знакомство с брейнротом записывается один раз', () => {

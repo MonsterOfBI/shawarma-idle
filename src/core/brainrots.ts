@@ -9,6 +9,8 @@ export interface BrainrotDef {
   id: string;
   home: number;
   role: BrainrotRole;
+  // во сколько раз чек этого гостя больше обычного (1 — средний гость)
+  pay?: number;
 }
 
 export const BRAINROTS: BrainrotDef[] = [
@@ -16,48 +18,70 @@ export const BRAINROTS: BrainrotDef[] = [
   { id: 'tungtung', home: 0, role: 'staff' },
   { id: 'ballerina', home: 0, role: 'staff' },
   { id: 'bombardiro', home: 0, role: 'event' },
-  // 0 — коробка у помойки: бродяги и бандиты
-  { id: 'chimpanzini', home: 0, role: 'customer' },
-  { id: 'boneca', home: 0, role: 'customer' },
-  { id: 'bobritto', home: 0, role: 'customer' },
-  // 1 — ларёк у метро: город, офис, уличные музыканты
-  { id: 'cappuccino', home: 1, role: 'customer' },
-  { id: 'hotspot', home: 1, role: 'customer' },
-  { id: 'golubiro', home: 1, role: 'customer' },
-  { id: 'trictrac', home: 1, role: 'customer' },
-  // 2 — пляж: морские
-  { id: 'tralalero', home: 2, role: 'customer' },
-  { id: 'trippi', home: 2, role: 'customer' },
-  { id: 'bananita', home: 2, role: 'customer' },
-  { id: 'burbaloni', home: 2, role: 'customer' },
-  // 3 — джунгли
-  { id: 'patapim', home: 3, role: 'customer' },
-  { id: 'orangutini', home: 3, role: 'customer' },
-  { id: 'glorbo', home: 3, role: 'customer' },
-  // 4 — пустыня
-  { id: 'lirili', home: 4, role: 'customer' },
-  { id: 'frigo', home: 4, role: 'customer' },
-  { id: 'chicleteira', home: 4, role: 'customer' },
-  // 5 — итальянская площадь
-  { id: 'vaca', home: 5, role: 'customer' },
-  { id: 'gusini', home: 5, role: 'customer' },
-  { id: 'espresso', home: 5, role: 'customer' },
-  { id: 'spaghetti', home: 5, role: 'customer' },
-  // 6 — дворец: самые редкие звёзды
-  { id: 'strawberry', home: 6, role: 'customer' },
-  { id: 'cannelloni', home: 6, role: 'customer' },
-  { id: 'graipuss', home: 6, role: 'customer' },
+  // 0 — коробка у помойки: бродяги, бандиты и дворовые
+  { id: 'chimpanzini', home: 0, role: 'customer', pay: 0.8 },
+  { id: 'boneca', home: 0, role: 'customer', pay: 0.6 },
+  { id: 'bobritto', home: 0, role: 'customer', pay: 1.6 },
+  { id: 'timcheese', home: 0, role: 'customer', pay: 0.5 },
+  { id: 'svinino', home: 0, role: 'customer', pay: 1.2 },
+  { id: 'golubiro', home: 0, role: 'customer', pay: 0.6 },
+  { id: 'zibra', home: 0, role: 'customer', pay: 0.8 },
+  // 1 — ларёк у метро: город, офис, морские гости с вокзала
+  { id: 'cappuccino', home: 1, role: 'customer', pay: 1.3 },
+  { id: 'hotspot', home: 1, role: 'customer', pay: 0.7 },
+  { id: 'trictrac', home: 1, role: 'customer', pay: 1 },
+  { id: 'tatasahur', home: 1, role: 'customer', pay: 0.9 },
+  { id: 'trippi', home: 1, role: 'customer', pay: 0.7 },
+  { id: 'burbaloni', home: 1, role: 'customer', pay: 1.1 },
+  { id: 'bananita', home: 1, role: 'customer', pay: 0.9 },
+  // 2 — пустыня: кактусы, джунгли по соседству и путешественники
+  { id: 'lirili', home: 2, role: 'customer', pay: 1.3 },
+  { id: 'frigo', home: 2, role: 'customer', pay: 1 },
+  { id: 'chicleteira', home: 2, role: 'customer', pay: 0.8 },
+  { id: 'cacto', home: 2, role: 'customer', pay: 0.7 },
+  { id: 'rhino', home: 2, role: 'customer', pay: 1.7 },
+  { id: 'patapim', home: 2, role: 'customer', pay: 1.2 },
+  { id: 'glorbo', home: 2, role: 'customer', pay: 0.7 },
+  // 3 — итальянская площадь: туристы и звёзды мемов
+  { id: 'vaca', home: 3, role: 'customer', pay: 2 },
+  { id: 'gusini', home: 3, role: 'customer', pay: 0.6 },
+  { id: 'espresso', home: 3, role: 'customer', pay: 1.2 },
+  { id: 'spaghetti', home: 3, role: 'customer', pay: 1 },
+  { id: 'ballerino', home: 3, role: 'customer', pay: 0.9 },
+  { id: 'tralalero', home: 3, role: 'customer', pay: 1.6 },
+  { id: 'crabchef', home: 3, role: 'customer', pay: 1.3 },
+  // 4 — дворец: самые редкие и богатые звёзды
+  { id: 'strawberry', home: 4, role: 'customer', pay: 3 },
+  { id: 'cannelloni', home: 4, role: 'customer', pay: 2.2 },
+  { id: 'graipuss', home: 4, role: 'customer', pay: 1.4 },
+  { id: 'cocofanto', home: 4, role: 'customer', pay: 1.6 },
+  { id: 'girafa', home: 4, role: 'customer', pay: 2.5 },
+  { id: 'tigrullini', home: 4, role: 'customer', pay: 1.6 },
+  { id: 'orangutini', home: 4, role: 'customer', pay: 0.9 },
 ];
 
 export const BRAINROT_BY_ID: Record<string, BrainrotDef> = Object.fromEntries(BRAINROTS.map((b) => [b.id, b]));
 
 // Кто стоит в очереди на локации: у каждой точки свои персонажи.
 // Гости с прошлой точки иногда заглядывают (вес 1 против 8 у местных), остальные не приходят.
+// Богатые гости (чек от ×1,5) приходят вдвое реже обычных.
 export function customerPool(location: number): { id: string; weight: number }[] {
   return BRAINROTS.filter((b) => b.role === 'customer' && (b.home === location || b.home === location - 1)).map((b) => ({
     id: b.id,
-    weight: b.home === location ? 8 : 1,
+    weight: (b.home === location ? 8 : 1) * ((b.pay ?? 1) >= 1.5 ? 0.5 : 1),
   }));
+}
+
+// Множитель чека гостя: у каждого брейнрота свой.
+export function payOf(id: string): number {
+  return BRAINROT_BY_ID[id]?.pay ?? 1;
+}
+
+// Средний множитель чека на локации с учётом того, кто как часто приходит (для симуляции баланса).
+export function averagePay(location: number): number {
+  const pool = customerPool(location);
+  const total = pool.reduce((n, p) => n + p.weight, 0);
+  return pool.reduce((n, p) => n + p.weight * payOf(p.id), 0) / total;
 }
 
 export function pickCustomer(location: number, random: number): string {

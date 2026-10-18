@@ -31,6 +31,7 @@ import {
 } from './core/economy';
 import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
+import { BRAINROT_BY_ID, payOf } from './core/brainrots';
 import { BOX_ODDS, type BoxKind, type Drop, PET_RARITY, RARITIES, type Rarity, petBonus, petMult } from './core/pets';
 import { questDone, questProgress, counter } from './core/quests';
 import { UPGRADES } from './core/upgrades';
@@ -215,7 +216,10 @@ export class Ui {
       const mut = el('span', 'pet-mut');
       root.append(img, name, rar, bonus, lv, mut);
       root.addEventListener('click', () => {
-        if (this.lastState?.pets[id]) this.toast(`${t(`br_${id}`)}: «${t(`brs_${id}`)}»`);
+        if (!this.lastState?.pets[id]) return;
+        // у посетителей свой чек: показываем, во сколько раз он больше среднего
+        const check = BRAINROT_BY_ID[id]?.role === 'customer' ? ` · ${t('checkMult', formatNumber(payOf(id), lang()))}` : '';
+        this.toast(`${t(`br_${id}`)}: «${t(`brs_${id}`)}»${check}`);
       });
       grid.append(root);
       this.petCards.set(id, { root, img, name, bonus, lv, mut, key: '' });

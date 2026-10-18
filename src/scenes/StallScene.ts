@@ -33,7 +33,7 @@ const WALK_SPEED = 0.15; // пикселей за мс при масштабе 1
 export interface StallCallbacks {
   onTap(x: number, y: number): void;
   onGolden(x: number, y: number): void;
-  onServed(id: string): void;
+  onServed(id: string, x: number, y: number): void;
 }
 
 interface Customer {
@@ -41,6 +41,9 @@ interface Customer {
   c: Critter;
   state: 'queue' | 'leaving';
   phase: number;
+  vx: number; // скорость, пикселей за мс: разгоняются и тормозят плавно
+  tx?: number; // куда идёт в очереди
+  wait: number; // мс до шага вперёд: очередь трогается волной, а не вся разом
   bubble?: Phaser.GameObjects.Container;
   talked: boolean;
 }
@@ -474,13 +477,19 @@ export class StallScene extends Phaser.Scene {
     this.stall = buildStall(this, this.location, this.look);
   }
 
+  // Ларёк «приседает» от тапа как пружина: частые тапы не дёргают его рывками, а копятся и плавно отпускают.
+  private squashTarget = 0;
+  private squashNow = 0;
   private squash(k = 1) {
+    this.squashTarget = Math.min(1.6, this.squashTarget + k * 0.7);
+  }
+
+  private animateSquash(delta: number) {
     if (!this.stall) return;
-    const s = this.stallScale;
-    const targets = [this.stall.root, this.stall.glow];
-    this.tweens.killTweensOf(targets);
-    targets.forEach((o) => o.setScale(s * (1 + 0.03 * k), s * (1 - 0.06 * k)));
-    this.tweens.add({ targets, scaleX: s, scaleY: s, duration: 240, ease: 'Back.out' });
+    this.squashTarget *= Math.exp(-delta / 110);
+    this.squashNow += (this.squashTarget - this.squashNow) * Math.min(1, delta / 45);
+    const a = this.squashNow, s = this.stallScale;
+    for (const o of [this.stall.root, this.stall.glow]) o.setScale(s * (1 + 0.025 * a), s * (1 - 0.045 * a));
   }
 
   private layout() {
@@ -633,9 +642,15 @@ export class StallScene extends Phaser.Scene {
     }
   }
 
-  setIncome(perSecond: number) {
-    this.wantQueue = Phaser.Math.Clamp(1 + Math.floor(Math.log10(perSecond + 1)), 1, 6);
-    this.serveEvery = perSecond > 0 ? Phaser.Math.Clamp(3000 / (1 + Math.log10(perSecond + 1)), 400, 3000) : 0;
+  // Длина очереди растёт с доходом, но не больше четырёх; обслуживают раз в serveEvery мс.
+  setIncome(perSecond: number, serveEvery: number) {
+    this.wantQueue = Phaser.Math.Clamp(2 + Math.floor(Math.log10(perSecond + 1) / 3), 2, 4);
+    this.serveEvery = serveEvery;
+  }
+
+  // Тап ускоряет очередь: первый гость получает шаурму раньше.
+  hurry() {
+    if (this.customers.some((c) => c.state === 'queue')) this.serveTimer += 420;
   }
 
   setRush(on: boolean) {
@@ -663,7 +678,7 @@ export class StallScene extends Phaser.Scene {
   // Тап обслуживает первого в очереди.
   serve() {
     const first = this.customers.find((c) => c.state === 'queue');
-    if (!first || Math.abs(first.c.root.x - this.queueX(0)) > 4) return;
+    if (!first || Math.abs(first.c.root.x - this.queueX(0)) > 3) return;
     first.state = 'leaving';
     first.bubble?.destroy();
     first.bubble = undefined;
@@ -675,7 +690,7 @@ export class StallScene extends Phaser.Scene {
     g.setPosition(16, -first.c.height * 0.45).setAngle(-15);
     first.c.body.add(g);
     first.c.root.setDepth(7);
-    this.cb.onServed(first.id);
+    this.cb.onServed(first.id, first.c.root.x, first.c.root.y - first.c.height * first.c.root.scaleY * 0.8);
   }
 
   burst(x: number, y: number, count = 6) {
@@ -728,7 +743,7 @@ export class StallScene extends Phaser.Scene {
       this.coins.explode(18, x, y);
       this.cameras.main.shake(180, 0.006);
       this.cb.onGolden(x, y);
-      this.cb.onServed('bombardiro');
+      this.cb.onServed('bombardiro', x, y);
       this.dropBag(x, y);
       this.tweens.add({ targets: c.root, x: x + 260 * u, y: y - 160 * u, angle: -20, alpha: 0, duration: 900, ease: 'Cubic.in', onComplete: () => c.root.destroy() });
       this.bomber = undefined;
@@ -791,7 +806,7 @@ export class StallScene extends Phaser.Scene {
     const id = pickCustomer(this.location, Math.random());
     const c = drawBrainrot(this, id);
     c.root.setPosition(-50 * this.unit, this.groundY + 4 * this.unit).setScale(this.critterScale(c)).setDepth(6);
-    this.customers.push({ id, c, state: 'queue', phase: Math.random() * 6, talked: false });
+    this.customers.push({ id, c, state: 'queue', phase: Math.random() * 6, talked: false, vx: this.walkSpeed(), wait: 0 });
   }
 
   private say(cu: Customer) {
@@ -925,13 +940,23 @@ export class StallScene extends Phaser.Scene {
     }
   }
 
-  private animateWalk(cu: { c: Critter; phase: number }, moving: boolean, delta: number) {
-    cu.phase += delta / (moving ? 85 : 420);
-    const swing = moving ? Math.sin(cu.phase) * 26 : 0;
+  private walkSpeed() {
+    return WALK_SPEED * this.unit * (this.rush ? 1.25 : 1);
+  }
+
+  // Шаг зависит от пройденного пути, поэтому ноги не «буксуют»; на остановке шаг мягко затухает,
+  // а стоящий гость спокойно дышит и покачивается.
+  private animateWalk(cu: { c: Critter; phase: number; vx?: number }, k: number, delta: number) {
+    const go = Phaser.Math.Clamp(k, 0, 1);
+    cu.phase += (delta / 95) * go;
+    const swing = Math.sin(cu.phase) * 24 * go;
     const [l, r] = cu.c.legs;
     l?.setAngle(swing);
     r?.setAngle(-swing);
-    cu.c.body.y = moving ? -Math.abs(Math.sin(cu.phase)) * 3 : Math.sin(cu.phase) * 1.2;
+    const breathe = Math.sin(this.clock / 700 + cu.phase * 0.3);
+    cu.c.body.y = -Math.abs(Math.sin(cu.phase)) * 3.2 * go + breathe * 0.9 * (1 - go);
+    cu.c.body.rotation = 0.05 * go + Math.sin(this.clock / 1300 + cu.phase) * 0.025 * (1 - go);
+    cu.c.body.scaleY = 1 + breathe * 0.012 * (1 - go);
   }
 
   // ---------- кадр ----------
@@ -977,16 +1002,25 @@ export class StallScene extends Phaser.Scene {
       this.steam.emitParticleAt(this.stallX + sp.x * this.stallScale, this.groundY + sp.y * this.stallScale);
     }
 
-    // очередь
+    // очередь: каждый гость плавно разгоняется и тормозит у своего места,
+    // а когда первый уходит, остальные трогаются по очереди, а не все разом
     const line = this.customers.filter((c) => c.state === 'queue');
-    const speed = WALK_SPEED * u * (this.rush ? 1.8 : 1);
+    const vmax = this.walkSpeed();
+    const ease = Math.min(1, delta / 170);
     line.forEach((c, i) => {
-      const dx = this.queueX(i) - c.c.root.x;
-      const step = speed * delta;
-      c.c.root.x += Math.abs(dx) <= step ? dx : Math.sign(dx) * step;
-      const arrived = Math.abs(dx) <= 1;
-      this.animateWalk(c, !arrived, delta);
-      if (arrived && i === 0 && !c.talked) {
+      const tx = this.queueX(i);
+      if (c.tx !== undefined && tx > c.tx + 1) c.wait = Math.max(c.wait, i * 160);
+      c.tx = tx;
+      if (c.wait > 0) c.wait -= delta;
+      const dx = tx - c.c.root.x;
+      const want = c.wait > 0 ? 0 : Phaser.Math.Clamp(dx / 240, -1, 1) * vmax;
+      c.vx += (want - c.vx) * ease;
+      if (Math.abs(dx) < 0.6 && Math.abs(c.vx) < 0.012) {
+        c.c.root.x = tx;
+        c.vx = 0;
+      } else c.c.root.x += c.vx * delta;
+      this.animateWalk(c, Math.abs(c.vx) / vmax, delta);
+      if (Math.abs(dx) < 2 && i === 0 && !c.talked) {
         c.talked = true;
         if (!this.met.has(c.id) || Math.random() < 0.35) this.say(c);
       }
@@ -994,25 +1028,31 @@ export class StallScene extends Phaser.Scene {
     for (const c of this.customers) {
       if (c.bubble) c.bubble.setPosition(c.c.root.x + 6 * u, c.c.root.y - c.c.height * c.c.root.scaleY - (c.bubble.getData('h') / 2 + 12 * u));
       if (c.state !== 'leaving') continue;
-      c.c.root.x += speed * 1.2 * delta;
-      c.c.root.y = this.groundY + 22 * u;
-      this.animateWalk(c, true, delta);
+      c.vx += (vmax * 1.15 - c.vx) * Math.min(1, delta / 320);
+      c.c.root.x += c.vx * delta;
+      c.c.root.y += (this.groundY + 22 * u - c.c.root.y) * Math.min(1, delta / 260);
+      this.animateWalk(c, c.vx / vmax, delta);
       if (c.c.root.x > this.scale.width + 70 * u) c.c.root.destroy();
     }
     this.customers = this.customers.filter((c) => c.c.root.active);
 
-    const want = this.rush ? 7 : this.wantQueue;
+    // гости приходят спокойно, без толпы: в час пик чаще, но не бегом
+    const want = this.rush ? 5 : this.wantQueue;
     const fits = this.queueX(line.length) > 14 * u;
-    if (line.length < want && fits && !this.moving && Math.random() < delta / (this.rush ? 250 : 700)) this.spawnCustomer();
-    if (this.serveEvery > 0) {
-      this.serveTimer += delta;
+    if (line.length < want && fits && !this.moving && Math.random() < delta / (line.length === 0 ? 350 : this.rush ? 700 : 1600)) this.spawnCustomer();
+    if (this.serveEvery > 0 && line.length > 0) {
+      this.serveTimer += delta * (this.rush ? 1.5 : 1);
       if (this.serveTimer >= this.serveEvery) {
-        this.serveTimer = 0;
-        this.serve();
+        const first = line[0];
+        if (Math.abs(first.c.root.x - this.queueX(0)) < 3) {
+          this.serveTimer = 0;
+          this.serve();
+        } else this.serveTimer = this.serveEvery;
       }
     }
 
     this.animateMascot(delta);
+    this.animateSquash(delta);
     if (LOCATIONS[this.location].id === 'palace') {
       this.rainTimer -= delta;
       if (this.rainTimer <= 0) {
@@ -1023,8 +1063,8 @@ export class StallScene extends Phaser.Scene {
 
     // питомцы пританцовывают, в час пик быстрее
     for (const p of this.pets) {
-      p.phase += delta / (this.rush ? 180 : 320);
-      const hop = Math.abs(Math.sin(p.phase));
+      p.phase += delta / (this.rush ? 260 : 420);
+      const hop = Math.sin(p.phase) ** 2; // плавный подскок без излома внизу
       const sc = p.c.root.getData('s');
       p.c.body.y = -hop * 4;
       p.c.root.setScale(sc * (1 + 0.03 * (1 - hop)), sc * (1 - 0.03 * (1 - hop)));

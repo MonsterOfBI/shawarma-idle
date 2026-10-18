@@ -2,7 +2,7 @@
 
 import Phaser from 'phaser';
 import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
-import { BRAINROT_BY_ID, meet } from './core/brainrots';
+import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
 import { type BoxKind, type Drop, PET_RARITY, RARITIES, petBonus } from './core/pets';
 import { claimQuest, ensureQuests } from './core/quests';
@@ -35,6 +35,9 @@ import {
   collectOffline,
   OFFLINE_CAP_SECONDS,
   incomePerSecond,
+  customerCheck,
+  serveCustomer,
+  serveIntervalMs,
   normalize,
   offlineEarnings,
   relocate,
@@ -80,7 +83,7 @@ export class Game {
     this.scene = new StallScene({
       onTap: (x, y) => this.onTap(x, y),
       onGolden: (x, y) => this.onGolden(x, y),
-      onServed: (id) => this.meet(id),
+      onServed: (id, x, y) => this.served(id, x, y),
     });
     this.ui = new Ui({
       buy: (id, n) => this.buy(id, n),
@@ -157,7 +160,7 @@ export class Game {
     }
     this.state = ensureQuests(tick(this.state, now), now, Math.random);
     this.events(now);
-    this.scene.setIncome(incomePerSecond(this.state, now));
+    this.scene.setIncome(incomePerSecond(this.state, now), serveIntervalMs(this.state, now));
     this.scene.setLook(this.state.levels);
     this.scene.setHints(this.hints(now));
     this.scene.setMascot(this.state.levels.barker ?? 0);
@@ -252,7 +255,7 @@ export class Game {
     const extra = comboMult(this.combo) * (rush ? RUSH_MULT : 1) * (crit ? CRIT_MULT : 1);
     const value = tapValue(this.state, now) * extra;
     this.state = recordCombo(tap(this.state, now, extra), this.combo);
-    this.scene.serve();
+    this.scene.hurry();
     const text = `+${formatNumber(value, lang())} ₽`;
     if (crit) {
       this.scene.crit(`${t('crit')} ${text}`, x, y);
@@ -303,6 +306,18 @@ export class Game {
   }
 
   // Знакомство с брейнротом: новый попадает в коллекцию.
+  // Гость получил шаурму и платит свой чек: у каждого брейнрота свой множитель.
+  private served(id: string, x: number, y: number) {
+    this.meet(id);
+    if (id === 'bombardiro' || this.paused) return;
+    const now = Date.now();
+    const check = customerCheck(this.state, now, id);
+    this.state = serveCustomer(this.state, now, id);
+    const pay = payOf(id);
+    const color = pay >= 2 ? '#ff9ccb' : pay >= 1.5 ? '#ffd86b' : pay >= 1 ? '#b8f08a' : '#fff4dc';
+    this.scene.popText(`+${formatNumber(check, lang())} ₽`, x, y, color, pay >= 1.5 ? 1.25 : 1);
+  }
+
   private meet(id: string) {
     const next = meet(this.state, id);
     if (next === this.state) return;
