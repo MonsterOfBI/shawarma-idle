@@ -167,18 +167,18 @@ describe('числа', () => {
 });
 
 describe('баланс', () => {
-  it('первый переезд занимает 10–25 минут активной игры', () => {
+  it('первый переезд занимает 13–33 минуты активной игры', () => {
     const minutes = secondsToEarn(LOCATIONS[1].threshold, 3) / 60;
-    expect(minutes).toBeGreaterThan(10);
-    expect(minutes).toBeLessThan(25);
+    expect(minutes).toBeGreaterThan(13);
+    expect(minutes).toBeLessThan(33);
   });
 
-  it('каждый следующий переезд занимает от 20 минут до 100 минут и дольше предыдущего', () => {
+  it('каждый следующий переезд занимает от 26 до 130 минут и дольше предыдущего', () => {
     let prev = 0;
     for (let loc = 1; loc < LOCATIONS.length - 1; loc++) {
       const minutes = secondsToEarn(LOCATIONS[loc + 1].threshold, 3, { ...newGame(0), location: loc }) / 60;
-      expect(minutes).toBeGreaterThan(20);
-      expect(minutes).toBeLessThan(100);
+      expect(minutes).toBeGreaterThan(26);
+      expect(minutes).toBeLessThan(130);
       expect(minutes).toBeGreaterThan(prev);
       prev = minutes;
     }
