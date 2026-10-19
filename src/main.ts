@@ -16,6 +16,11 @@ import { setLang } from './i18n';
 import { createLocalPlatform } from './platform/platform';
 import { createYandexPlatform } from './platform/yandex';
 
+// Требования Яндекс Игр: без контекстного меню, выделения и перетаскивания картинок (долгий тап на телефоне).
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('dragstart', (e) => e.preventDefault());
+document.addEventListener('selectstart', (e) => e.preventDefault());
+
 async function start() {
   // На Яндекс Играх подключится их SDK, в браузере — локальная версия без рекламы и покупок.
   const platform = (await createYandexPlatform()) ?? createLocalPlatform();

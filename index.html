@@ -13,6 +13,7 @@
           <div class="hud-row">
             <span id="place" class="ribbon"></span>
             <span class="hud-btns">
+              <button id="lb-btn" class="round-btn trophy" type="button"></button>
               <button id="music" class="round-btn" type="button"></button>
               <button id="sound" class="round-btn" type="button"></button>
             </span>
@@ -66,6 +67,7 @@
             </div>
           </div>
           <div id="pet-bonus" class="banner"></div>
+          <p id="merge-note" class="note merge-note"></p>
           <div id="pets" class="pets"></div>
         </div>
 
@@ -148,6 +150,39 @@
             <button id="rv-again" class="btn btn-red" type="button"></button>
             <button id="rv-ok" class="btn btn-amber" type="button"></button>
           </div>
+        </div>
+      </div>
+
+      <div id="merge" class="reveal merge" hidden>
+        <div class="rays"></div>
+        <div class="merge-trio" aria-hidden="true"><img alt="" /><img alt="" /><img alt="" /></div>
+        <div class="merge-flash" aria-hidden="true"></div>
+        <div class="reveal-card">
+          <span id="mg-kicker" class="rarity-tag"></span>
+          <img id="mg-img" alt="" />
+          <b id="mg-name"></b>
+          <span id="mg-stars" class="stars-big"></span>
+          <span id="mg-bonus" class="pill"></span>
+          <div class="modal-btns row">
+            <button id="mg-ok" class="btn btn-amber" type="button"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="lb-modal" class="modal" hidden>
+        <div class="sheet lb">
+          <i class="lb-cup ico" aria-hidden="true"></i>
+          <h2 id="lb-title"></h2>
+          <div id="lb-seg" class="seg lb-seg" role="radiogroup">
+            <button type="button" role="radio" data-board="week"></button>
+            <button type="button" role="radio" data-board="total"></button>
+          </div>
+          <div id="lb-mine" class="lb-mine"></div>
+          <span id="lb-reset" class="lb-reset"></span>
+          <ol id="lb-list" class="lb-list"></ol>
+          <p id="lb-note" class="lb-note"></p>
+          <button id="lb-login" class="btn btn-amber wide" type="button" hidden></button>
+          <button id="lb-close" class="btn btn-ghost wide" type="button"></button>
         </div>
       </div>
 

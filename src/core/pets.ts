@@ -76,8 +76,29 @@ export const MUTATION_MULT = [1, 2, 5];
 export const MUTATION_CHANCE = { gold: 0.08, diamond: 0.015 };
 
 export interface Pet {
-  count: number; // сколько раз выпал
+  count: number; // сколько копий сейчас (после слияния остаётся одна)
   mut: number; // лучшая выпавшая мутация
+  stars: number; // звёзды слияния, от 0 до MAX_STARS
+}
+
+// Слияние (версия 2.9): три копии одного брейнрота сливаются в одного со звездой.
+// Звезда умножает бонус питомца. Мутация при слиянии сохраняется, так что слить мутанта по ошибке нельзя.
+export const MERGE_COPIES = 3;
+export const MAX_STARS = 3;
+export const STAR_MULT = [1, 2.5, 6, 15];
+
+export function canMerge(p: Pet | undefined): boolean {
+  return !!p && p.count >= MERGE_COPIES && p.stars < MAX_STARS;
+}
+
+export function mergePet(s: GameState, id: string): GameState {
+  const p = s.pets[id];
+  if (!canMerge(p)) return s;
+  return { ...s, pets: { ...s.pets, [id]: { ...p, count: p.count - (MERGE_COPIES - 1), stars: p.stars + 1 } }, merges: s.merges + 1 };
+}
+
+export function anyMerge(s: GameState): boolean {
+  return Object.entries(s.pets).some(([id, p]) => PET_RARITY[id] && canMerge(p));
 }
 
 export interface Drop {
@@ -94,7 +115,7 @@ export function petLevel(p: Pet): number {
 
 export function petBonus(id: string, p: Pet): number {
   const base = RARITY_BONUS[PET_RARITY[id] ?? 'common'];
-  return base * (1 + DUPLICATE_STEP * (p.count - 1)) * MUTATION_MULT[p.mut];
+  return base * (1 + DUPLICATE_STEP * (p.count - 1)) * MUTATION_MULT[p.mut] * STAR_MULT[p.stars ?? 0];
 }
 
 export function petMult(s: GameState): number {
@@ -121,7 +142,7 @@ export function openBox(s: GameState, kind: BoxKind, rand: () => number): { stat
   const m = rand();
   const mut = m < MUTATION_CHANCE.diamond ? 2 : m < MUTATION_CHANCE.diamond + MUTATION_CHANCE.gold ? 1 : 0;
   const old = s.pets[id];
-  const pet: Pet = old ? { count: old.count + 1, mut: Math.max(old.mut, mut) } : { count: 1, mut };
+  const pet: Pet = old ? { count: old.count + 1, mut: Math.max(old.mut, mut), stars: old.stars ?? 0 } : { count: 1, mut, stars: 0 };
   const met = s.met.includes(id) ? s.met : [...s.met, id];
   return {
     state: { ...s, pets: { ...s.pets, [id]: pet }, boxesOpened: s.boxesOpened + 1, met },

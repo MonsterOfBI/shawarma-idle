@@ -590,9 +590,9 @@ export class StallScene extends Phaser.Scene {
   }
 
   // Лучшие брейнроты игрока танцуют перед ларьком. Мутация даёт золотое или алмазное сияние.
-  setPets(list: { id: string; mut: number }[]) {
+  setPets(list: { id: string; mut: number; stars?: number }[]) {
     const top = list.slice(0, PET_SLOTS.length);
-    const key = top.map((p) => `${p.id}:${p.mut}`).join(',');
+    const key = top.map((p) => `${p.id}:${p.mut}:${p.stars ?? 0}`).join(',');
     if (key === this.petKey || !this.sys.isActive()) return;
     const old = new Set(this.pets.map((p) => p.id));
     this.petKey = key;
@@ -600,9 +600,17 @@ export class StallScene extends Phaser.Scene {
     this.pets = top.map((p, slot) => {
       const c = drawBrainrot(this, p.id);
       let aura: Phaser.GameObjects.Arc | undefined;
-      if (p.mut > 0) {
-        aura = this.add.circle(0, -c.height * 0.45, Math.max(40, c.height * 0.62), p.mut === 2 ? 0x7ff0ff : 0xffd86b, 0.4).setBlendMode(Phaser.BlendModes.ADD);
+      const stars = p.stars ?? 0;
+      if (p.mut > 0 || stars > 0) {
+        const color = p.mut === 2 ? 0x7ff0ff : p.mut === 1 ? 0xffd86b : stars >= 3 ? 0xff7ab8 : 0xffe9a8;
+        aura = this.add.circle(0, -c.height * 0.45, Math.max(40, c.height * 0.62), color, 0.4).setBlendMode(Phaser.BlendModes.ADD);
         c.root.addAt(aura, 0);
+      }
+      // звёзды слияния над головой
+      for (let i = 0; i < stars; i++) {
+        const x = (i - (stars - 1) / 2) * 22;
+        const st = this.add.star(x, -c.height - 14 - (i === 1 && stars === 3 ? 6 : 0), 5, 5, 11, 0xffb02e).setStrokeStyle(3, 0x2a1b3d);
+        c.root.add(st);
       }
       c.root.setDepth(7.8);
       return { id: p.id, c, aura, phase: slot * 1.7, slot };
@@ -732,7 +740,7 @@ export class StallScene extends Phaser.Scene {
     const glow = this.add.circle(0, -4, 70, 0xffd86b, 0.3).setBlendMode(Phaser.BlendModes.ADD);
     c.root.addAt(glow, 0);
     this.tweens.add({ targets: glow, scale: 1.3, alpha: 0.12, yoyo: true, repeat: -1, duration: 450 });
-    const hit = this.add.rectangle(-4, 4, 150, 100, 0, 0).setInteractive({ useHandCursor: true });
+    const hit = this.add.rectangle(-4, 4, 190, 130, 0, 0).setInteractive({ useHandCursor: true });
     c.root.add(hit);
     const b: Bomber = { c, y0, caught: false };
     hit.on('pointerdown', () => {
@@ -1079,8 +1087,8 @@ export class StallScene extends Phaser.Scene {
     // Бомбардиро
     const b = this.bomber;
     if (b && !b.caught) {
-      b.c.root.x += (this.scale.width / 10000) * delta;
-      b.c.root.y = b.y0 + Math.sin(this.clock / 300) * 8 * u;
+      b.c.root.x += (this.scale.width / 5200) * delta; // пролетает экран примерно за 5 секунд
+      b.c.root.y = b.y0 + Math.sin(this.clock / 220) * 12 * u;
       b.c.root.setRotation(Math.sin(this.clock / 300 + 1) * 0.05);
       if (Math.random() < delta / 120) this.sparks.emitParticleAt(b.c.root.x - 40 * u, b.c.root.y + Phaser.Math.Between(-10, 20) * u);
       if (b.c.root.x > this.scale.width + 120 * u) {

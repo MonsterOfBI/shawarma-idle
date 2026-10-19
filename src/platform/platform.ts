@@ -7,6 +7,19 @@ export interface Product {
   price: string; // строка цены от площадки, например «49 YAN»
 }
 
+// Лидерборды: недельный и за всё время. Счёт — проданная шаурма.
+export type Board = 'week' | 'total';
+export interface LbEntry {
+  rank: number;
+  name: string;
+  score: number;
+  me: boolean;
+}
+export interface LbResult {
+  entries: LbEntry[];
+  me: LbEntry | null;
+}
+
 export interface Platform {
   name: 'local' | 'yandex';
   lang: string;
@@ -27,6 +40,15 @@ export interface Platform {
   restorePurchases(): Promise<{ owned: ProductId[]; pendingCash: number }>;
   // площадка просит поставить игру на паузу (реклама, свёрнутая вкладка)
   onPause(cb: (paused: boolean) => void): void;
+  // есть ли таблицы игроков (только на Яндекс Играх)
+  leaderboards: boolean;
+  // вошёл ли игрок в Яндекс ID: записывать результат могут только вошедшие
+  isAuthorized(): boolean;
+  // окно входа; вызывать только по нажатию игрока (п. 1.2.1 требований Яндекса)
+  login(): Promise<boolean>;
+  setScore(board: Board, score: number): Promise<void>;
+  // лучшие игроки и соседи игрока; null, если таблица недоступна
+  getBoard(board: Board): Promise<LbResult | null>;
 }
 
 const KEY = 'shawarma-idle-save';
@@ -81,6 +103,17 @@ export function createLocalPlatform(): Platform {
       return { owned: [], pendingCash: 0 };
     },
     onPause: onVisibility,
+    leaderboards: false,
+    isAuthorized() {
+      return false;
+    },
+    async login() {
+      return false;
+    },
+    async setScore() {},
+    async getBoard() {
+      return null;
+    },
   };
 }
 

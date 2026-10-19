@@ -32,12 +32,12 @@ import {
 import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { BRAINROT_BY_ID, payOf } from './core/brainrots';
-import { BOX_ODDS, type BoxKind, type Drop, PET_RARITY, RARITIES, type Rarity, petBonus, petMult } from './core/pets';
+import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult } from './core/pets';
 import { questDone, questProgress, counter } from './core/quests';
 import { UPGRADES } from './core/upgrades';
 import { lang, t } from './i18n';
 import { awardIcon, icon, ui } from './icons';
-import type { Product, ProductId } from './platform/platform';
+import type { Board, LbResult, Product, ProductId } from './platform/platform';
 
 export interface UiActions {
   buy(id: string, n: number): void;
@@ -51,7 +51,22 @@ export interface UiActions {
   claimDaily(): void;
   openDaily(): void;
   claimQuest(i: number): void;
+  merge(id: string): void;
+  openLeaderboard(): void;
 }
+
+// Что нужно окну рейтинга от игры.
+export interface LeaderboardSource {
+  available: boolean;
+  authorized(): boolean;
+  login(): Promise<boolean>;
+  load(board: Board): Promise<LbResult | null>;
+  mine(board: Board): number;
+  decode(board: Board, score: number): number | null;
+  resetIn(): number; // секунд до новой недели
+}
+
+const starText = (n: number) => '★'.repeat(n);
 
 // Название точки; дворец со звёздами пишется как «Дворец шаурмы ★2».
 function placeName(id: string, star: number): string {
@@ -103,6 +118,8 @@ interface PetCard {
   bonus: HTMLElement;
   lv: HTMLElement;
   mut: HTMLElement;
+  stars: HTMLElement;
+  merge: HTMLElement;
   key: string;
 }
 
@@ -141,6 +158,9 @@ export class Ui {
     $('#music').innerHTML = ui('music');
     $('#sound').addEventListener('click', () => actions.toggleSound());
     $('#music').addEventListener('click', () => actions.toggleMusic());
+    $('#lb-btn').innerHTML = ui('trophy');
+    $('#lb-btn').setAttribute('aria-label', t('lbBtn'));
+    $('#lb-btn').addEventListener('click', () => actions.openLeaderboard());
 
     // боковые кнопки
     const side = (id: string, ico: string, label: string, fn: () => void) => {
@@ -214,15 +234,24 @@ export class Ui {
       const bonus = el('span', 'pet-bonus');
       const lv = el('span', 'pet-lv');
       const mut = el('span', 'pet-mut');
-      root.append(img, name, rar, bonus, lv, mut);
+      const stars = el('span', 'pet-stars');
+      const merge = el('span', 'pet-merge', t('petMerge'));
+      merge.setAttribute('role', 'button');
+      merge.hidden = true;
+      merge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        actions.merge(id);
+      });
+      root.append(img, stars, name, rar, bonus, lv, mut, merge);
       root.addEventListener('click', () => {
         if (!this.lastState?.pets[id]) return;
+        if (canMerge(this.lastState.pets[id])) return actions.merge(id);
         // у посетителей свой чек: показываем, во сколько раз он больше среднего
         const check = BRAINROT_BY_ID[id]?.role === 'customer' ? ` · ${t('checkMult', formatNumber(payOf(id), lang()))}` : '';
         this.toast(`${t(`br_${id}`)}: «${t(`brs_${id}`)}»${check}`);
       });
       grid.append(root);
-      this.petCards.set(id, { root, img, name, bonus, lv, mut, key: '' });
+      this.petCards.set(id, { root, img, name, bonus, lv, mut, stars, merge, key: '' });
     }
 
     // задания и подарки
@@ -407,7 +436,7 @@ export class Ui {
     };
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
-    set('pets', canBuyBox(s, now) || adBoxReady(s, now) ? '!' : '');
+    set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
     const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');
@@ -489,7 +518,7 @@ export class Ui {
 
   private renderPets(s: GameState, now: number) {
     const owned = Object.keys(s.pets).filter((id) => PET_RARITY[id]).length;
-    $('#pets-count').textContent = t('petsCount', owned);
+    $('#pets-count').textContent = t('petsCount', owned).replace('{n}', String(Object.keys(PET_RARITY).length));
     const buy = $<HTMLButtonElement>('#box-buy');
     buy.textContent = `${fmt(boxCost(s, now))} ₽`;
     buy.disabled = !canBuyBox(s, now);
@@ -500,15 +529,16 @@ export class Ui {
     const banner = $('#pet-bonus');
     if (!owned) banner.textContent = t('petsHint');
     else banner.innerHTML = `${t('petBonusLabel')} <b>+${pct(petMult(s) - 1)} %</b>`;
+    $('#merge-note').textContent = owned ? t('mergeNote') : '';
     for (const id of PET_IDS) {
       const c = this.petCards.get(id)!;
       const p = s.pets[id];
-      const key = p ? `${p.count}:${p.mut}` : '';
+      const key = p ? `${p.count}:${p.mut}:${p.stars}` : '';
       if (key === c.key) continue;
       const wasUnknown = !c.key;
       c.key = key;
       c.root.classList.toggle('unknown', !p);
-      c.root.classList.remove('m-1', 'm-2');
+      c.root.classList.remove('m-1', 'm-2', 'st-1', 'st-2', 'st-3', 'can-merge');
       c.name.textContent = p ? t(`br_${id}`) : '???';
       c.bonus.hidden = c.lv.hidden = !p;
       c.mut.hidden = !p || !p.mut;
@@ -519,7 +549,13 @@ export class Ui {
         c.mut.classList.toggle('diamond', p.mut === 2);
       }
       c.bonus.textContent = `+${pct(petBonus(id, p))} %`;
-      c.lv.textContent = t('level', p.count);
+      // пока можно копить звёзды — показываем копии «2/3», после трёх звёзд — просто уровень
+      c.lv.textContent = p.stars < MAX_STARS ? `${Math.min(p.count, 99)}/${MERGE_COPIES}` : t('level', p.count);
+      c.stars.textContent = starText(p.stars);
+      if (p.stars) c.root.classList.add(`st-${p.stars}`);
+      const ready = canMerge(p);
+      c.root.classList.toggle('can-merge', ready);
+      c.merge.hidden = !ready;
       if (wasUnknown) {
         c.root.classList.remove('fresh');
         void c.root.offsetWidth;
@@ -746,8 +782,10 @@ export class Ui {
     $('#rv-name').textContent = t(`br_${drop.id}`);
     const info = $('#rv-info');
     info.className = drop.isNew ? 'new' : drop.mut ? `mut-${drop.mut}` : '';
-    info.textContent = [drop.isNew ? t('petNew') : t('petUp', drop.level), drop.mut ? t(`mut_${drop.mut}`) : ''].filter(Boolean).join(' · ');
     const p = this.lastState?.pets[drop.id];
+    info.textContent = [drop.isNew ? t('petNew') : t('petUp', drop.level), drop.mut ? t(`mut_${drop.mut}`) : '', canMerge(p) ? t('mergeReady') : '']
+      .filter(Boolean)
+      .join(' · ');
     $('#rv-bonus').textContent = p ? t('petGives', pct(petBonus(drop.id, p))) : '';
     const againBtn = $<HTMLButtonElement>('#rv-again');
     againBtn.hidden = !again;
@@ -760,6 +798,122 @@ export class Ui {
       };
       againBtn.onclick = () => done('again');
       $('#rv-ok').onclick = () => done('ok');
+    });
+  }
+
+  // Слияние: три портрета слетаются в один, вспышка, звёзды выскакивают по одной.
+  async mergeShow(id: string, stars: number, bonusPct: number, onOpen: () => void): Promise<void> {
+    const box = $('#merge');
+    const src = this.portraits[id] ?? '';
+    box.querySelectorAll<HTMLImageElement>('.merge-trio img').forEach((img) => (img.src = src));
+    box.className = 'reveal merge fuse';
+    box.hidden = false;
+    let skip!: () => void;
+    const skipped = new Promise<void>((r) => (skip = r));
+    box.onclick = () => skip();
+    await Promise.race([wait(1000), skipped]);
+    box.onclick = null;
+    box.className = 'reveal merge open';
+    onOpen();
+    $('#mg-kicker').textContent = t('mergeKicker');
+    ($('#mg-img') as HTMLImageElement).src = src;
+    $('#mg-name').textContent = t(`br_${id}`);
+    const st = $('#mg-stars');
+    st.innerHTML = '';
+    for (let i = 0; i < MAX_STARS; i++) {
+      const star = el('i', i < stars ? '' : 'dim', '★');
+      star.style.animationDelay = `${0.25 + i * 0.18}s`;
+      st.append(star);
+    }
+    $('#mg-bonus').textContent = t('petGives', pct(bonusPct));
+    $('#mg-ok').textContent = t('mergeOk');
+    return new Promise((resolve) => {
+      $('#mg-ok').onclick = () => {
+        box.hidden = true;
+        resolve();
+      };
+    });
+  }
+
+  // Окно рейтинга: неделя и всё время. Без Яндекса показывает только свои продажи.
+  async leaderboard(src: LeaderboardSource) {
+    const modal = $('#lb-modal');
+    $('#lb-title').textContent = t('lbTitle');
+    $('.lb-cup').innerHTML = ui('trophy');
+    $('#lb-close').textContent = t('lbClose');
+    const seg = $('#lb-seg');
+    const [bw, bt] = Array.from(seg.querySelectorAll<HTMLButtonElement>('button'));
+    bw.textContent = t('lbWeek');
+    bt.textContent = t('lbAll');
+    const login = $<HTMLButtonElement>('#lb-login');
+    login.textContent = t('lbLogin');
+    let board: Board = 'week';
+    let token = 0;
+    const show = async () => {
+      const my = ++token;
+      bw.setAttribute('aria-checked', String(board === 'week'));
+      bt.setAttribute('aria-checked', String(board === 'total'));
+      $('#lb-mine').innerHTML = t(board === 'week' ? 'lbMineWeek' : 'lbMineAll', `<b>${fmt(src.mine(board))}</b>`);
+      const left = src.resetIn();
+      const leftText = left >= 86_400 ? t('durDH').replace('{d}', String(Math.floor(left / 86_400))).replace('{h}', String(Math.floor((left % 86_400) / 3600))) : formatDuration(left, lang());
+      $('#lb-reset').textContent = board === 'week' ? t('lbReset', leftText) : '';
+      login.hidden = !src.available || src.authorized();
+      const list = $('#lb-list');
+      const note = $('#lb-note');
+      list.innerHTML = '';
+      if (!src.available) {
+        note.textContent = `${t('lbLocal')} ${t('lbHow')}`;
+        return;
+      }
+      note.textContent = t('lbLoading');
+      const res = await src.load(board);
+      if (my !== token) return;
+      if (!res) {
+        note.textContent = t('lbError');
+        return;
+      }
+      const rows = res.entries
+        .map((e) => ({ ...e, score: src.decode(board, e.score) }))
+        .filter((e): e is typeof e & { score: number } => e.score !== null && e.score > 0);
+      const seen = new Set<number>();
+      let last = 0;
+      for (const e of rows.sort((a, b) => a.rank - b.rank)) {
+        if (seen.has(e.rank)) continue;
+        seen.add(e.rank);
+        if (last && e.rank > last + 1) list.append(el('li', 'gap', '⋯'));
+        last = e.rank;
+        const li = el('li', e.me ? 'me' : '');
+        li.append(el('span', 'rk', String(e.rank)), el('span', 'nm', e.me ? `${e.name || t('lbAnon')} (${t('lbYou')})` : e.name || t('lbAnon')), el('span', 'sc', fmt(e.score)));
+        list.append(li);
+      }
+      note.textContent = rows.length ? t('lbHow') : `${t('lbEmpty')} ${t('lbHow')}`;
+    };
+    bw.onclick = () => {
+      board = 'week';
+      void show();
+    };
+    bt.onclick = () => {
+      board = 'total';
+      void show();
+    };
+    login.onclick = async () => {
+      login.disabled = true;
+      await src.login();
+      login.disabled = false;
+      void show();
+    };
+    modal.hidden = false;
+    await show();
+    return new Promise<void>((resolve) => {
+      const close = () => {
+        token++;
+        modal.hidden = true;
+        resolve();
+      };
+      $('#lb-close').onclick = close;
+      modal.onclick = (e) => {
+        if (e.target === modal) close();
+      };
     });
   }
 }

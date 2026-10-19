@@ -1,7 +1,7 @@
 // Реализация Platform для Яндекс Игр. Документация SDK: https://yandex.ru/dev/games/doc/ru/sdk/sdk-about
 // SDK подключается скриптом /sdk.js, который Яндекс отдаёт со своего хостинга игры.
 
-import { type Platform, type Product, type ProductId, localLoad, localSave, onVisibility } from './platform';
+import { type Board, type LbEntry, type Platform, type Product, type ProductId, localLoad, localSave, onVisibility } from './platform';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -11,6 +11,8 @@ declare global {
 }
 
 const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack'];
+// Технические имена лидербордов. Их нужно создать в консоли Яндекс Игр (см. docs/yandex-publish.md).
+export const LEADERBOARD_NAMES: Record<Board, string> = { week: 'shawarmaWeek', total: 'shawarmaTotal' };
 
 function loadScript(src: string, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -63,6 +65,30 @@ export async function createYandexPlatform(): Promise<Platform | null> {
   } catch {
     // старые версии SDK без событий — хватит visibilitychange
   }
+
+  const authorized = () => {
+    if (!player) return false;
+    try {
+      if (typeof player.isAuthorized === 'function') return !!player.isAuthorized();
+      return player.getMode?.() !== 'lite';
+    } catch {
+      return false;
+    }
+  };
+  // новый SDK: ysdk.leaderboards; старый: ysdk.getLeaderboards()
+  let boards: any = null;
+  const getBoards = async () => {
+    if (ysdk.leaderboards) return ysdk.leaderboards;
+    if (!boards && ysdk.getLeaderboards) boards = await ysdk.getLeaderboards();
+    return boards;
+  };
+  const myId = () => {
+    try {
+      return player?.getUniqueID?.() ?? '';
+    } catch {
+      return '';
+    }
+  };
 
   async function consumeCash(purchases: any[]): Promise<number> {
     let count = 0;
@@ -177,6 +203,48 @@ export async function createYandexPlatform(): Promise<Platform | null> {
     onPause(cb) {
       pauseListeners.push(cb);
       onVisibility(cb);
+    },
+    leaderboards: !!(ysdk.leaderboards || ysdk.getLeaderboards),
+    isAuthorized: authorized,
+    async login() {
+      if (authorized()) return true;
+      try {
+        await ysdk.auth.openAuthDialog();
+        player = await ysdk.getPlayer({ scopes: false });
+      } catch {
+        // игрок закрыл окно входа
+      }
+      return authorized();
+    },
+    async setScore(board, score) {
+      if (!authorized()) return;
+      try {
+        const lb = await getBoards();
+        const name = LEADERBOARD_NAMES[board];
+        if (lb?.setScore) await lb.setScore(name, Math.floor(score));
+        else await lb?.setLeaderboardScore?.(name, Math.floor(score));
+      } catch {
+        // не чаще раза в секунду и только для вошедших — ошибки молча пропускаем
+      }
+    },
+    async getBoard(board) {
+      try {
+        const lb = await getBoards();
+        if (!lb) return null;
+        const name = LEADERBOARD_NAMES[board];
+        const opts = { quantityTop: 10, includeUser: authorized(), quantityAround: 2 };
+        const res = lb.getEntries ? await lb.getEntries(name, opts) : await lb.getLeaderboardEntries(name, opts);
+        const me = myId();
+        const entries: LbEntry[] = (res?.entries ?? []).map((e: any) => ({
+          rank: Number(e.rank) || 0,
+          name: String(e.player?.publicName ?? ''),
+          score: Number(e.score) || 0,
+          me: !!me && e.player?.uniqueID === me,
+        }));
+        return { entries, me: entries.find((e) => e.me) ?? null };
+      } catch {
+        return null;
+      }
     },
   };
 }

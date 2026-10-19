@@ -3,7 +3,7 @@
 import { achievementMult } from './achievements';
 import { LOCATIONS, LOCATION_FROM_V7 } from './locations';
 import { payOf } from './brainrots';
-import { type BoxKind, type Pet, openBox, petMult } from './pets';
+import { type BoxKind, type Pet, MAX_STARS, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
 export const SAVE_VERSION = 8;
@@ -67,6 +67,9 @@ export interface GameState {
   daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
   quests: Quest[];
   questsDone: number;
+  merges: number; // сколько раз сливали брейнротов
+  sold: number; // продано шаурмы за всё время: тапы плюс обслуженные гости (для лидерборда)
+  week: { id: number; sold: number }; // продано за текущую неделю (номер недели по Москве)
 }
 
 export type QuestKind = 'taps' | 'buy' | 'golden' | 'box' | 'earn' | 'combo';
@@ -105,6 +108,9 @@ export function newGame(now: number): GameState {
     daily: { streak: 0, last: '' },
     quests: [],
     questsDone: 0,
+    merges: 0,
+    sold: 0,
+    week: { id: weekId(now), sold: 0 },
   };
 }
 
@@ -155,6 +161,13 @@ export function normalize(raw: unknown, now: number): GameState {
     },
     quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],
     questsDone: Math.floor(num(r.questsDone, 0)),
+    merges: Math.floor(num(r.merges, 0)),
+    // до версии 2.9 продажи не считали: начинаем с числа тапов
+    sold: Math.floor(num(r.sold, num(r.taps, 0))),
+    week: {
+      id: Math.floor(num(r.week?.id, weekId(now))),
+      sold: Math.floor(num(r.week?.sold, 0)),
+    },
   };
 }
 
@@ -169,7 +182,12 @@ function normalizePets(raw: unknown): Record<string, Pet> {
   if (!raw || typeof raw !== 'object') return out;
   for (const [id, v] of Object.entries(raw as Record<string, any>)) {
     const count = Math.floor(Number(v?.count));
-    if (count >= 1) out[id] = { count, mut: Math.min(2, Math.max(0, Math.floor(Number(v?.mut) || 0))) };
+    if (count >= 1)
+      out[id] = {
+        count,
+        mut: Math.min(2, Math.max(0, Math.floor(Number(v?.mut) || 0))),
+        stars: Math.min(MAX_STARS, Math.max(0, Math.floor(Number(v?.stars) || 0))),
+      };
   }
   return out;
 }
@@ -308,7 +326,38 @@ function earn(state: GameState, amount: number): GameState {
 
 // extra — множитель комбо и часа пика, считается в контроллере
 export function tap(state: GameState, now: number, extra = 1): GameState {
-  return { ...earn(state, tapValue(state, now) * extra), taps: state.taps + 1 };
+  return sell({ ...earn(state, tapValue(state, now) * extra), taps: state.taps + 1 }, now);
+}
+
+// ---------- продажи для лидерборда ----------
+// Неделя начинается в понедельник в 00:00 по Москве (UTC+3), у всех игроков одна и та же.
+const WEEK_MS = 7 * 86_400_000;
+const WEEK_ZERO = Date.UTC(2026, 0, 4, 21); // понедельник 5 января 2026, 00:00 МСК
+export function weekId(now: number): number {
+  return Math.floor((now - WEEK_ZERO) / WEEK_MS);
+}
+export function weekEndsAt(now: number): number {
+  return WEEK_ZERO + (weekId(now) + 1) * WEEK_MS;
+}
+// Продана одна шаурма: счёт за всё время и за неделю (новая неделя начинает счёт с нуля).
+export function sell(state: GameState, now: number, n = 1): GameState {
+  const id = weekId(now);
+  const week = state.week.id === id ? { id, sold: state.week.sold + n } : { id, sold: n };
+  return { ...state, sold: state.sold + n, week };
+}
+// Продажи за неделю, которые видны сейчас: если неделя сменилась, это ноль.
+export function soldThisWeek(state: GameState, now: number): number {
+  return state.week.id === weekId(now) ? state.week.sold : 0;
+}
+// Очки недельной таблицы: номер недели × 1 000 000 + продажи (не больше 999 999).
+// У Яндекса нет недельного сброса, поэтому неделя зашита в старшие разряды:
+// результаты прошлых недель всегда ниже текущих, а игра показывает только текущую неделю.
+export const WEEK_SCALE = 1_000_000;
+export function weeklyScore(state: GameState, now: number): number {
+  return weekId(now) * WEEK_SCALE + Math.min(WEEK_SCALE - 1, soldThisWeek(state, now));
+}
+export function decodeWeekly(score: number, now: number): number | null {
+  return Math.floor(score / WEEK_SCALE) === weekId(now) ? score % WEEK_SCALE : null;
 }
 
 export function comboMult(combo: number): number {
@@ -332,7 +381,7 @@ export function customerCheck(state: GameState, now: number, id: string): number
 }
 
 export function serveCustomer(state: GameState, now: number, id: string): GameState {
-  return earn(state, customerCheck(state, now, id));
+  return sell(earn(state, customerCheck(state, now, id)), now);
 }
 
 // Как часто работники сами обслуживают гостя: от 4,5 секунды в начале до 3 секунд у богатой точки.

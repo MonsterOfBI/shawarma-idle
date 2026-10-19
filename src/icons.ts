@@ -53,6 +53,9 @@ const ICONS: Record<string, string> = {
   sound: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 11 a6 6 0 0 1 0 10 M24 7 a11 11 0 0 1 0 18"/>`),
   mute: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 12 l7 8 M28 12 l-7 8"/>`),
   frenzy: svg(`<path d="M18 3 L7 18 h8 l-2 11 L25 13 h-8 Z" fill="${T}"/>`),
+  trophy: svg(`<path d="M9 5 h14 v7 a7 7 0 0 1 -14 0 Z" fill="${A}"/><path d="M9 8 h-4 a4 4 0 0 0 5 6 M23 8 h4 a4 4 0 0 1 -5 6"/><path d="M16 19 v4"/><rect x="10" y="23" width="12" height="5" rx="1.5" fill="${T}"/>`),
+  star: svg(`<path d="M16 4 l3.5 7.2 7.9 1.1 -5.7 5.5 1.4 7.8 -7.1-3.7 -7.1 3.7 1.4-7.8 -5.7-5.5 7.9-1.1 Z" fill="${A}"/>`),
+  merge: svg(`<circle cx="8" cy="10" r="4" fill="${C}"/><circle cx="24" cy="10" r="4" fill="${C}"/><circle cx="16" cy="7" r="4" fill="${C}"/><path d="M9 15 L16 22 L23 15 M16 12 v10"/><path d="M16 22 l2.2 4.4 4.8.7 -3.5 3.3" fill="${A}"/>`),
   x2: svg(`<circle cx="16" cy="16" r="12" fill="${A}"/><path d="M10 12 l6 8 M16 12 l-6 8 M19 13 a3 3 0 0 1 6 1 c0 3-6 4-6 7 h6"/>`),
 };
 

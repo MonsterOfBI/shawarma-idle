@@ -429,9 +429,84 @@ describe('версия 2.0', () => {
 
   it('старое сохранение получает пустых питомцев, календарь и задания', () => {
     const s = normalize({ money: 5, pets: { tralalero: { count: 2, mut: 9 }, bad: { count: 0 } } }, 0);
-    expect(s.pets).toEqual({ tralalero: { count: 2, mut: 2 } });
+    expect(s.pets).toEqual({ tralalero: { count: 2, mut: 2, stars: 0 } });
     expect(s.daily).toEqual({ streak: 0, last: '' });
     expect(s.quests).toEqual([]);
     expect(s.bought).toBe(0);
+  });
+});
+
+// ---------- версия 2.9: слияние брейнротов ----------
+import { STAR_MULT, canMerge, mergePet, petBonus, anyMerge } from './pets';
+import { decodeWeekly, sell, soldThisWeek, weekEndsAt, weekId, weeklyScore } from './economy';
+
+describe('слияние брейнротов', () => {
+  const withPet = (count: number, stars = 0, mut = 0): GameState => ({ ...newGame(0), pets: { gusini: { count, mut, stars } } });
+
+  it('нужно три копии, звёзд не больше трёх', () => {
+    expect(canMerge(withPet(2).pets.gusini)).toBe(false);
+    expect(canMerge(withPet(3).pets.gusini)).toBe(true);
+    expect(canMerge(withPet(5, 3).pets.gusini)).toBe(false);
+    expect(anyMerge(withPet(3))).toBe(true);
+    expect(anyMerge(withPet(2))).toBe(false);
+  });
+
+  it('три копии становятся одной со звездой, мутация остаётся', () => {
+    const s = mergePet(withPet(4, 0, 2), 'gusini');
+    expect(s.pets.gusini).toEqual({ count: 2, mut: 2, stars: 1 });
+    expect(s.merges).toBe(1);
+    expect(mergePet(withPet(2), 'gusini')).toEqual(withPet(2));
+  });
+
+  it('слияние всегда выгоднее, чем копить копии', () => {
+    for (let stars = 0; stars < 3; stars++) {
+      const before = petBonus('gusini', withPet(3, stars).pets.gusini);
+      const after = petBonus('gusini', mergePet(withPet(3, stars), 'gusini').pets.gusini);
+      expect(after).toBeGreaterThan(before * 1.3);
+    }
+    expect(STAR_MULT.length).toBe(4);
+  });
+
+  it('старые питомцы без звёзд получают 0 звёзд', () => {
+    const s = normalize({ version: 8, pets: { gusini: { count: 3, mut: 1 } } }, 0);
+    expect(s.pets.gusini.stars).toBe(0);
+  });
+});
+
+describe('продажи для лидерборда', () => {
+  const mon = Date.UTC(2026, 9, 18, 21); // понедельник 19 октября 2026, 00:00 МСК
+  it('неделя меняется в понедельник в полночь по Москве', () => {
+    expect(weekId(mon) - weekId(mon - 1)).toBe(1);
+    expect(weekId(mon + 6.9 * 86_400_000)).toBe(weekId(mon));
+    expect(weekEndsAt(mon)).toBe(mon + 7 * 86_400_000);
+  });
+
+  it('тап и гость считаются продажей, новая неделя с нуля', () => {
+    let s = { ...newGame(mon), money: 0 };
+    s = tap(s, mon);
+    s = serveCustomer(s, mon + 1000, 'gusini');
+    expect(s.sold).toBe(2);
+    expect(soldThisWeek(s, mon + 1000)).toBe(2);
+    const next = mon + 7 * 86_400_000 + 5;
+    expect(soldThisWeek(s, next)).toBe(0);
+    s = sell(s, next);
+    expect(s.week.sold).toBe(1);
+    expect(s.sold).toBe(3);
+  });
+
+  it('недельные очки: прошлые недели ниже, видна только текущая', () => {
+    const s = sell(newGame(mon), mon, 1234);
+    const score = weeklyScore(s, mon);
+    expect(decodeWeekly(score, mon)).toBe(1234);
+    expect(decodeWeekly(score, mon + 7 * 86_400_000)).toBeNull();
+    expect(weeklyScore(newGame(mon), mon + 7 * 86_400_000)).toBeGreaterThan(score);
+    expect(weeklyScore(sell(s, mon, 5_000_000), mon) % 1_000_000).toBe(999_999);
+    expect(weeklyScore(s, mon)).toBeLessThan(2 ** 31);
+  });
+
+  it('старое сохранение: продажи начинаются с числа тапов', () => {
+    const s = normalize({ version: 8, taps: 500 }, mon);
+    expect(s.sold).toBe(500);
+    expect(s.week).toEqual({ id: weekId(mon), sold: 0 });
   });
 });

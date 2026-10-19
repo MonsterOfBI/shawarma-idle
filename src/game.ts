@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
-import { type BoxKind, type Drop, PET_RARITY, RARITIES, petBonus } from './core/pets';
+import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, petBonus } from './core/pets';
 import { claimQuest, ensureQuests } from './core/quests';
 import {
   type GameState,
@@ -45,6 +45,10 @@ import {
   tap,
   tapValue,
   tick,
+  decodeWeekly,
+  soldThisWeek,
+  weekEndsAt,
+  weeklyScore,
 } from './core/economy';
 import { unlockAchievements } from './core/achievements';
 import { formatNumber } from './core/format';
@@ -56,6 +60,8 @@ import { StallScene } from './scenes/StallScene';
 import { Ui } from './ui';
 
 const SAVE_EVERY_MS = 10_000;
+// результат в лидерборды отправляем раз в минуту (Яндекс разрешает не чаще раза в секунду)
+const SCORE_EVERY_MS = 60_000;
 // если вкладка была скрыта дольше минуты, считаем это отсутствием и показываем окно офлайн-дохода
 const AWAY_MS = 60_000;
 // щедрый гость приходит раз в 1–2,5 минуты, час пик раз в 2,5–5 минут
@@ -78,6 +84,8 @@ export class Game {
   private nextGoldenAt = Date.now() + 35_000;
   private medalQueue: string[] = [];
   private revealing = false;
+  private lastScoreAt = 0;
+  private sentScore: Record<'week' | 'total', number> = { week: -1, total: -1 };
 
   constructor(private platform: Platform) {
     this.scene = new StallScene({
@@ -97,6 +105,8 @@ export class Game {
       claimDaily: () => void this.claimDaily(),
       openDaily: () => void this.openDaily(),
       claimQuest: (i) => void this.claimQuest(i),
+      merge: (id) => void this.merge(id),
+      openLeaderboard: () => void this.openLeaderboard(),
     });
   }
 
@@ -166,6 +176,58 @@ export class Game {
     this.scene.setMascot(this.state.levels.barker ?? 0);
     this.ui.render(this.state, now);
     if (now - this.lastSave > SAVE_EVERY_MS) void this.save();
+    if (now - this.lastScoreAt > SCORE_EVERY_MS) void this.pushScores();
+  }
+
+  // ---------- лидерборды ----------
+  private async pushScores() {
+    this.lastScoreAt = Date.now();
+    if (!this.platform.leaderboards || !this.platform.isAuthorized()) return;
+    const scores = { week: weeklyScore(this.state, Date.now()), total: Math.floor(this.state.sold) };
+    for (const board of ['week', 'total'] as const) {
+      if (scores[board] === this.sentScore[board]) continue;
+      this.sentScore[board] = scores[board];
+      await this.platform.setScore(board, scores[board]);
+      await new Promise((r) => setTimeout(r, 1100));
+    }
+  }
+
+  private async openLeaderboard() {
+    void this.save();
+    const pushed = this.pushScores();
+    await this.ui.leaderboard({
+      available: this.platform.leaderboards,
+      authorized: () => this.platform.isAuthorized(),
+      login: async () => {
+        const ok = await this.platform.login();
+        if (ok) await this.pushScores();
+        return ok;
+      },
+      load: async (board) => {
+        await pushed;
+        return this.platform.getBoard(board);
+      },
+      mine: (board) => (board === 'week' ? soldThisWeek(this.state, Date.now()) : this.state.sold),
+      decode: (board, score) => (board === 'week' ? decodeWeekly(score, Date.now()) : score),
+      resetIn: () => (weekEndsAt(Date.now()) - Date.now()) / 1000,
+    });
+  }
+
+  // ---------- слияние брейнротов ----------
+  private async merge(id: string) {
+    if (this.revealing || !canMerge(this.state.pets[id])) return;
+    this.state = mergePet(this.state, id);
+    void this.save();
+    this.revealing = true;
+    sfx.shake();
+    const p = this.state.pets[id];
+    await this.ui.mergeShow(id, p.stars, petBonus(id, p), () => {
+      sfx.reveal(Math.min(5, 2 + p.stars));
+      this.scene.setPets(this.topPets());
+      this.ui.render(this.state, Date.now());
+    });
+    this.revealing = false;
+    this.ui.render(this.state, Date.now());
   }
 
   // о чём маскот напоминает в первую очередь
@@ -339,7 +401,7 @@ export class Game {
     return Object.entries(this.state.pets)
       .filter(([id]) => PET_RARITY[id])
       .sort((a, b) => petBonus(b[0], b[1]) - petBonus(a[0], a[1]))
-      .map(([id, p]) => ({ id, mut: p.mut }));
+      .map(([id, p]) => ({ id, mut: p.mut, stars: p.stars }));
   }
 
   // Ящик: за деньги, за рекламу (золотой) или бесплатно (подарок, задание).
