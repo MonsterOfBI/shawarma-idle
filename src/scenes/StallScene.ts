@@ -80,6 +80,7 @@ export class StallScene extends Phaser.Scene {
   private sky!: Phaser.GameObjects.Graphics;
   private stars!: Phaser.GameObjects.Graphics;
   private backdrop!: Pen;
+  private backdropRT!: Phaser.GameObjects.RenderTexture;
   private props!: Phaser.GameObjects.Container;
   private extras!: Phaser.GameObjects.Container;
   private night!: Phaser.GameObjects.Rectangle;
@@ -174,7 +175,10 @@ export class StallScene extends Phaser.Scene {
     }
     this.sky = this.add.graphics().setDepth(0);
     this.stars = this.add.graphics().setDepth(0.5);
-    this.backdrop = new Pen(this.add.graphics().setDepth(1), 2);
+    // Фон рисуется в текстуру и только потом на экран: тысячи фигур фона
+    // не пересчитываются каждый кадр, а только при перерисовке мира.
+    this.backdrop = new Pen(this.make.graphics({}, false), 2);
+    this.backdropRT = this.add.renderTexture(0, 0, this.scale.width, this.scale.height).setOrigin(0, 0).setDepth(1);
     this.props = this.add.container(0, 0).setDepth(1.5);
     this.extras = this.add.container(0, 0).setDepth(4);
     this.night = this.add.rectangle(0, 0, 10, 10, 0x140a2a, 0).setOrigin(0, 0).setDepth(8);
@@ -349,6 +353,9 @@ export class StallScene extends Phaser.Scene {
     this.drawSky(phase);
     this.backdrop.g.clear();
     BACKDROPS[LOCATIONS[this.location].id](this.backdrop, this.ctx());
+    const { width, height } = this.scale;
+    if (this.backdropRT.width !== width || this.backdropRT.height !== height) this.backdropRT.resize(width, height);
+    this.backdropRT.clear().draw(this.backdrop.g);
     this.night.setFillStyle(0x1a1450, 0.2 * this.nightK);
     this.lampGlow.setAlpha(0.12 + 0.4 * this.nightK);
     this.stall?.winGlow.setAlpha(0.05 + 0.3 * this.nightK);
