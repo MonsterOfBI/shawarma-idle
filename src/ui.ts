@@ -424,7 +424,7 @@ export class Ui {
     const ab = $('#btn-adbox');
     ab.classList.toggle('ready', adReady);
     ab.classList.toggle('wait', !adReady);
-    (ab.querySelector('.badge') as HTMLElement).hidden = true; // ящик за рекламу доступен всегда, не дёргаем игрока
+    (ab.querySelector('.badge') as HTMLElement).hidden = !adReady;
     $('#adbox-label').textContent = adReady ? t('sideBox') : formatDuration((s.adBoxAt - now) / 1000, lang());
   }
 
@@ -436,7 +436,7 @@ export class Ui {
     };
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
-    set('pets', canBuyBox(s, now) || anyMerge(s) ? '!' : '');
+    set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
     const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');

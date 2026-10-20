@@ -67,9 +67,9 @@ export type BoxKind = 'common' | 'golden' | 'god';
 
 // Шансы редкостей в процентах.
 export const BOX_ODDS: Record<BoxKind, Record<Rarity, number>> = {
-  // версия 2.11: редкие заметно чаще (легендарный 3,2 → 7 %, мифический 0,65 → 2 %, божественный 0,15 → 0,5 %)
-  common: { common: 44, rare: 30, epic: 16.5, legendary: 7, mythic: 2, god: 0.5 },
-  golden: { common: 0, rare: 34, epic: 36, legendary: 20, mythic: 7.5, god: 2.5 },
+  // версия 2.12: редкие чуть чаще, чем в 2.10 (легендарный 3,2 → 4,5 %, мифический 0,65 → 1,2 %, божественный 0,15 → 0,3 %)
+  common: { common: 52, rare: 29, epic: 13, legendary: 4.5, mythic: 1.2, god: 0.3 },
+  golden: { common: 0, rare: 41, epic: 35, legendary: 17, mythic: 5.4, god: 1.6 },
   god: { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0, god: 100 },
 };
 

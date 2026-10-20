@@ -37,8 +37,8 @@ export const FRENZY_MULT = 7;
 export const FRENZY_SECONDS = 30;
 export const TAP_FRENZY_MULT = 10;
 export const TAP_FRENZY_SECONDS = 15;
-// Золотой ящик за рекламу — без отката (версия 2.11): ограничивает сама реклама.
-export const AD_BOX_COOLDOWN_MS = 0;
+// Бесплатный золотой ящик за рекламу — не чаще раза в 4 минуты (вернули в версии 2.12).
+export const AD_BOX_COOLDOWN_MS = 4 * 60 * 1000;
 
 export interface GameState {
   version: number;
@@ -427,10 +427,10 @@ export function minutesOfIncome(state: GameState, now: number, minutes: number):
 
 // ---------- ящики с брейнротами ----------
 
-// Обычный ящик стоит примерно 2 минуты дохода (с тапами 3 раза в секунду)
-// и дорожает на 2 % с каждым открытым ящиком (версия 2.11; было 6 минут и +4 %).
-export const BOX_MINUTES = 2;
-export const BOX_GROWTH = 0.02;
+// Обычный ящик стоит примерно 3 минуты дохода (с тапами 3 раза в секунду)
+// и дорожает на 3 % с каждым открытым ящиком (версия 2.12; в 2.11 было 2 минуты и +2 %, до этого 6 минут и +4 %).
+export const BOX_MINUTES = 3;
+export const BOX_GROWTH = 0.03;
 export function boxCost(state: GameState, now: number): number {
   return Math.round(minutesOfIncome(state, now, BOX_MINUTES) * (1 + state.boxesOpened * BOX_GROWTH));
 }
@@ -445,7 +445,7 @@ export function buyBox(state: GameState, now: number, rand: () => number) {
 }
 
 export function adBoxReady(state: GameState, now: number): boolean {
-  return AD_BOX_COOLDOWN_MS === 0 || now >= state.adBoxAt;
+  return now >= state.adBoxAt;
 }
 
 export function freeBox(state: GameState, now: number, kind: BoxKind, rand: () => number, fromAd = false) {

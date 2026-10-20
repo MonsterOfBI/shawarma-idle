@@ -527,8 +527,8 @@ describe('версия 2.11', () => {
     for (const k of ['common', 'golden', 'god'] as const) {
       expect(Object.values(BOX_ODDS[k]).reduce((a, b) => a + b, 0)).toBeCloseTo(100);
     }
-    expect(BOX_ODDS.common.legendary).toBeGreaterThanOrEqual(7);
-    expect(BOX_ODDS.common.god).toBeGreaterThanOrEqual(0.5);
+    expect(BOX_ODDS.common.legendary).toBeGreaterThan(3.2);
+    expect(BOX_ODDS.common.god).toBeGreaterThan(0.15);
   });
 
   it('божественный ящик всегда даёт бога', () => {
@@ -539,16 +539,16 @@ describe('версия 2.11', () => {
     }
   });
 
-  it('ящик стоит 2 минуты дохода и дорожает на 2 % за открытый', () => {
+  it('ящик стоит 3 минуты дохода и дорожает на 3 % за открытый', () => {
     const s = { ...newGame(0), levels: { knife: 20, grill: 10 } };
-    expect(boxCost(s, 0)).toBe(minutesOfIncome(s, 0, 2));
-    expect(boxCost({ ...s, boxesOpened: 50 }, 0)).toBe(Math.round(minutesOfIncome(s, 0, 2) * 2));
+    expect(boxCost(s, 0)).toBe(minutesOfIncome(s, 0, 3));
+    expect(boxCost({ ...s, boxesOpened: 100 }, 0)).toBe(Math.round(minutesOfIncome(s, 0, 3) * 4));
   });
 
-  it('золотой ящик за рекламу можно открывать подряд', () => {
+  it('золотой ящик за рекламу снова с откатом 4 минуты', () => {
     const r = freeBox(newGame(0), 1000, 'golden', () => 0.5, true);
-    expect(adBoxReady(r.state, 1000)).toBe(true);
-    expect(adBoxReady({ ...newGame(0), adBoxAt: 1e15 }, 0)).toBe(true);
+    expect(adBoxReady(r.state, 1000)).toBe(false);
+    expect(adBoxReady(r.state, 1000 + 4 * 60 * 1000)).toBe(true);
   });
 
   it('задание платит не больше 12 минут дохода, даже из старого сохранения', () => {

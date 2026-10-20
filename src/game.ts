@@ -236,7 +236,7 @@ export class Game {
     const s = this.state;
     const out: string[] = [];
     if (canRelocate(s)) out.push('barkMove');
-    if (canBuyBox(s, now)) out.push('barkBox');
+    if (adBoxReady(s, now) || canBuyBox(s, now)) out.push('barkBox');
     if (canClaimDaily(s, dayKey(new Date()))) out.push('barkDaily');
     // новичку подсказываем про улучшения, опытному не надоедаем
     if (s.bought < 10 && UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1))) out.push('barkUp');
@@ -413,10 +413,8 @@ export class Game {
     if (how === 'buy') r = buyBox(this.state, now, Math.random);
     else if (how === 'free') r = freeBox(this.state, now, kind, Math.random);
     else {
-      if (!adBoxReady(this.state, now)) {
-        this.ui.toast(t('boxWait', '…'));
-        return;
-      }
+      // пока идёт откат, кнопка просто показывает таймер, без всплывающей надписи посреди экрана
+      if (!adBoxReady(this.state, now)) return;
       this.setPaused(true);
       const ok = await this.platform.showRewarded();
       this.setPaused(false);
