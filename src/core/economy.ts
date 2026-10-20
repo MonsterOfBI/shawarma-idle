@@ -542,7 +542,7 @@ export function fastMove(state: GameState, now: number): boolean {
   return best !== undefined && runTime(state, now) < best;
 }
 
-// Каждый переезд дарит легендарный ящик (легендарный брейнрот или выше).
+// Каждый переезд дарит мифический ящик (мифический брейнрот или выше).
 export const MOVE_BOX: BoxKind = 'legend';
 
 export function relocate(state: GameState, now: number): GameState {

@@ -556,7 +556,7 @@ export class Game {
     if (!this.state.owned.noAds) {
       await this.during('ad', this.platform.showInterstitial(), AD_PAUSE_MAX_MS);
     }
-    // подарки за переезд: легендарный ящик всегда, золотой — за рекорд скорости
+    // подарки за переезд: мифический ящик всегда, золотой — за рекорд скорости
     await wait(1800);
     await this.openBox(MOVE_BOX, 'free', t('moveBoxTitle'));
     if (fast) {
