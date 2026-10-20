@@ -4,6 +4,7 @@
 
 import { ACHIEVEMENTS, ACHIEVEMENT_BONUS } from './core/achievements';
 import { DAILY, canClaimDaily, dayKey, nextDailyIndex } from './core/daily';
+import { WEEKLY_DAYS, canClaimWeekly, weekStart, weekday } from './core/weekly';
 import {
   type BuyMode,
   type GameState,
@@ -54,6 +55,7 @@ export interface UiActions {
   buyBox(): void;
   adBox(): void;
   claimDaily(): void;
+  claimWeekly(): void;
   openDaily(): void;
   claimQuest(i: number): void;
   merge(id: string): void;
@@ -311,6 +313,10 @@ export class Ui {
     $('#h-daily').textContent = t('hDaily');
     $('#h-quests').textContent = t('hQuests');
     $('#daily-claim').addEventListener('click', () => actions.claimDaily());
+    $('#h-weekly').textContent = t('hWeekly');
+    $('#weekly-claim').addEventListener('click', () => actions.claimWeekly());
+    const wk = $('#weekly-days');
+    for (let i = 0; i < 7; i++) wk.append(el('span', 'wk-day', t(`wd_${i}`)));
     $('#ach-title').textContent = t('achTitle');
     const awards = $('#awards');
     for (const a of ACHIEVEMENTS) {
@@ -482,6 +488,7 @@ export class Ui {
     const left = (until: number) => formatDuration(Math.max(0, (until - now) / 1000), lang());
     const items: [string, string, string][] = [];
     if (boostActive(s, now)) items.push(['boost', 'x2', t('buffBoost', left(s.boostUntil))]);
+    if (now < s.starterUntil) items.push(['starter', 'gift', t('buffBoost', left(s.starterUntil))]);
     if (now < s.frenzyUntil) items.push(['frenzy', 'frenzy', t('buffFrenzy', left(s.frenzyUntil))]);
     if (now < s.tapFrenzyUntil) items.push(['taps', 'finger', t('buffTaps', left(s.tapFrenzyUntil))]);
     const stage = $('#stage');
@@ -542,7 +549,7 @@ export class Ui {
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
     set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
-    const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0);
+    const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0) + (canClaimWeekly(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');
     set('shop', '');
@@ -702,12 +709,34 @@ export class Ui {
     return can;
   }
 
+  private renderWeekly(s: GameState) {
+    const day = today();
+    const thisWeek = s.weekly.week === weekStart(day);
+    const days = thisWeek ? s.weekly.days : [];
+    const played = new Set(days.map(weekday));
+    const cells = $('#weekly-days').children;
+    for (let i = 0; i < 7; i++) {
+      cells[i].classList.toggle('on', played.has(i));
+      cells[i].classList.toggle('now', i === weekday(day));
+    }
+    $('#weekly-count').textContent = `${Math.min(days.length, WEEKLY_DAYS)} / ${WEEKLY_DAYS}`;
+    const can = canClaimWeekly(s, day);
+    const claimed = thisWeek && s.weekly.claimed;
+    $('#weekly-note').textContent = claimed ? t('weeklyDone') : can ? t('weeklyReady') : t('weeklyNote', WEEKLY_DAYS - days.length);
+    const btn = $<HTMLButtonElement>('#weekly-claim');
+    btn.disabled = !can;
+    btn.classList.toggle('pulse', can);
+    btn.textContent = claimed ? t('dailyTaken') : t('weeklyClaim');
+  }
+
   private renderQuests(s: GameState, now: number) {
     const can = this.fillDaily($('#daily-strip'), s, now);
     $('#daily-streak').textContent = t('dailyStreak', can ? nextDailyIndex(s, today()) : s.daily.streak);
     const claim = $<HTMLButtonElement>('#daily-claim');
     claim.disabled = !can;
     claim.textContent = can ? t('dailyClaim') : t('dailyTaken');
+
+    this.renderWeekly(s);
 
     const box = $('#quests');
     const waits = [...(s.questWait ?? [])].sort((a, b) => a - b).slice(0, Math.max(0, QUEST_SLOTS - s.quests.length));
@@ -849,6 +878,7 @@ export class Ui {
   private renderShop(s: GameState, now: number) {
     const box = $('#shop');
     const items: { id: ProductId; ico: string; name: string; text: string; owned: boolean; hot?: boolean }[] = [
+      { id: 'starter_pack', ico: 'gift', name: t('shopStarter'), text: t('shopStarterText'), owned: s.owned.starter, hot: true },
       { id: 'x2_forever', ico: 'x2', name: t('shopX2'), text: t('shopX2Text'), owned: s.owned.x2Forever, hot: true },
       { id: 'no_ads', ico: 'play', name: t('shopNoAds'), text: t('shopNoAdsText'), owned: s.owned.noAds },
       { id: 'cash_pack', ico: 'bag', name: t('shopCash'), text: t('shopCashText', fmt(cashPackAmount(s, now))), owned: false },
@@ -955,7 +985,7 @@ export class Ui {
     const box = $('#reveal');
     const crate = box.querySelector('.reveal-crate') as HTMLElement;
     crate.classList.toggle('gold', kind !== 'common');
-    crate.classList.toggle('legend', kind === 'legend' || kind === 'god');
+    crate.classList.toggle('legend', kind === 'legend' || kind === 'legendary' || kind === 'god');
     const head = $('#rv-title');
     head.textContent = title;
     head.hidden = !title;

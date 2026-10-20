@@ -4,6 +4,7 @@ import Phaser from 'phaser';
 import { setAudioPaused, setInstrument, setMuted, setMusic, setVolumes, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
+import { claimWeekly, markPlayed } from './core/weekly';
 import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, openBox, petBonus } from './core/pets';
 import { claimQuest, ensureQuests, refreshEarnQuests } from './core/quests';
 import {
@@ -13,6 +14,7 @@ import {
   RUSH_SECONDS,
   addBoost,
   addMoney,
+  grantStarter,
   buyN,
   canBuyN,
   isMaxed,
@@ -77,6 +79,9 @@ const SAVE_EVERY_MS = 10_000;
 const SCORE_EVERY_MS = 60_000;
 // если вкладка была скрыта дольше минуты, считаем это отсутствием и показываем окно офлайн-дохода
 const AWAY_MS = 60_000;
+// полноэкранная реклама не чаще раза в 3 минуты (правила Яндекса допускают, игрокам не надоедает)
+const INTERSTITIAL_GAP_MS = 3 * 60_000;
+let lastInterstitial = 0;
 const STUCK_PAUSE_MS = 2500;
 const AD_PAUSE_MAX_MS = 120_000;
 const BUY_PAUSE_MAX_MS = 300_000;
@@ -123,6 +128,7 @@ export class Game {
       buyBox: () => void this.openBox('common', 'buy'),
       adBox: () => void this.openBox('golden', 'ad'),
       claimDaily: () => void this.claimDaily(),
+      claimWeekly: () => void this.claimWeekly(),
       openDaily: () => void this.openDaily(),
       claimQuest: (i) => void this.claimQuest(i),
       merge: (id) => void this.merge(id),
@@ -173,6 +179,7 @@ export class Game {
     this.applyOwned(restored.owned);
     for (let i = 0; i < restored.pendingCash; i++) this.state = addMoney(this.state, cashPackAmount(this.state, now));
     for (let i = 0; i < restored.pendingGods; i++) this.state = openBox(this.state, 'god', Math.random).state;
+    for (let i = 0; i < restored.pendingStarters; i++) this.state = openBox(grantStarter(this.state, now).state, 'golden', Math.random).state;
     this.ui.setProducts(await this.platform.getProducts(), this.platform.purchasesAvailable);
 
     this.platform.onPause((p, reason) => this.hold(reason, p));
@@ -222,7 +229,7 @@ export class Game {
       void this.welcomeBack(now);
       return;
     }
-    this.state = ensureQuests(tick(this.state, now), now, Math.random);
+    this.state = markPlayed(ensureQuests(tick(this.state, now), now, Math.random), dayKey(new Date(now)));
     this.events(now);
     this.scene.setIncome(incomePerSecond(this.state, now), serveIntervalMs(this.state, now));
     this.scene.setLook(this.state.levels);
@@ -296,6 +303,14 @@ export class Game {
     return out;
   }
 
+  // Полноэкранная реклама только в логичных паузах (переезд, возвращение), без «Без рекламы»
+  // и не чаще раза в 3 минуты.
+  private async interstitial() {
+    if (this.state.owned.noAds || Date.now() - lastInterstitial < INTERSTITIAL_GAP_MS) return;
+    lastInterstitial = Date.now();
+    await this.during('ad', this.platform.showInterstitial(), AD_PAUSE_MAX_MS);
+  }
+
   private async welcomeBack(now: number) {
     const earned = offlineEarnings(this.state, now);
     // короткую отлучку (перезагрузка страницы) засчитываем молча, без окна
@@ -318,6 +333,9 @@ export class Game {
       }
       this.state = collectOffline(this.state, now, factor);
       this.state = { ...this.state, lastSeen: Date.now() };
+      // возвращение после окна «Пока вас не было» — логичная пауза; если игрок только что
+      // смотрел рекламу за ×2, вторую подряд не показываем
+      if (choice !== 'double') await this.interstitial();
     } finally {
       this.modalOpen = false;
       this.gameplayStart();
@@ -543,6 +561,16 @@ export class Game {
     for (const kind of r.boxes) await this.openBox(kind, 'free');
   }
 
+  private async claimWeekly() {
+    const r = claimWeekly(this.state, dayKey(new Date()));
+    if (!r) return;
+    this.state = r.state;
+    sfx.claim();
+    void this.save();
+    this.ui.render(this.state, Date.now());
+    await this.openBox(r.box, 'free', t('weeklyBoxTitle'));
+  }
+
   private async claimQuest(i: number) {
     const r = claimQuest(this.state, i, Date.now(), Math.random);
     if (!r) return;
@@ -582,9 +610,7 @@ export class Game {
     if (this.state.location === LOCATIONS.length - 1 && this.state.stars === 0) setTimeout(() => this.ui.toast(t('storyEnd'), 'medal'), 2500);
     await this.save();
     // полноэкранная реклама только в этой логичной паузе и только без покупки «Без рекламы»
-    if (!this.state.owned.noAds) {
-      await this.during('ad', this.platform.showInterstitial(), AD_PAUSE_MAX_MS);
-    }
+    await this.interstitial();
     // подарки за переезд: мифический ящик всегда, золотой — за рекорд скорости
     // ящик ждёт, пока раскроется новая улица и уедет открытка точки
     await wait(3000);
@@ -602,6 +628,16 @@ export class Game {
     const now = Date.now();
     if (id === 'god_pet') {
       await this.openBox('god', 'free');
+      return;
+    }
+    if (id === 'starter_pack') {
+      const r = grantStarter(this.state, now);
+      this.state = r.state;
+      sfx.reward();
+      this.ui.toast(t('starterGot', formatNumber(r.money, lang())), 'money');
+      this.scene.celebrate(true);
+      void this.save();
+      await this.openBox('golden', 'free');
       return;
     }
     if (id === 'cash_pack') this.state = addMoney(this.state, cashPackAmount(this.state, now));

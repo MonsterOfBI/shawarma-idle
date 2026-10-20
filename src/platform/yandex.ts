@@ -10,9 +10,10 @@ declare global {
   }
 }
 
-const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack', 'god_pet'];
+const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack', 'god_pet', 'starter_pack'];
 // расходуемые покупки: их списывают сразу после выдачи
-const CONSUMABLE = ['cash_pack', 'god_pet'];
+// starter_pack тоже расходуемый: «продан один раз» помнит само сохранение (owned.starter)
+const CONSUMABLE = ['cash_pack', 'god_pet', 'starter_pack'];
 // Технические имена лидербордов. Их нужно создать в консоли Яндекс Игр (см. docs/yandex-publish.md).
 export const LEADERBOARD_NAMES: Record<Board, string> = { week: 'shawarmaWeek', total: 'shawarmaTotal' };
 
@@ -231,15 +232,16 @@ export async function createYandexPlatform(): Promise<Platform | null> {
       }
     },
     async restorePurchases() {
-      if (!payments) return { owned: [], pendingCash: 0, pendingGods: 0 };
+      if (!payments) return { owned: [], pendingCash: 0, pendingGods: 0, pendingStarters: 0 };
       try {
         const list: any[] = await payments.getPurchases();
         const owned = list.map((p) => p.productID).filter((id: string) => id === 'no_ads' || id === 'x2_forever');
         const pendingCash = await consumeCash(list);
         const pendingGods = await consumeCash(list, 'god_pet');
-        return { owned, pendingCash, pendingGods };
+        const pendingStarters = await consumeCash(list, 'starter_pack');
+        return { owned, pendingCash, pendingGods, pendingStarters };
       } catch {
-        return { owned: [], pendingCash: 0, pendingGods: 0 };
+        return { owned: [], pendingCash: 0, pendingGods: 0, pendingStarters: 0 };
       }
     },
     onPause(cb) {

@@ -31,6 +31,9 @@ import { formatNumber } from './format';
 import { LOCATIONS } from './locations';
 import { PROFILES, simulate } from './sim';
 import { UPGRADES, upgradeCost } from './upgrades';
+import { canClaimWeekly, claimWeekly, markPlayed, weekStart, weekday } from './weekly';
+import { rollRarity } from './pets';
+import { grantStarter } from './economy';
 
 describe('экономика', () => {
   it('тап даёт 1 ₽ в начале игры', () => {
@@ -781,13 +784,66 @@ describe('настройки', () => {
   });
 
   it('начать заново: прогресс обнуляется, покупки и настройки остаются', () => {
-    const s = { ...newGame(0), money: 1e9, location: 3, pets: { vaca: { count: 2, mut: 0, stars: 0 } }, owned: { noAds: true, x2Forever: true }, langPref: 'en', sfxVol: 0.3 };
+    const s = { ...newGame(0), money: 1e9, location: 3, pets: { vaca: { count: 2, mut: 0, stars: 0 } }, owned: { noAds: true, x2Forever: true, starter: true }, langPref: 'en', sfxVol: 0.3 };
     const r = resetProgress(s, 100);
     expect(r.money).toBe(0);
     expect(r.location).toBe(0);
     expect(r.pets).toEqual({});
-    expect(r.owned).toEqual({ noAds: true, x2Forever: true });
+    expect(r.owned).toEqual({ noAds: true, x2Forever: true, starter: true });
     expect(r.langPref).toBe('en');
     expect(r.sfxVol).toBe(0.3);
+  });
+});
+
+describe('недельный сундук', () => {
+  it('неделя начинается в понедельник', () => {
+    expect(weekStart('2026-10-20')).toBe('2026-10-19'); // вторник → понедельник
+    expect(weekStart('2026-10-25')).toBe('2026-10-19'); // воскресенье
+    expect(weekStart('2026-10-26')).toBe('2026-10-26');
+    expect(weekday('2026-10-25')).toBe(6);
+  });
+
+  it('5 разных дней из 7 — легендарный ящик, один раз за неделю', () => {
+    let s = newGame(0);
+    for (const d of ['2026-10-19', '2026-10-19', '2026-10-20', '2026-10-22', '2026-10-23']) s = markPlayed(s, d);
+    expect(s.weekly.days.length).toBe(4);
+    expect(canClaimWeekly(s, '2026-10-23')).toBe(false);
+    s = markPlayed(s, '2026-10-25');
+    expect(canClaimWeekly(s, '2026-10-25')).toBe(true);
+    const r = claimWeekly(s, '2026-10-25')!;
+    expect(r.box).toBe('legendary');
+    expect(canClaimWeekly(r.state, '2026-10-25')).toBe(false);
+    // новая неделя — счёт заново
+    const next = markPlayed(r.state, '2026-10-26');
+    expect(next.weekly).toEqual({ week: '2026-10-26', days: ['2026-10-26'], claimed: false });
+  });
+
+  it('незабранный сундук сгорает с концом недели', () => {
+    let s = newGame(0);
+    for (const d of ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']) s = markPlayed(s, d);
+    expect(canClaimWeekly(s, '2026-10-27')).toBe(false);
+  });
+
+  it('легендарный ящик: только легендарные и божественные', () => {
+    for (const r of [0, 0.5, 0.86, 0.9, 0.999]) expect(['legendary', 'god']).toContain(rollRarity('legendary', r));
+  });
+
+  it('старое сохранение получает пустую неделю и не купленный стартовый набор', () => {
+    const s = normalize({ version: 8 }, 0);
+    expect(s.weekly).toEqual({ week: '', days: [], claimed: false });
+    expect(s.owned.starter).toBe(false);
+    expect(s.starterUntil).toBe(0);
+  });
+});
+
+describe('стартовый набор', () => {
+  it('×2 к доходу на сутки и 30 минут дохода', () => {
+    const s0 = { ...newGame(0), levels: { grill_helper: 10 } };
+    const per = incomePerSecond(s0, 0);
+    const { state, money } = grantStarter(s0, 0);
+    expect(money).toBe(minutesOfIncome(s0, 0, 30));
+    expect(state.owned.starter).toBe(true);
+    expect(incomePerSecond(state, 1000)).toBeCloseTo(per * 2, 6);
+    expect(incomePerSecond(state, 24 * 3600_000 + 1)).toBeCloseTo(per, 6);
   });
 });

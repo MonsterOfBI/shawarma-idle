@@ -517,6 +517,17 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 .sheet .kicker { color: var(--gold); }
 .sheet .daily { margin-bottom: 8px; }
 
+/* недельный сундук */
+.weekly { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; margin-bottom: 16px; }
+.wk-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.wk-day {
+  display: grid; place-items: center; height: 30px; border-radius: 10px; font-family: var(--display); font-weight: 800; font-size: 10px;
+  background: rgba(42, 27, 61, 0.08); color: rgba(42, 27, 61, 0.55); box-shadow: inset 0 0 0 2px rgba(42, 27, 61, 0.12);
+}
+.wk-day.on { background: var(--pickle); color: var(--cream); box-shadow: 0 0 0 2px var(--plum-0); }
+.wk-day.now:not(.on) { box-shadow: inset 0 0 0 2px var(--gold); color: var(--plum); }
+.wk-note { margin: 0; font-size: 12px; line-height: 1.3; color: rgba(42, 27, 61, 0.75); }
+
 /* ---------- открытие ящика ---------- */
 .reveal {
   --r: var(--r-common);
