@@ -66,6 +66,7 @@ export interface GameState {
   adBoxAt: number; // мс; когда снова можно взять ящик за рекламу
   daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
   quests: Quest[];
+  questWait: number[]; // мс; когда появятся новые задания на места выполненных (версия 2.15)
   questsDone: number;
   merges: number; // сколько раз сливали брейнротов
   sold: number; // продано шаурмы за всё время: тапы плюс обслуженные гости (для лидерборда)
@@ -109,6 +110,7 @@ export function newGame(now: number): GameState {
     adBoxAt: 0,
     daily: { streak: 0, last: '' },
     quests: [],
+    questWait: [],
     questsDone: 0,
     merges: 0,
     runStart: now,
@@ -164,6 +166,7 @@ export function normalize(raw: unknown, now: number): GameState {
       last: typeof r.daily?.last === 'string' ? r.daily.last : '',
     },
     quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],
+    questWait: Array.isArray(r.questWait) ? r.questWait.filter((x: unknown) => typeof x === 'number' && Number.isFinite(x)).slice(0, 3) : [],
     questsDone: Math.floor(num(r.questsDone, 0)),
     merges: Math.floor(num(r.merges, 0)),
     // до версии 2.9 продажи не считали: начинаем с числа тапов

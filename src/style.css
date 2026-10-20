@@ -387,6 +387,9 @@ button:disabled { cursor: default; }
 .quest-prog .bar { flex: 1; height: 10px; }
 .quest-prog span { font-family: var(--display); font-weight: 800; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
 .quest .btn { min-width: 86px; min-height: 46px; font-size: 11.5px; padding: 5px 8px; }
+.quest.wait { opacity: 0.78; background: repeating-linear-gradient(-45deg, var(--cream) 0 10px, var(--cream-2) 10px 20px); }
+.quest-wait-text { margin-top: 4px; font-size: 11.5px; color: var(--ink-soft); }
+.quest-timer { min-width: 86px; text-align: center; font-family: var(--display); font-weight: 900; font-size: 18px; font-variant-numeric: tabular-nums; color: var(--plum); }
 .quest.ready { background: linear-gradient(90deg, #fff1b8, var(--cream)); }
 .quest.ready .btn { animation: nudge 1.1s ease-in-out infinite; }
 

@@ -423,8 +423,29 @@ describe('версия 2.0', () => {
     s = { ...s, taps: s.taps + s.quests[i].target };
     expect(questDone(s, s.quests[i])).toBe(true);
     const r = claimQuest(s, i, 0, Math.random)!;
-    expect(r.state.quests).toHaveLength(3);
+    // версия 2.15: новое задание приходит не сразу, а через 20 минут
+    expect(r.state.quests).toHaveLength(2);
     expect(r.state.questsDone).toBe(1);
+    expect(nextQuestAt(r.state)).toBe(QUEST_REFILL_MS);
+    expect(ensureQuests(r.state, QUEST_REFILL_MS - 1, Math.random).quests).toHaveLength(2);
+    const later = ensureQuests(r.state, QUEST_REFILL_MS, Math.random);
+    expect(later.quests).toHaveLength(3);
+    expect(later.questWait).toEqual([]);
+    expect(nextQuestAt(later)).toBeNull();
+  });
+
+  it('задания 2.15: цели втрое больше, награда 2 минуты дохода или ящик', async () => {
+    const { ensureQuests } = await import('./quests');
+    for (let k = 0; k < 30; k++) {
+      const s = ensureQuests(newGame(0), 0, seq(k / 30, 0.5, k / 30, 0.1, k / 30, 0.9));
+      for (const q of s.quests) {
+        if (q.kind === 'taps') expect(q.target).toBe(240);
+        if (q.kind === 'buy') expect(q.target).toBe(24);
+        if (q.reward.minutes) expect(q.reward.minutes).toBe(QUEST_MINUTES);
+      }
+    }
+    expect(QUEST_MINUTES).toBe(2);
+    expect(QUEST_BOX_CHANCE).toBe(0.2);
   });
 
   it('старое сохранение получает пустых питомцев, календарь и задания', () => {
@@ -432,6 +453,7 @@ describe('версия 2.0', () => {
     expect(s.pets).toEqual({ tralalero: { count: 2, mut: 2, stars: 0 } });
     expect(s.daily).toEqual({ streak: 0, last: '' });
     expect(s.quests).toEqual([]);
+    expect(s.questWait).toEqual([]);
     expect(s.bought).toBe(0);
   });
 });
@@ -513,7 +535,7 @@ describe('продажи для лидерборда', () => {
 
 import { PRICE_MULT, adBoxReady, boxCost, freeBox, minutesOfIncome } from './economy';
 import { openBox } from './pets';
-import { claimQuest } from './quests';
+import { claimQuest, nextQuestAt, QUEST_REFILL_MS, QUEST_MINUTES, QUEST_BOX_CHANCE } from './quests';
 
 describe('версия 2.11', () => {
   it('улучшения на помойке дороже в 1,5 раза, дальше вдвое', () => {
@@ -556,10 +578,10 @@ describe('версия 2.11', () => {
     expect(adBoxReady(r.state, 1000 + 4 * 60 * 1000)).toBe(true);
   });
 
-  it('задание платит не больше 12 минут дохода, даже из старого сохранения', () => {
+  it('задание платит не больше 2 минут дохода, даже из старого сохранения', () => {
     const s = { ...newGame(0), levels: { knife: 20, grill: 10 }, taps: 1000, quests: [{ kind: 'taps' as const, target: 10, start: 0, reward: { minutes: 60 } }] };
     const r = claimQuest(s, 0, 0, () => 0.9)!;
-    expect(r.money).toBe(minutesOfIncome(s, 0, 12));
+    expect(r.money).toBe(minutesOfIncome(s, 0, 2));
   });
 });
 

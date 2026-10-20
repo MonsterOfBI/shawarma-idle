@@ -35,7 +35,7 @@ import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { BRAINROTS, BRAINROT_BY_ID, payOf } from './core/brainrots';
 import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult } from './core/pets';
-import { questDone, questProgress, counter } from './core/quests';
+import { QUEST_SLOTS, questDone, questProgress, counter } from './core/quests';
 import { UPGRADES } from './core/upgrades';
 import { lang, t } from './i18n';
 import { awardIcon, icon, ui } from './icons';
@@ -605,7 +605,8 @@ export class Ui {
     claim.textContent = can ? t('dailyClaim') : t('dailyTaken');
 
     const box = $('#quests');
-    const key = s.quests.map((q) => `${q.kind}${q.target}${q.start}`).join();
+    const waits = [...(s.questWait ?? [])].sort((a, b) => a - b).slice(0, Math.max(0, QUEST_SLOTS - s.quests.length));
+    const key = s.quests.map((q) => `${q.kind}${q.target}${q.start}`).join() + `|${waits.length}`;
     if (key !== this.questKey) {
       this.questKey = key;
       box.replaceChildren(
@@ -626,8 +627,25 @@ export class Ui {
           card.append(ic, info, btn);
           return card;
         }),
+        // места выполненных заданий: новое задание придёт по таймеру
+        ...waits.map(() => {
+          const card = el('div', 'card quest wait');
+          const ic = el('div', 'quest-ico');
+          ic.innerHTML = icon('list');
+          const info = el('div', '');
+          info.append(el('div', 'quest-name', t('questWaitTitle')), el('div', 'quest-wait-text', ''));
+          card.append(ic, info, el('div', 'quest-timer', ''));
+          return card;
+        }),
       );
     }
+    waits.forEach((at, k) => {
+      const card = box.children[s.quests.length + k] as HTMLElement | undefined;
+      if (!card) return;
+      const left = Math.max(0, Math.ceil((at - now) / 1000));
+      (card.querySelector('.quest-timer') as HTMLElement).textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      (card.querySelector('.quest-wait-text') as HTMLElement).textContent = t('questWaitText');
+    });
     s.quests.forEach((q, i) => {
       const card = box.children[i] as HTMLElement;
       const p = questProgress(s, q);
