@@ -9,6 +9,7 @@ import { drawBrainrot, drawMascot, setBakeRes, type Critter } from './brainrots'
 import { UPGRADES } from '../core/upgrades';
 import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, lerpColor, rng, shade } from './draw';
 import { type StallParts, buildStall } from './stall';
+import { Weather } from './weather';
 import { bake, dropTexture } from './bake';
 
 export { DISPLAY_FONT };
@@ -77,6 +78,7 @@ export class StallScene extends Phaser.Scene {
   readonly ready: Promise<void>;
 
   private location = 0;
+  private weather!: Weather;
   private look: Look = lookOf({});
   private lookKeyNow = '';
   private met = new Set<string>();
@@ -184,6 +186,7 @@ export class StallScene extends Phaser.Scene {
 
   create() {
     this.makeTextures();
+    this.weather = new Weather(this);
     // сочнее цвета всей улицы: чуть больше насыщенности и контраста (только WebGL)
     if (this.renderer.type === Phaser.WEBGL) {
       const fx = this.cameras.main.postFX?.addColorMatrix();
@@ -716,6 +719,7 @@ export class StallScene extends Phaser.Scene {
     }
     const apply = () => {
       this.location = index;
+      this.weather.reset();
       this.customers.forEach((c) => {
         c.bubble?.destroy();
         c.c.root.destroy();
@@ -1374,6 +1378,7 @@ export class StallScene extends Phaser.Scene {
       this.redrawWorld();
     }
     this.animateSky();
+    this.weather.update(delta, LOCATIONS[this.location].id, { w: this.scale.width, h: this.scale.height, horizon: this.horizonY, ground: this.groundY, unit: u }, this.moving);
 
     // вертел крутится: полосы мяса бегут вниз и сужаются вместе с конусом
     const k = (this.clock / 220) % 1;

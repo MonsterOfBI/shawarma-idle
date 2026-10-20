@@ -149,6 +149,7 @@ export class Game {
       render: { powerPreference: 'low-power', antialias: true },
     });
     await this.scene.ready;
+    document.querySelector<HTMLElement>('.loading-bar i')?.style.setProperty('--p', '100%');
     this.scene.setLocation(this.state.location);
     this.scene.setLook(this.state.levels);
     this.meetStaff();
