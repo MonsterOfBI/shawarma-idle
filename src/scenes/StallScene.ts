@@ -926,9 +926,15 @@ export class StallScene extends Phaser.Scene {
       }
     }
     this.tweens.killTweensOf(pop);
-    pop.style.setStyle({ fontSize: `${Math.round(19 * u)}px`, color, stroke: '#2a1b3d', strokeThickness: Math.round(5 * u) }, false);
-    if (pop.text === text) pop.updateText();
-    else pop.setText(text);
+    // Размер шрифта меняется: стиль надо задать целиком, иначе Phaser оставит высоту строки
+    // от старого размера и обрежет верх букв. Тот же размер — меняем только цвет и текст.
+    const fs = Math.round(19 * u);
+    if (pop.getData('fs') !== fs) {
+      pop.setData('fs', fs);
+      pop.setText(text).setStyle({ fontFamily: DISPLAY_FONT, fontStyle: '800', fontSize: `${fs}px`, color, stroke: '#2a1b3d', strokeThickness: Math.round(5 * u) });
+    } else if (pop.style.color !== color) {
+      pop.setText(text).setColor(color);
+    } else pop.setText(text);
     const tilt = Phaser.Math.Between(-8, 8);
     pop
       .setPosition(x + Phaser.Math.Between(-14, 14) * this.unit, y - 20 * this.unit)
