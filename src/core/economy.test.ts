@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type GameState,
   OFFLINE_CAP_SECONDS,
@@ -29,7 +29,7 @@ import { CRIT_CHANCE, CRIT_MULT, bulkAmount, bulkCost, buyN, canBuyN, customerCh
 import { UPGRADE_BY_ID } from './upgrades';
 import { formatNumber } from './format';
 import { LOCATIONS } from './locations';
-import { secondsToEarn } from './sim';
+import { PROFILES, simulate } from './sim';
 import { UPGRADES, upgradeCost } from './upgrades';
 
 describe('экономика', () => {
@@ -79,10 +79,10 @@ describe('экономика', () => {
     expect(s.boostUntil).toBe(60 * 60 * 1000);
   });
 
-  it('офлайн-доход ограничен четырьмя часами и не учитывает буст', () => {
+  it('офлайн-доход: половина дохода, не больше четырёх часов, без буста; реклама удваивает до полного', () => {
     const s = addBoost({ ...newGame(0), levels: { cashier: 1 } }, 0);
-    expect(offlineEarnings(s, 24 * 3600 * 1000)).toBe(OFFLINE_CAP_SECONDS);
-    expect(collectOffline(s, 24 * 3600 * 1000, 2).money).toBe(OFFLINE_CAP_SECONDS * 2);
+    expect(offlineEarnings(s, 24 * 3600 * 1000)).toBe(OFFLINE_CAP_SECONDS / 2);
+    expect(collectOffline(s, 24 * 3600 * 1000, 2).money).toBe(OFFLINE_CAP_SECONDS);
   });
 
   it('переезд сбрасывает улучшения и даёт множитель', () => {
@@ -167,30 +167,39 @@ describe('числа', () => {
 });
 
 describe('баланс', () => {
-  it('первый переезд занимает 13–33 минуты активной игры', () => {
-    const minutes = secondsToEarn(LOCATIONS[1].threshold, 3) / 60;
-    expect(minutes).toBeGreaterThan(13);
-    expect(minutes).toBeLessThan(33);
+  // Полная симуляция активного игрока без рекламы (версия 2.16): тапы с комбо и критами, Бомбардиро,
+  // час пик, питомцы из ящиков, задания, подарок дня, ящики за переезд. Считается один раз на все проверки.
+  let run: ReturnType<typeof simulate>;
+  let at: number[] = [];
+  let seg: number[] = [];
+  beforeAll(() => {
+    run = simulate(PROFILES.active, 3);
+    at = run.moves.map((m) => m.playMin);
+    seg = at.map((m, i) => m - (at[i - 1] ?? 0));
+  }, 180_000); // симуляция 12+ часов игры идёт около полминуты
+
+  it('первый переезд занимает 12–20 минут', () => {
+    expect(seg[0]).toBeGreaterThanOrEqual(12);
+    expect(seg[0]).toBeLessThanOrEqual(20);
   });
 
-  it('каждый следующий переезд занимает от 26 до 200 минут и дольше предыдущего', () => {
-    let prev = 0;
-    for (let loc = 1; loc < LOCATIONS.length - 1; loc++) {
-      const minutes = secondsToEarn(LOCATIONS[loc + 1].threshold, 3, { ...newGame(0), location: loc }) / 60;
-      expect(minutes).toBeGreaterThan(26);
-      expect(minutes).toBeLessThan(200);
-      expect(minutes).toBeGreaterThan(prev);
-      prev = minutes;
-    }
-  }, 30_000); // симуляция долгая: свой запас времени, чтобы тест не падал по таймауту
+  it('каждый следующий переезд по сюжету дольше предыдущего, дворец через 9–13 часов', () => {
+    for (let i = 1; i < LOCATIONS.length - 1; i++) expect(seg[i]).toBeGreaterThan(seg[i - 1]);
+    expect(at[LOCATIONS.length - 2]).toBeGreaterThanOrEqual(9 * 60);
+    expect(at[LOCATIONS.length - 2]).toBeLessThanOrEqual(13 * 60);
+  });
 
-  it('первые звёзды дворца тоже занимают от 5 минут до двух с половиной часов', () => {
-    for (let stars = 0; stars < 3; stars++) {
-      const s = { ...newGame(0), location: LOCATIONS.length - 1, stars };
-      const minutes = secondsToEarn(nextMove(s).threshold, 3, s) / 60;
-      expect(minutes).toBeGreaterThan(5);
-      expect(minutes).toBeLessThan(150);
+  it('первые звёзды дворца занимают от 20 минут до 4 часов каждая', () => {
+    const stars = seg.slice(LOCATIONS.length - 1);
+    expect(stars.length).toBe(3);
+    for (const m of stars) {
+      expect(m).toBeGreaterThanOrEqual(20);
+      expect(m).toBeLessThanOrEqual(240);
     }
+  });
+
+  it('ни один источник денег, кроме тапов, пассива и чеков, не даёт больше 20 %', () => {
+    for (const k of ['golden', 'quests', 'daily', 'offline']) expect(run.share[k]).toBeLessThanOrEqual(20);
   });
 
   it('комбо даёт от ×1 до ×2 к тапу', () => {
@@ -361,10 +370,10 @@ describe('версия 2.0', () => {
     s = a.state;
     expect(s.met).toContain(a.drop.id);
     const m1 = petMult(s);
-    expect(m1).toBeCloseTo(1.03);
+    expect(m1).toBeCloseTo(1.01);
     const b = openBox(s, 'common', seq(0, 0, 0.5));
     expect(b.drop.isNew).toBe(false);
-    expect(petMult(b.state)).toBeCloseTo(1.039);
+    expect(petMult(b.state)).toBeCloseTo(1.013);
     const moved = relocate({ ...b.state, runEarned: 1e20 }, 0);
     expect(moved.pets).toEqual(b.state.pets);
   });
@@ -373,7 +382,7 @@ describe('версия 2.0', () => {
     const { openBox, petMult } = await import('./pets');
     const r = openBox(newGame(0), 'common', seq(0, 0, 0.001));
     expect(r.drop.mut).toBe(2);
-    expect(petMult(r.state)).toBeCloseTo(1.15);
+    expect(petMult(r.state)).toBeCloseTo(1.05);
   });
 
   it('ящик за деньги списывает цену и дорожает', async () => {
@@ -386,11 +395,11 @@ describe('версия 2.0', () => {
     expect(buyBox(newGame(0), 0, Math.random)).toBeNull();
   });
 
-  it('Бомбардиро: лихорадка ×7 к доходу, бешеные тапы ×10', async () => {
+  it('Бомбардиро: лихорадка ×4 к доходу, бешеные тапы ×10', async () => {
     const { applyGolden } = await import('./economy');
     const s = { ...newGame(0), levels: { cashier: 1, knife: 1 } };
     const f = applyGolden(s, 0, 'frenzy');
-    expect(incomePerSecond(f, 1000) / incomePerSecond(s, 1000)).toBeCloseTo(7);
+    expect(incomePerSecond(f, 1000) / incomePerSecond(s, 1000)).toBeCloseTo(4);
     expect(incomePerSecond(f, 40_000)).toBeCloseTo(incomePerSecond(s, 40_000));
     const t2 = applyGolden(s, 0, 'taps');
     expect(tapValue(t2, 1000) / tapValue(s, 1000)).toBeCloseTo(10);
@@ -566,10 +575,10 @@ describe('версия 2.11', () => {
     }
   });
 
-  it('ящик стоит 3 минуты дохода и дорожает на 3 % за открытый', () => {
+  it('ящик стоит 3 минуты дохода и дорожает на 5 % за открытый', () => {
     const s = { ...newGame(0), levels: { knife: 20, grill: 10 } };
     expect(boxCost(s, 0)).toBe(minutesOfIncome(s, 0, 3));
-    expect(boxCost({ ...s, boxesOpened: 100 }, 0)).toBe(Math.round(minutesOfIncome(s, 0, 3) * 4));
+    expect(boxCost({ ...s, boxesOpened: 100 }, 0)).toBe(Math.round(minutesOfIncome(s, 0, 3) * 6));
   });
 
   it('золотой ящик за рекламу снова с откатом 4 минуты', () => {
@@ -644,5 +653,73 @@ describe('мотивация переезда', () => {
     expect(s.runStart).toBe(5000);
     expect(s.moveBest).toEqual({});
     expect(normalize({ version: 8, moveBest: { metro: 5, bad: 'x' } }, 0).moveBest).toEqual({ metro: 5 });
+  });
+});
+
+describe('версия 2.16', () => {
+  it('за рекламу не больше 12 золотых ящиков в день, на следующий день счёт заново', async () => {
+    const { AD_BOXES_PER_DAY, adBoxesLeft, adBoxDone, adBoxReady, freeBox, AD_BOX_COOLDOWN_MS } = await import('./economy');
+    const day1 = new Date(2026, 9, 20, 10).getTime();
+    let s = newGame(day1);
+    let now = day1;
+    for (let i = 0; i < AD_BOXES_PER_DAY; i++) {
+      expect(adBoxReady(s, now)).toBe(true);
+      s = freeBox(s, now, 'golden', () => 0.5, true).state;
+      now += AD_BOX_COOLDOWN_MS;
+    }
+    expect(AD_BOXES_PER_DAY).toBe(12);
+    expect(adBoxesLeft(s, now)).toBe(0);
+    expect(adBoxDone(s, now)).toBe(true);
+    expect(adBoxReady(s, now)).toBe(false);
+    const day2 = new Date(2026, 9, 21, 9).getTime();
+    expect(adBoxesLeft(s, day2)).toBe(12);
+    expect(adBoxReady(s, day2)).toBe(true);
+    // ящик не за рекламу лимит не тратит
+    expect(freeBox(s, now, 'golden', () => 0.5).state.adBoxes).toEqual(s.adBoxes);
+  });
+
+  it('гарант: 30-й ящик подряд без мифика — мифик или выше, 100-й без легендарного — легендарный или выше', async () => {
+    const { openBox, PITY_MYTHIC, PITY_LEGEND, pityLeft } = await import('./pets');
+    let s = newGame(0);
+    const low = () => 0.01; // всегда обычный
+    for (let i = 1; i < PITY_MYTHIC; i++) {
+      const r = openBox(s, 'common', low);
+      expect(r.drop.rarity).toBe('common');
+      s = r.state;
+    }
+    expect(pityLeft(s).mythic).toBe(1);
+    const hit = openBox(s, 'common', low);
+    expect(hit.drop.pity).toBe(true);
+    expect(['mythic', 'legendary', 'god']).toContain(hit.drop.rarity);
+    expect(hit.state.pity.mythic).toBe(0);
+    // счётчик легендарного не сбрасывается мификом
+    const s99 = { ...newGame(0), pity: { mythic: 5, legend: PITY_LEGEND - 1 } };
+    const leg = openBox(s99, 'common', low);
+    expect(leg.drop.pity).toBe(true);
+    expect(['legendary', 'god']).toContain(leg.drop.rarity);
+    expect(leg.state.pity).toEqual({ mythic: 0, legend: 0 });
+    // честно выпавший мифик сбрасывает только счётчик мифика
+    const lucky = openBox({ ...newGame(0), pity: { mythic: 10, legend: 10 } }, 'legend', () => 0.01);
+    expect(lucky.drop.rarity).toBe('mythic');
+    expect(lucky.drop.pity).toBe(false);
+    expect(lucky.state.pity).toEqual({ mythic: 0, legend: 11 });
+  });
+
+  it('питомцы втрое слабее, легендарный сильнее мифического', () => {
+    expect(RARITY_BONUS).toEqual({ common: 0.01, rare: 0.025, epic: 0.05, mythic: 0.12, legendary: 0.3, god: 1 });
+  });
+
+  it('мешок Бомбардиро: 45 секунд дохода и 20 тапов', () => {
+    const s = { ...newGame(0), levels: { cashier: 5, knife: 5 } };
+    expect(goldenReward(s, 0)).toBe(Math.round(incomePerSecond(s, 0) * 45 + tapValue(s, 0) * 20));
+  });
+
+  it('старое сохранение получает пустые счётчики гаранта и лимита рекламы', () => {
+    const s = normalize({ version: 8, money: 5 }, 0);
+    expect(s.pity).toEqual({ mythic: 0, legend: 0 });
+    expect(s.adBoxes).toEqual({ day: '', n: 0 });
+    const t = normalize({ version: 8, pity: { mythic: 7, legend: -3 }, adBoxes: { day: '2026-10-20', n: 4 } }, 0);
+    expect(t.pity).toEqual({ mythic: 7, legend: 0 });
+    expect(t.adBoxes).toEqual({ day: '2026-10-20', n: 4 });
   });
 });

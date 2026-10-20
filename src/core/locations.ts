@@ -14,13 +14,14 @@ export interface LocationDef {
 
 // Сюжет: от коробки у помойки до дворца шаурмы, пять точек. Каждая богаче предыдущей.
 // В версии 2.8 пляж и джунгли убраны из сюжета, а их персонажи разошлись по оставшимся точкам.
-// В версии 2.10 пороги подняты так, чтобы каждый переезд занимал на 30 % больше времени (всего около 3 ч 40 мин).
+// Версия 2.16: пороги подобраны полной симуляцией (sim.ts) под длинный темп: активный игрок переезжает
+// через 15 мин, 1 ч 50 мин, 4 ч 45 мин и попадает во дворец примерно через 11 ч; казуал 3×20 мин в день — на 6-й день.
 export const LOCATIONS: LocationDef[] = [
   { id: 'dump', threshold: 0, mult: 1, body: 0xc49a62, roof: 0x3d6fb6, width: 170 },
-  { id: 'metro', threshold: 1_500_000_000_000, mult: 4, body: 0xe4472b, roof: 0xffb02e, width: 200 },
-  { id: 'desert', threshold: 62_000_000_000_000, mult: 25, body: 0xd98b4a, roof: 0xfff4dc, width: 260 },
-  { id: 'piazza', threshold: 1_080_000_000_000_000, mult: 150, body: 0xc8553d, roof: 0x2f6b4f, width: 300 },
-  { id: 'palace', threshold: 14_400_000_000_000_000, mult: 1000, body: 0xf6e7c1, roof: 0xffcf3f, width: 340 },
+  { id: 'metro', threshold: 3_400_000_000_000, mult: 4, body: 0xe4472b, roof: 0xffb02e, width: 200 },
+  { id: 'desert', threshold: 320_000_000_000_000, mult: 25, body: 0xd98b4a, roof: 0xfff4dc, width: 260 },
+  { id: 'piazza', threshold: 12_000_000_000_000_000, mult: 150, body: 0xc8553d, roof: 0x2f6b4f, width: 300 },
+  { id: 'palace', threshold: 420_000_000_000_000_000, mult: 1000, body: 0xf6e7c1, roof: 0xffcf3f, width: 340 },
 ];
 
 // Сохранения версии 7 жили на семи точках: переводим номер точки на новую карту из пяти.

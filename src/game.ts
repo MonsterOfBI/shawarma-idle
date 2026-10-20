@@ -19,7 +19,11 @@ import {
   isVisible,
   CRIT_MULT,
   adBoxReady,
+  adBoxDone,
   applyGolden,
+  GOLDEN_MIN_MS,
+  GOLDEN_SPREAD_MS,
+  OFFLINE_RATE,
   boxCost,
   buyBox,
   canBuyBox,
@@ -75,9 +79,7 @@ const AWAY_MS = 60_000;
 const STUCK_PAUSE_MS = 2500;
 const AD_PAUSE_MAX_MS = 120_000;
 const BUY_PAUSE_MAX_MS = 300_000;
-// щедрый гость приходит раз в 1–2,5 минуты, час пик раз в 2,5–5 минут
-const GOLDEN_MIN_MS = 60_000;
-const GOLDEN_SPREAD_MS = 90_000;
+// Бомбардиро прилетает раз в 100–200 секунд (GOLDEN_MIN_MS в экономике), час пик раз в 2,5–5 минут
 const RUSH_MIN_MS = 150_000;
 const RUSH_SPREAD_MS = 150_000;
 
@@ -292,7 +294,7 @@ export class Game {
     this.platform.gameplayStop();
     try {
       const away = Math.min((now - this.state.lastSeen) / 1000, OFFLINE_CAP_SECONDS);
-      const choice = await this.ui.offline(earned, away, incomePerSecond(this.state, now, false));
+      const choice = await this.ui.offline(earned, away, incomePerSecond(this.state, now, false) * OFFLINE_RATE);
       let factor = 1;
       if (choice === 'double') {
         const ok = await this.during('ad', this.platform.showRewarded(), AD_PAUSE_MAX_MS);
@@ -462,7 +464,11 @@ export class Game {
     else if (how === 'free') r = freeBox(this.state, now, kind, Math.random);
     else {
       // пока идёт откат, кнопка просто показывает таймер, без всплывающей надписи посреди экрана
-      if (!adBoxReady(this.state, now)) return;
+      if (!adBoxReady(this.state, now)) {
+        // дневной лимит исчерпан: говорим один раз по нажатию, таймер тут не поможет
+        if (adBoxDone(this.state, now)) this.ui.toast(t('adBoxTomorrow'));
+        return;
+      }
       const ok = await this.during('ad', this.platform.showRewarded(), AD_PAUSE_MAX_MS);
       if (!ok) {
         this.ui.toast(t('adFail'));

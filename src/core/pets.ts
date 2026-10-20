@@ -7,16 +7,16 @@ import type { GameState } from './economy';
 export type Rarity = 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | 'god';
 export const RARITIES: Rarity[] = ['common', 'rare', 'epic', 'mythic', 'legendary', 'god'];
 
-// Бонус к доходу за питомца на первом уровне (0,03 = +3 %).
-// Урезан вдвое в версии 2.5: золотой ящик за рекламу раз в 4 минуты давал в среднем +40 % дохода навсегда,
-// и реклама обесценивала всю остальную прокачку. Теперь в среднем около +20 % за ящик.
+// Бонус к доходу за питомца на первом уровне (0,01 = +1 %).
+// Версия 2.16: втрое слабее, чем в 2.5–2.15. Полная симуляция показала, что к дворцу питомцы
+// умножали доход в 5–9 раз и прохождение шло в 7 раз быстрее задуманного.
 export const RARITY_BONUS: Record<Rarity, number> = {
-  common: 0.03,
-  rare: 0.07,
-  epic: 0.15,
-  mythic: 0.4,
-  legendary: 1,
-  god: 3,
+  common: 0.01,
+  rare: 0.025,
+  epic: 0.05,
+  mythic: 0.12,
+  legendary: 0.3,
+  god: 1,
 };
 // Каждый повтор питомца добавляет 30 % его базового бонуса.
 export const DUPLICATE_STEP = 0.3;
@@ -112,6 +112,29 @@ export interface Drop {
   mut: number;
   isNew: boolean;
   level: number;
+  pity: boolean; // редкость поднята гарантом
+}
+
+// Гарант (версия 2.16): каждый 30-й ящик подряд без мифика даёт мифика или выше,
+// каждый 100-й подряд без легендарного — легендарного или божественного. Считаются все ящики.
+export const PITY_MYTHIC = 30;
+export const PITY_LEGEND = 100;
+const rank = (r: Rarity) => RARITIES.indexOf(r);
+
+// Сколько ящиков осталось до гаранта (1 — следующий ящик гарантирован).
+export function pityLeft(s: GameState): { mythic: number; legend: number } {
+  return { mythic: Math.max(1, PITY_MYTHIC - s.pity.mythic), legend: Math.max(1, PITY_LEGEND - s.pity.legend) };
+}
+
+// Редкость с учётом гаранта. Шансы внутри гаранта — как у мифического ящика за переезд.
+export function pityRarity(s: GameState, kind: BoxKind, rolled: Rarity, rand: () => number): { rarity: Rarity; pity: boolean } {
+  if (kind === 'god') return { rarity: rolled, pity: false };
+  if (s.pity.legend + 1 >= PITY_LEGEND && rank(rolled) < rank('legendary')) {
+    const o = BOX_ODDS.legend;
+    return { rarity: rand() * (o.legendary + o.god) < o.god ? 'god' : 'legendary', pity: true };
+  }
+  if (s.pity.mythic + 1 >= PITY_MYTHIC && rank(rolled) < rank('mythic')) return { rarity: rollRarity('legend', rand()), pity: true };
+  return { rarity: rolled, pity: false };
 }
 
 export function petLevel(p: Pet): number {
@@ -141,7 +164,7 @@ export function rollRarity(kind: BoxKind, r: number): Rarity {
 
 // Открыть ящик: rand — источник случайных чисел от 0 до 1 (в тестах подменяется).
 export function openBox(s: GameState, kind: BoxKind, rand: () => number): { state: GameState; drop: Drop } {
-  const rarity = rollRarity(kind, rand());
+  const { rarity, pity } = pityRarity(s, kind, rollRarity(kind, rand()), rand);
   const pool = Object.keys(PET_RARITY).filter((id) => PET_RARITY[id] === rarity);
   const id = pool[Math.floor(rand() * pool.length) % pool.length];
   const m = rand();
@@ -150,7 +173,16 @@ export function openBox(s: GameState, kind: BoxKind, rand: () => number): { stat
   const pet: Pet = old ? { count: old.count + 1, mut: Math.max(old.mut, mut), stars: old.stars ?? 0 } : { count: 1, mut, stars: 0 };
   const met = s.met.includes(id) ? s.met : [...s.met, id];
   return {
-    state: { ...s, pets: { ...s.pets, [id]: pet }, boxesOpened: s.boxesOpened + 1, met },
-    drop: { id, rarity, mut, isNew: !old, level: pet.count },
+    state: {
+      ...s,
+      pets: { ...s.pets, [id]: pet },
+      boxesOpened: s.boxesOpened + 1,
+      met,
+      pity: {
+        mythic: rank(rarity) >= rank('mythic') ? 0 : s.pity.mythic + 1,
+        legend: rank(rarity) >= rank('legendary') ? 0 : s.pity.legend + 1,
+      },
+    },
+    drop: { id, rarity, mut, isNew: !old, level: pet.count, pity },
   };
 }

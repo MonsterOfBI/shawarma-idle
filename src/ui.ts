@@ -8,6 +8,9 @@ import {
   type BuyMode,
   type GameState,
   adBoxReady,
+  adBoxDone,
+  adBoxesLeft,
+  AD_BOXES_PER_DAY,
   boostActive,
   boxCost,
   bulkAmount,
@@ -34,7 +37,7 @@ import {
 import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { BRAINROTS, BRAINROT_BY_ID, payOf } from './core/brainrots';
-import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult } from './core/pets';
+import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult, pityLeft } from './core/pets';
 import { QUEST_SLOTS, questDone, questProgress, counter } from './core/quests';
 import { UPGRADES } from './core/upgrades';
 import { lang, t } from './i18n';
@@ -435,7 +438,7 @@ export class Ui {
     ab.classList.toggle('ready', adReady);
     ab.classList.toggle('wait', !adReady);
     (ab.querySelector('.badge') as HTMLElement).hidden = !adReady;
-    $('#adbox-label').textContent = adReady ? t('sideBox') : formatDuration((s.adBoxAt - now) / 1000, lang());
+    $('#adbox-label').textContent = adReady ? t('sideBox') : adBoxDone(s, now) ? t('boxTomorrow') : formatDuration((s.adBoxAt - now) / 1000, lang());
 
     // переезд готов: на улице появляется кнопка с грузовиком, вкладка «Переезд» качается
     const move = canRelocate(s);
@@ -540,7 +543,11 @@ export class Ui {
     const g = $<HTMLButtonElement>('#gbox-buy');
     const ready = adBoxReady(s, now);
     g.disabled = !ready;
-    g.textContent = ready ? t('boxFree') : t('boxWait', formatDuration((s.adBoxAt - now) / 1000, lang()));
+    const left = adBoxesLeft(s, now);
+    g.textContent = ready ? t('boxFree') : left === 0 ? t('boxTomorrow') : t('boxWait', formatDuration((s.adBoxAt - now) / 1000, lang()));
+    $('#gbox-left').textContent = t('gboxLeft', left).replace('{max}', String(AD_BOXES_PER_DAY));
+    const pl = pityLeft(s);
+    $('#pity-note').innerHTML = t('pityNote', `<b>${pl.mythic}</b>`).replace('{l}', `<b>${pl.legend}</b>`);
     const banner = $('#pet-bonus');
     if (!owned) banner.textContent = t('petsHint');
     else banner.innerHTML = `${t('petBonusLabel')} <b>+${pct(petMult(s) - 1)} %</b>`;
@@ -869,7 +876,7 @@ export class Ui {
     const info = $('#rv-info');
     info.className = drop.isNew ? 'new' : drop.mut ? `mut-${drop.mut}` : '';
     const p = this.lastState?.pets[drop.id];
-    info.textContent = [drop.isNew ? t('petNew') : t('petUp', drop.level), drop.mut ? t(`mut_${drop.mut}`) : '', canMerge(p) ? t('mergeReady') : '']
+    info.textContent = [drop.pity ? t('pityHit') : '', drop.isNew ? t('petNew') : t('petUp', drop.level), drop.mut ? t(`mut_${drop.mut}`) : '', canMerge(p) ? t('mergeReady') : '']
       .filter(Boolean)
       .join(' · ');
     $('#rv-bonus').textContent = p ? t('petGives', pct(petBonus(drop.id, p))) : '';

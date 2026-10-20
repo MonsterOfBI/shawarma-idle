@@ -32,13 +32,22 @@ export const RUSH_MULT = 3;
 export const RUSH_SECONDS = 30;
 // Вехи как в AdVenture Capitalist: на этих уровнях улучшение начинает приносить вдвое больше.
 export const MILESTONES = [10, 25, 50, 100, 200, 300, 400, 500];
-// Эффекты Бомбардиро: «Лихорадка» — доход в секунду ×7 на 30 с, «Бешеные тапы» — тапы ×10 на 15 с.
-export const FRENZY_MULT = 7;
+// Эффекты Бомбардиро: «Лихорадка» — доход в секунду ×4 на 30 с, «Бешеные тапы» — тапы ×10 на 15 с.
+// Версия 2.16: Бомбардиро реже (раз в 100–200 секунд) и слабее: он приносил четверть всех денег.
+export const GOLDEN_MIN_MS = 100_000;
+export const GOLDEN_SPREAD_MS = 100_000;
+export const GOLDEN_BAG_SECONDS = 45;
+export const GOLDEN_BAG_TAPS = 20;
+export const FRENZY_MULT = 4;
 export const FRENZY_SECONDS = 30;
 export const TAP_FRENZY_MULT = 10;
 export const TAP_FRENZY_SECONDS = 15;
 // Бесплатный золотой ящик за рекламу — не чаще раза в 4 минуты (вернули в версии 2.12).
 export const AD_BOX_COOLDOWN_MS = 4 * 60 * 1000;
+// Версия 2.16: не больше 12 золотых ящиков за рекламу в день, иначе реклама заменяет всю прокачку.
+export const AD_BOXES_PER_DAY = 12;
+// Пока игра закрыта, ларёк зарабатывает половину обычного (версия 2.16); реклама удваивает до полного.
+export const OFFLINE_RATE = 0.5;
 
 export interface GameState {
   version: number;
@@ -64,6 +73,8 @@ export interface GameState {
   frenzyUntil: number; // мс; лихорадка дохода от Бомбардиро
   tapFrenzyUntil: number; // мс; бешеные тапы от Бомбардиро
   adBoxAt: number; // мс; когда снова можно взять ящик за рекламу
+  adBoxes: { day: string; n: number }; // сколько ящиков за рекламу взято в этот день (ГГГГ-ММ-ДД)
+  pity: { mythic: number; legend: number }; // ящиков подряд без мифика и без легендарного (гарант)
   daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
   quests: Quest[];
   questWait: number[]; // мс; когда появятся новые задания на места выполненных (версия 2.15)
@@ -108,6 +119,8 @@ export function newGame(now: number): GameState {
     frenzyUntil: 0,
     tapFrenzyUntil: 0,
     adBoxAt: 0,
+    adBoxes: { day: '', n: 0 },
+    pity: { mythic: 0, legend: 0 },
     daily: { streak: 0, last: '' },
     quests: [],
     questWait: [],
@@ -161,6 +174,8 @@ export function normalize(raw: unknown, now: number): GameState {
     frenzyUntil: num(r.frenzyUntil, 0),
     tapFrenzyUntil: num(r.tapFrenzyUntil, 0),
     adBoxAt: num(r.adBoxAt, 0),
+    adBoxes: { day: typeof r.adBoxes?.day === 'string' ? r.adBoxes.day : '', n: Math.floor(num(r.adBoxes?.n, 0)) },
+    pity: { mythic: Math.floor(num(r.pity?.mythic, 0)), legend: Math.floor(num(r.pity?.legend, 0)) },
     daily: {
       streak: Math.min(7, Math.floor(num(r.daily?.streak, 0))),
       last: typeof r.daily?.last === 'string' ? r.daily.last : '',
@@ -417,9 +432,9 @@ export function serveIntervalMs(state: GameState, now: number): number {
   return Math.round(Math.min(4500, Math.max(3000, 4500 - 250 * Math.log10(ips + 1))));
 }
 
-// Щедрый гость: примерно полторы минуты дохода или 40 тапов, смотря что больше.
+// Мешок Бомбардиро: 45 секунд дохода плюс 20 тапов (до версии 2.16 — 90 секунд и 40 тапов).
 export function goldenReward(state: GameState, now: number): number {
-  return Math.max(25, Math.round(incomePerSecond(state, now) * 90 + tapValue(state, now) * 40));
+  return Math.max(25, Math.round(incomePerSecond(state, now) * GOLDEN_BAG_SECONDS + tapValue(state, now) * GOLDEN_BAG_TAPS));
 }
 
 export function catchGolden(state: GameState, now: number): GameState {
@@ -447,9 +462,9 @@ export function minutesOfIncome(state: GameState, now: number, minutes: number):
 // ---------- ящики с брейнротами ----------
 
 // Обычный ящик стоит примерно 3 минуты дохода (с тапами 3 раза в секунду)
-// и дорожает на 3 % с каждым открытым ящиком (версия 2.12; в 2.11 было 2 минуты и +2 %, до этого 6 минут и +4 %).
+// и дорожает на 5 % с каждым открытым ящиком (версия 2.16; в 2.12 было +3 %, в 2.11 — 2 минуты и +2 %).
 export const BOX_MINUTES = 3;
-export const BOX_GROWTH = 0.03;
+export const BOX_GROWTH = 0.05;
 export function boxCost(state: GameState, now: number): number {
   return Math.round(minutesOfIncome(state, now, BOX_MINUTES) * (1 + state.boxesOpened * BOX_GROWTH));
 }
@@ -463,13 +478,33 @@ export function buyBox(state: GameState, now: number, rand: () => number) {
   return openBox({ ...state, money: state.money - boxCost(state, now) }, 'common', rand);
 }
 
+// День по часам игрока, как у подарка дня: ГГГГ-ММ-ДД.
+export function localDay(now: number): string {
+  const d = new Date(now);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+export function adBoxesLeft(state: GameState, now: number): number {
+  const used = state.adBoxes.day === localDay(now) ? state.adBoxes.n : 0;
+  return Math.max(0, AD_BOXES_PER_DAY - used);
+}
+
 export function adBoxReady(state: GameState, now: number): boolean {
-  return now >= state.adBoxAt;
+  return now >= state.adBoxAt && adBoxesLeft(state, now) > 0;
+}
+
+// Лимит на сегодня исчерпан: ящик за рекламу вернётся завтра.
+export function adBoxDone(state: GameState, now: number): boolean {
+  return adBoxesLeft(state, now) === 0;
 }
 
 export function freeBox(state: GameState, now: number, kind: BoxKind, rand: () => number, fromAd = false) {
   const r = openBox(state, kind, rand);
-  return fromAd ? { ...r, state: { ...r.state, adBoxAt: now + AD_BOX_COOLDOWN_MS } } : r;
+  if (!fromAd) return r;
+  const day = localDay(now);
+  const n = (state.adBoxes.day === day ? state.adBoxes.n : 0) + 1;
+  return { ...r, state: { ...r.state, adBoxAt: now + AD_BOX_COOLDOWN_MS, adBoxes: { day, n } } };
 }
 
 export function buy(state: GameState, id: string): GameState {
@@ -489,10 +524,10 @@ export function tick(state: GameState, now: number): GameState {
   return { ...earn(state, incomePerSecond(state, now) * seconds), lastSeen: now };
 }
 
-// Сколько игрок заработал, пока игра была закрыта. Без буста, не больше 2 часов.
+// Сколько игрок заработал, пока игра была закрыта: половина дохода, без буста, не больше 4 часов.
 export function offlineEarnings(state: GameState, now: number): number {
   const seconds = Math.min(Math.max(0, (now - state.lastSeen) / 1000), OFFLINE_CAP_SECONDS);
-  return incomePerSecond(state, now, false) * seconds;
+  return incomePerSecond(state, now, false) * OFFLINE_RATE * seconds;
 }
 
 export function collectOffline(state: GameState, now: number, factor: number): GameState {
