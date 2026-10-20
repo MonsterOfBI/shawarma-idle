@@ -768,3 +768,26 @@ describe('версия 2.16', () => {
     expect(t.adBoxes).toEqual({ day: '2026-10-20', n: 4 });
   });
 });
+
+import { resetProgress } from './economy';
+
+describe('настройки', () => {
+  it('старое сохранение получает громкость и язык по умолчанию', () => {
+    const s = normalize({ version: 8, money: 5 }, 0);
+    expect(s.musicVol).toBe(0.7);
+    expect(s.sfxVol).toBe(1);
+    expect(s.langPref).toBe('');
+    expect(normalize({ version: 8, langPref: 'de', sfxVol: 7 }, 0)).toMatchObject({ langPref: '', sfxVol: 1 });
+  });
+
+  it('начать заново: прогресс обнуляется, покупки и настройки остаются', () => {
+    const s = { ...newGame(0), money: 1e9, location: 3, pets: { vaca: { count: 2, mut: 0, stars: 0 } }, owned: { noAds: true, x2Forever: true }, langPref: 'en', sfxVol: 0.3 };
+    const r = resetProgress(s, 100);
+    expect(r.money).toBe(0);
+    expect(r.location).toBe(0);
+    expect(r.pets).toEqual({});
+    expect(r.owned).toEqual({ noAds: true, x2Forever: true });
+    expect(r.langPref).toBe('en');
+    expect(r.sfxVol).toBe(0.3);
+  });
+});

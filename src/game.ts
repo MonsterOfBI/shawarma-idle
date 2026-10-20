@@ -1,7 +1,7 @@
 // Контроллер игры: держит состояние, крутит время, сохраняет, связывает сцену, интерфейс и площадку.
 
 import Phaser from 'phaser';
-import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
+import { setAudioPaused, setMuted, setMusic, setVolumes, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
 import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, openBox, petBonus } from './core/pets';
@@ -55,6 +55,7 @@ import {
   tap,
   tapValue,
   tick,
+  resetProgress,
   decodeWeekly,
   soldThisWeek,
   weekEndsAt,
@@ -114,7 +115,7 @@ export class Game {
     });
     this.ui = new Ui({
       buy: (id, n) => this.buy(id, n),
-      toggleMusic: () => this.toggleMusic(),
+      openSettings: () => void this.openSettings(),
       boost: () => void this.boost(),
       relocate: () => void this.relocate(),
       purchase: (id) => void this.purchase(id),
@@ -129,10 +130,12 @@ export class Game {
     });
   }
 
-  async start() {
+  // raw — сохранение, уже прочитанное в main.ts (оттуда же берётся выбранный игроком язык)
+  async start(raw: unknown) {
     const now = Date.now();
-    this.state = ensureQuests(normalize(await this.platform.load(), now), now, Math.random);
+    this.state = ensureQuests(normalize(raw, now), now, Math.random);
     setMuted(this.state.muted);
+    setVolumes(this.state.musicVol, this.state.sfxVol);
 
     new Phaser.Game({
       type: Phaser.AUTO,
@@ -618,10 +621,31 @@ export class Game {
     this.ui.render(this.state, Date.now());
   }
 
-  private toggleMusic() {
-    this.state = { ...this.state, musicOff: !this.state.musicOff };
-    setMusic(!this.state.muted && !this.state.musicOff);
-    this.ui.render(this.state, Date.now());
+  private async openSettings() {
+    await this.ui.settings(this.state, {
+      music: (v) => {
+        // ползунок в ноль выключает музыку совсем
+        this.state = { ...this.state, musicVol: v > 0 ? v : this.state.musicVol, musicOff: v === 0 };
+        setVolumes(this.state.musicVol, this.state.sfxVol);
+        setMusic(!this.state.muted && !this.state.musicOff);
+      },
+      sfx: (v) => {
+        this.state = { ...this.state, sfxVol: v };
+        setVolumes(this.state.musicVol, this.state.sfxVol);
+        sfx.buy();
+      },
+      lang: async (l) => {
+        // тексты расставлены при запуске, поэтому проще всего перезапустить игру на новом языке
+        this.state = { ...this.state, langPref: l };
+        await this.save();
+        location.reload();
+      },
+      reset: async () => {
+        this.state = resetProgress(this.state, Date.now());
+        await this.save();
+        location.reload();
+      },
+    });
     void this.save();
   }
 

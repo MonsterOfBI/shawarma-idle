@@ -49,6 +49,7 @@ const ICONS: Record<string, string> = {
   truck: svg(`<rect x="3" y="9" width="17" height="13" rx="1" fill="${T}"/><path d="M20 13 h5 l4 5 v4 h-9 Z" fill="${C}"/><circle cx="9" cy="24" r="3" fill="${C}"/><circle cx="24" cy="24" r="3" fill="${C}"/>`),
   bag: svg(`<path d="M6 11 h20 l-2 16 h-16 Z" fill="${A}"/><path d="M11 11 v-2 a5 5 0 0 1 10 0 v2"/>`),
   up: svg(`<circle cx="16" cy="16" r="12" fill="${G}"/><path d="M16 23 V10 M10 15 l6-6 6 6" stroke="${C}" stroke-width="3"/>`),
+  gear: svg(`<circle cx="16" cy="16" r="11" stroke-width="5" stroke-dasharray="4.3 4.3" stroke-linecap="butt"/><circle cx="16" cy="16" r="8.5" fill="${C}"/><circle cx="16" cy="16" r="3.2" fill="${A}"/>`),
   music: svg(`<path d="M12 23 V8 l13-3 v15" /><circle cx="9" cy="23" r="3.5" fill="${C}"/><circle cx="22" cy="20" r="3.5" fill="${C}"/>`),
   sound: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 11 a6 6 0 0 1 0 10 M24 7 a11 11 0 0 1 0 18"/>`),
   mute: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 12 l7 8 M28 12 l-7 8"/>`),

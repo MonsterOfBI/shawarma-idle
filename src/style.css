@@ -821,3 +821,10 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 /* тост с наградой приземляется с лёгким покачиванием */
 .toast.show { animation: drop 0.5s cubic-bezier(.2, 1.4, .4, 1); }
 @keyframes drop { 0% { transform: translate(-50%, -30px) scale(0.7) rotate(-3deg); opacity: 0; } 60% { transform: translate(-50%, 3px) scale(1.03) rotate(1deg); opacity: 1; } }
+
+/* окно настроек */
+.settings { gap: 12px; }
+.st-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 800; font-size: 14px; color: var(--cream); text-align: left; }
+.st-row input[type='range'] { flex: 1; max-width: 200px; accent-color: var(--amber); height: 28px; }
+.st-reset.armed { background: var(--tomato); color: var(--cream); box-shadow: 0 0 0 2.5px var(--plum-0), 0 4px 0 2.5px var(--plum-0); }
+.st-note { margin: -4px 0 0; font-size: 12px; font-weight: 700; color: var(--on-dark-soft); }

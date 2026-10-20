@@ -24,13 +24,16 @@ document.addEventListener('selectstart', (e) => e.preventDefault());
 async function start() {
   // На Яндекс Играх подключится их SDK, в браузере — локальная версия без рекламы и покупок.
   const platform = (await createYandexPlatform()) ?? createLocalPlatform();
-  setLang(platform.lang);
+  const save = await platform.load();
+  // язык, выбранный в настройках, важнее языка площадки
+  const pref = (save as { langPref?: string } | null)?.langPref;
+  setLang(pref === 'ru' || pref === 'en' ? pref : platform.lang);
   // шрифты лежат в сборке; ждём их, чтобы надписи в сцене сразу были нужным шрифтом
   await Promise.race([
     Promise.all(['800 20px Unbounded', '900 20px Unbounded', '700 20px Unbounded', '600 16px "Golos Text"'].map((f) => document.fonts.load(f, 'ШАУРМА 123'))),
     new Promise((r) => setTimeout(r, 2500)),
   ]).catch(() => undefined);
-  await new Game(platform).start();
+  await new Game(platform).start(save);
 }
 
 void start();

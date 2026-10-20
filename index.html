@@ -14,7 +14,7 @@
             <span id="place" class="ribbon"></span>
             <span class="hud-btns">
               <button id="lb-btn" class="round-btn trophy" type="button"></button>
-              <button id="music" class="round-btn" type="button"></button>
+              <button id="settings-btn" class="round-btn" type="button"></button>
               <button id="sound" class="round-btn" type="button"></button>
             </span>
           </div>
@@ -175,6 +175,23 @@
           <div class="modal-btns row">
             <button id="mg-ok" class="btn btn-amber" type="button"></button>
           </div>
+        </div>
+      </div>
+
+      <div id="settings" class="modal" hidden>
+        <div class="sheet settings">
+          <h2 id="st-title"></h2>
+          <label class="st-row"><span id="st-music"></span><input id="st-music-vol" type="range" min="0" max="100" step="5"></label>
+          <label class="st-row"><span id="st-sfx"></span><input id="st-sfx-vol" type="range" min="0" max="100" step="5"></label>
+          <div class="st-row"><span id="st-lang"></span>
+            <div id="st-lang-seg" class="seg" role="radiogroup">
+              <button type="button" role="radio" data-lang="ru">Русский</button>
+              <button type="button" role="radio" data-lang="en">English</button>
+            </div>
+          </div>
+          <button id="st-reset" class="btn btn-ghost wide st-reset" type="button"></button>
+          <p id="st-reset-note" class="st-note" hidden></p>
+          <button id="st-close" class="btn btn-amber wide" type="button"></button>
         </div>
       </div>
 

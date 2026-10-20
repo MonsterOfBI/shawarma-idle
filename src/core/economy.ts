@@ -62,6 +62,9 @@ export interface GameState {
   owned: { noAds: boolean; x2Forever: boolean };
   muted: boolean;
   musicOff: boolean; // музыка выключена отдельно от звуков
+  musicVol: number; // громкость музыки 0..1 (окно настроек)
+  sfxVol: number; // громкость звуков 0..1
+  langPref: string; // язык, выбранный игроком: '' — как у площадки, 'ru' или 'en'
   lastSeen: number; // мс, Date.now()
   achievements: string[]; // id полученных достижений, не сгорают при переезде
   goldenCaught: number; // сколько щедрых гостей поймано
@@ -108,6 +111,9 @@ export function newGame(now: number): GameState {
     owned: { noAds: false, x2Forever: false },
     muted: false,
     musicOff: false,
+    musicVol: 0.7,
+    sfxVol: 1,
+    langPref: '',
     lastSeen: now,
     achievements: [],
     goldenCaught: 0,
@@ -163,6 +169,9 @@ export function normalize(raw: unknown, now: number): GameState {
     owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
     muted: !!r.muted,
     musicOff: !!r.musicOff,
+    musicVol: Math.min(1, num(r.musicVol, 0.7)),
+    sfxVol: Math.min(1, num(r.sfxVol, 1)),
+    langPref: r.langPref === 'ru' || r.langPref === 'en' ? r.langPref : '',
     lastSeen: num(r.lastSeen, now),
     achievements: Array.isArray(r.achievements) ? r.achievements.filter((a: unknown) => typeof a === 'string') : [],
     goldenCaught: Math.floor(num(r.goldenCaught, 0)),
@@ -613,6 +622,11 @@ export function addBoost(state: GameState, now: number): GameState {
 // Пакет денег из магазина: доход за 30 минут, но не меньше 1 000.
 export function cashPackAmount(state: GameState, now: number): number {
   return Math.max(1000, Math.round(incomePerSecond(state, now, false) * 1800 + tapValue(state, now) * 300));
+}
+
+// Начать сюжет заново из окна настроек: покупки за деньги и настройки остаются.
+export function resetProgress(state: GameState, now: number): GameState {
+  return { ...newGame(now), owned: state.owned, muted: state.muted, musicOff: state.musicOff, musicVol: state.musicVol, sfxVol: state.sfxVol, langPref: state.langPref };
 }
 
 export function addMoney(state: GameState, amount: number): GameState {

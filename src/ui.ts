@@ -46,7 +46,7 @@ import type { Board, LbResult, Product, ProductId } from './platform/platform';
 
 export interface UiActions {
   buy(id: string, n: number): void;
-  toggleMusic(): void;
+  openSettings(): void;
   toggleSound(): void;
   boost(): void;
   relocate(): void;
@@ -197,10 +197,10 @@ export class Ui {
     $('#rush-title').textContent = t('rushTitle');
     $('.loading span')?.replaceChildren(t('title'));
     $('#sound').setAttribute('aria-label', t('sound'));
-    $('#music').setAttribute('aria-label', t('music'));
-    $('#music').innerHTML = ui('music');
+    $('#settings-btn').setAttribute('aria-label', t('settings'));
+    $('#settings-btn').innerHTML = ui('gear');
     $('#sound').addEventListener('click', () => actions.toggleSound());
-    $('#music').addEventListener('click', () => actions.toggleMusic());
+    $('#settings-btn').addEventListener('click', () => actions.openSettings());
     $('#lb-btn').innerHTML = ui('trophy');
     $('#lb-btn').setAttribute('aria-label', t('lbBtn'));
     $('#lb-btn').addEventListener('click', () => actions.openLeaderboard());
@@ -433,7 +433,6 @@ export class Ui {
       $('#sound').innerHTML = ui(s.muted ? 'mute' : 'sound');
     }
     $('#sound').classList.toggle('off', s.muted);
-    $('#music').classList.toggle('off', s.musicOff || s.muted);
     // боковые кнопки держим под шапкой
     const hud = $('#hud');
     $('#stage').style.setProperty('--side-top', `${hud.offsetTop + hud.offsetHeight + 34}px`);
@@ -1023,6 +1022,58 @@ export class Ui {
       $('#mg-ok').onclick = () => {
         box.hidden = true;
         resolve();
+      };
+    });
+  }
+
+  // Окно настроек: громкость, язык и начало заново (в два нажатия).
+  async settings(s: GameState, on: { music(v: number): void; sfx(v: number): void; lang(l: 'ru' | 'en'): void; reset(): void }) {
+    const modal = $('#settings');
+    $('#st-title').textContent = t('settings');
+    $('#st-music').textContent = t('stMusic');
+    $('#st-sfx').textContent = t('stSfx');
+    $('#st-lang').textContent = t('stLang');
+    $('#st-close').textContent = t('stClose');
+    const mv = $<HTMLInputElement>('#st-music-vol');
+    const sv = $<HTMLInputElement>('#st-sfx-vol');
+    mv.value = String(Math.round((s.musicOff ? 0 : s.musicVol) * 100));
+    sv.value = String(Math.round(s.sfxVol * 100));
+    mv.oninput = () => on.music(Number(mv.value) / 100);
+    sv.oninput = () => on.sfx(Number(sv.value) / 100);
+    const seg = $('#st-lang-seg');
+    const current = lang();
+    seg.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.lang === current));
+      b.onclick = () => {
+        if (b.dataset.lang !== current) on.lang(b.dataset.lang as 'ru' | 'en');
+      };
+    });
+    const reset = $<HTMLButtonElement>('#st-reset');
+    const note = $('#st-reset-note');
+    let armed = false;
+    reset.textContent = t('stReset');
+    reset.classList.remove('armed');
+    note.hidden = true;
+    note.textContent = t('stResetNote');
+    reset.onclick = () => {
+      if (!armed) {
+        armed = true;
+        reset.textContent = t('stResetSure');
+        reset.classList.add('armed');
+        note.hidden = false;
+        return;
+      }
+      on.reset();
+    };
+    modal.hidden = false;
+    return new Promise<void>((resolve) => {
+      const close = () => {
+        modal.hidden = true;
+        resolve();
+      };
+      $('#st-close').onclick = close;
+      modal.onclick = (e) => {
+        if (e.target === modal) close();
       };
     });
   }

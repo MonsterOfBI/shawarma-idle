@@ -6,6 +6,8 @@ let paused = false;
 // До первого действия игрока звук не создаём: браузер всё равно не даст его запустить
 // и засыпает консоль предупреждениями на каждый звук.
 let unlocked = false;
+let sfxVol = 1;
+let musicVol = 0.7;
 
 function audio(): AudioContext | null {
   if (!unlocked) return null;
@@ -21,7 +23,7 @@ function audio(): AudioContext | null {
 }
 
 function beep(freq: number, duration: number, type: OscillatorType, volume: number, delay = 0, out?: AudioNode) {
-  if (muted || paused) return;
+  if (muted || paused || sfxVol < 0.01) return;
   const a = audio();
   if (!a) return;
   const t = a.currentTime + Math.max(0, delay);
@@ -29,7 +31,7 @@ function beep(freq: number, duration: number, type: OscillatorType, volume: numb
   const gain = a.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, t);
-  gain.gain.setValueAtTime(volume, t);
+  gain.gain.setValueAtTime(Math.max(0.0002, volume * sfxVol), t);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
   osc.connect(gain).connect(out ?? a.destination);
   osc.start(t);
@@ -353,8 +355,15 @@ export function setMusic(on: boolean) {
     musicGain = a.createGain();
     musicGain.connect(a.destination);
   }
-  musicGain.gain.setTargetAtTime(2, a.currentTime, 0.4);
+  musicGain.gain.setTargetAtTime(2 * musicVol, a.currentTime, 0.4);
   if (!timer) timer = setInterval(scheduleMusic, 60);
+}
+
+// Громкость из окна настроек (0..1). Музыка сразу плавно подстраивается.
+export function setVolumes(music: number, sounds: number) {
+  musicVol = music;
+  sfxVol = sounds;
+  if (musicGain && ctx && musicOn) musicGain.gain.setTargetAtTime(2 * musicVol, ctx.currentTime, 0.1);
 }
 
 // Первый тап: разбудить звук и, если можно, запустить музыку.
