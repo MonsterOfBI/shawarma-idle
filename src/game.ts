@@ -31,6 +31,7 @@ import {
   milestonesReached,
   pickGoldenEffect,
   recordCombo,
+  beatsRecord,
   cashPackAmount,
   collectOffline,
   OFFLINE_CAP_SECONDS,
@@ -78,6 +79,7 @@ export class Game {
   private modalOpen = false;
   private lastSave = 0;
   private combo = 0;
+  private recordInStreak = false; // в этой серии рекорд уже побит
   private lastTapAt = 0;
   private rushUntil = 0;
   private nextRushAt = Date.now() + 90_000;
@@ -312,6 +314,8 @@ export class Game {
     if (this.paused || this.modalOpen) return;
     const now = Date.now();
     this.combo = now - this.lastTapAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
+    if (this.combo === 1) this.recordInStreak = false;
+    const record = beatsRecord(this.state, this.combo);
     this.lastTapAt = now;
     const rush = now < this.rushUntil;
     const crit = isCrit(Math.random());
@@ -326,6 +330,11 @@ export class Game {
     } else this.scene.popText(text, x, y, now < this.state.tapFrenzyUntil ? '#ff9ccb' : rush ? '#ffb02e' : '#fff4dc');
     this.scene.burst(x, y, 2 + Math.min(6, Math.floor(this.combo / 8)) + (rush ? 3 : 0) + (crit ? 8 : 0));
     this.scene.setCombo(this.combo, comboMult(this.combo));
+    if (record) {
+      this.scene.setRecord(this.combo, !this.recordInStreak);
+      if (!this.recordInStreak) sfx.reward();
+      this.recordInStreak = true;
+    }
     sfx.tap(this.combo);
   }
 

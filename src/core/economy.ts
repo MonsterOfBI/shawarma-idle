@@ -372,6 +372,13 @@ export function comboMult(combo: number): number {
   return 1 + Math.min(Math.max(combo, 0), COMBO_MAX) / COMBO_MAX;
 }
 
+// Новый рекорд серии показываем на экране, только когда старый рекорд уже был заметным
+// (иначе у новичка «рекорд» всплывал бы на каждом тапе первых серий).
+export const RECORD_SHOW_FROM = 10;
+export function beatsRecord(state: GameState, combo: number): boolean {
+  return combo > state.bestCombo && state.bestCombo >= RECORD_SHOW_FROM;
+}
+
 export function recordCombo(state: GameState, combo: number): GameState {
   return combo > state.bestCombo ? { ...state, bestCombo: combo } : state;
 }

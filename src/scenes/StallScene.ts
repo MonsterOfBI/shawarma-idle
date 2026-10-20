@@ -116,6 +116,7 @@ export class StallScene extends Phaser.Scene {
   private courierTimer = 5000;
 
   private comboText!: Phaser.GameObjects.Text;
+  private recordText!: Phaser.GameObjects.Text;
   private serveEvery = 0;
   private serveTimer = 0;
   private wantQueue = 1;
@@ -243,6 +244,11 @@ export class StallScene extends Phaser.Scene {
 
     this.comboText = this.add
       .text(0, 0, '', { fontFamily: DISPLAY_FONT, fontSize: '20px', color: '#fff4dc', fontStyle: '800', stroke: '#2a1b3d', strokeThickness: 6 })
+      .setOrigin(0.5)
+      .setDepth(12)
+      .setAlpha(0);
+    this.recordText = this.add
+      .text(0, 0, '', { fontFamily: DISPLAY_FONT, fontSize: '20px', color: '#ffd86b', fontStyle: '900', stroke: '#2a1b3d', strokeThickness: 7 })
       .setOrigin(0.5)
       .setDepth(12)
       .setAlpha(0);
@@ -688,6 +694,23 @@ export class StallScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.comboText);
     this.tweens.add({ targets: this.comboText, scale: 1, duration: 140, ease: 'Back.out' });
     this.tweens.add({ targets: this.comboText, alpha: 0, delay: 700, duration: 300 });
+  }
+
+  // Рекорд серии: появляется только когда игрок побивает свой лучший результат.
+  // first — рекорд побит впервые за эту серию: надпись прыгает сильнее и летят искры.
+  setRecord(combo: number, first: boolean) {
+    const u = this.unit;
+    const y = Math.min(this.scale.height - 16 * u, this.groundY + 32 * u) - 30 * u;
+    this.recordText
+      .setText(t('comboRecord', combo))
+      .setFontSize(Math.round(17 * u))
+      .setPosition(this.stallX, y)
+      .setAlpha(1)
+      .setScale(first ? 1.6 : 1.15);
+    this.tweens.killTweensOf(this.recordText);
+    this.tweens.add({ targets: this.recordText, scale: 1, duration: first ? 260 : 140, ease: 'Back.out' });
+    this.tweens.add({ targets: this.recordText, alpha: 0, delay: 1300, duration: 400 });
+    if (first) this.burst(this.stallX, y, 14);
   }
 
   // Тап обслуживает первого в очереди.

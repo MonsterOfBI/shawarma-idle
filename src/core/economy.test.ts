@@ -182,7 +182,7 @@ describe('баланс', () => {
       expect(minutes).toBeGreaterThan(prev);
       prev = minutes;
     }
-  });
+  }, 30_000); // симуляция долгая: свой запас времени, чтобы тест не падал по таймауту
 
   it('первые звёзды дворца тоже занимают от 5 минут до двух с половиной часов', () => {
     for (let stars = 0; stars < 3; stars++) {
@@ -555,5 +555,23 @@ describe('версия 2.11', () => {
     const s = { ...newGame(0), levels: { knife: 20, grill: 10 }, taps: 1000, quests: [{ kind: 'taps' as const, target: 10, start: 0, reward: { minutes: 60 } }] };
     const r = claimQuest(s, 0, 0, () => 0.9)!;
     expect(r.money).toBe(minutesOfIncome(s, 0, 12));
+  });
+});
+
+import { RECORD_SHOW_FROM, beatsRecord } from './economy';
+
+describe('рекорд серии тапов', () => {
+  it('рекорд запоминается и показывается, только когда побит', () => {
+    let s = { ...newGame(0), bestCombo: 20 };
+    expect(beatsRecord(s, 20)).toBe(false);
+    expect(beatsRecord(s, 21)).toBe(true);
+    s = recordCombo(s, 21);
+    expect(s.bestCombo).toBe(21);
+    expect(recordCombo(s, 5).bestCombo).toBe(21);
+  });
+
+  it('у новичка с маленьким рекордом надпись не всплывает', () => {
+    expect(beatsRecord({ ...newGame(0), bestCombo: RECORD_SHOW_FROM - 1 }, 30)).toBe(false);
+    expect(beatsRecord({ ...newGame(0), bestCombo: RECORD_SHOW_FROM }, RECORD_SHOW_FROM + 1)).toBe(true);
   });
 });
