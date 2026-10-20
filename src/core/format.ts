@@ -43,3 +43,22 @@ export function formatDuration(seconds: number, lang: 'ru' | 'en'): string {
   }
   return `${m}:${String(r).padStart(2, '0')}`;
 }
+
+// Номер разряда числа (1 — тысячи, 2 — миллионы, …) для подсказки «что значит квдр.»; 0 — меньше тысячи.
+export function numberTier(n: number): number {
+  let v = Math.abs(n);
+  let i = 0;
+  while (v >= 1000 && i < 11) {
+    v /= 1000;
+    i++;
+  }
+  return i;
+}
+
+// Число полностью, с пробелами между разрядами: 5 870 000 000 ₽. Очень большие — с порядком.
+export function fullNumber(n: number, lang: 'ru' | 'en'): string {
+  const v = Math.floor(Math.abs(n));
+  if (v >= 1e21) return formatNumber(n, lang);
+  const digits = BigInt(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'ru' ? '\u00a0' : ',');
+  return (n < 0 ? '-' : '') + digits;
+}

@@ -983,6 +983,36 @@ export class StallScene extends Phaser.Scene {
     return x;
   }
 
+  // Боковые кнопки (подарок, задания, ×2, ящик) в координатах сцены; спрашиваем у страницы раз в секунду.
+  private sideAt = -1e9;
+  private sideBoxes: { l: number; t: number; r: number; b: number }[] = [];
+  private sideRects() {
+    if (this.clock - this.sideAt > 1000) {
+      this.sideAt = this.clock;
+      const c = this.game.canvas.getBoundingClientRect();
+      this.sideBoxes = [];
+      document.querySelectorAll<HTMLElement>('.side-btn').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width) this.sideBoxes.push({ l: r.left - c.left, t: r.top - c.top, r: r.right - c.left, b: r.bottom - c.top });
+      });
+    }
+    return this.sideBoxes;
+  }
+
+  // Облачко реплики: внутри экрана и не под боковыми кнопками (сдвигаем вбок от кнопки).
+  private placeBubble(b: Phaser.GameObjects.Container, x: number, y: number) {
+    const w = this.scale.width;
+    const bw = b.getData('w') ?? 0, bh = b.getData('h') ?? 0;
+    let cx = Phaser.Math.Clamp(x, bw / 2 + 6, w - bw / 2 - 6);
+    for (const r of this.sideRects()) {
+      const overlapY = y - bh / 2 < r.b && y + bh / 2 > r.t;
+      const overlapX = cx - bw / 2 < r.r && cx + bw / 2 > r.l;
+      if (!overlapY || !overlapX) continue;
+      cx = r.l > w / 2 ? r.l - bw / 2 - 6 : r.r + bw / 2 + 6;
+    }
+    b.setPosition(Phaser.Math.Clamp(cx, bw / 2 + 6, Math.max(bw / 2 + 6, w - bw / 2 - 6)), y);
+  }
+
   private wallet() {
     if (this.clock - this.walletAt > 2000) {
       this.walletAt = this.clock;
@@ -1307,8 +1337,7 @@ export class StallScene extends Phaser.Scene {
     }
     if (this.mascotBubble) {
       const h = this.mascotBubble.getData('h');
-      const x = Phaser.Math.Clamp(m.root.x + 10 * u, this.mascotBubble.getBounds().width / 2 + 6, this.scale.width - 80 * u);
-      this.mascotBubble.setPosition(x, m.root.y + m.body.y * sc - (m.top + 22) * sc - h / 2);
+      this.placeBubble(this.mascotBubble, m.root.x + 10 * u, m.root.y + m.body.y * sc - (m.top + 22) * sc - h / 2);
     }
   }
 
@@ -1399,7 +1428,7 @@ export class StallScene extends Phaser.Scene {
       }
     });
     for (const c of this.customers) {
-      if (c.bubble) c.bubble.setPosition(Phaser.Math.Clamp(c.c.root.x + 6 * u, c.bubble.getData('w') / 2 + 6, this.scale.width - c.bubble.getData('w') / 2 - 6), c.c.root.y - c.c.height * c.c.root.scaleY - (c.bubble.getData('h') / 2 + 12 * u));
+      if (c.bubble) this.placeBubble(c.bubble, c.c.root.x + 6 * u, c.c.root.y - c.c.height * c.c.root.scaleY - (c.bubble.getData('h') / 2 + 12 * u));
       if (c.state !== 'leaving') continue;
       c.vx += (vmax * 1.15 - c.vx) * Math.min(1, delta / 320);
       c.c.root.x += c.vx * delta;

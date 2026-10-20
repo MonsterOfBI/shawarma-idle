@@ -34,7 +34,7 @@ import {
   MILESTONES,
   tapValue,
 } from './core/economy';
-import { formatDuration, formatNumber } from './core/format';
+import { formatDuration, formatNumber, fullNumber, numberTier } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { BRAINROTS, BRAINROT_BY_ID, payOf } from './core/brainrots';
 import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult, pityLeft } from './core/pets';
@@ -103,6 +103,40 @@ function today(offsetDays = 0): string {
   return dayKey(d);
 }
 
+// Кнопка с удержанием: обычное нажатие срабатывает один раз, а если держать палец,
+// через 0,4 с начинает повторяться всё быстрее (покупка подряд, пока хватает денег).
+function holdRepeat(btn: HTMLButtonElement, fire: () => void) {
+  let timer = 0;
+  let repeated = false;
+  const stop = () => {
+    clearTimeout(timer);
+    timer = 0;
+  };
+  const step = (delay: number) => {
+    timer = window.setTimeout(() => {
+      if (btn.disabled) return stop();
+      repeated = true;
+      fire();
+      step(Math.max(60, delay * 0.85));
+    }, delay);
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    repeated = false;
+    stop();
+    step(400);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) btn.addEventListener(ev, stop);
+  btn.addEventListener('click', () => {
+    // после серии повторов отпускание пальца не должно купить ещё раз
+    if (repeated) {
+      repeated = false;
+      return;
+    }
+    fire();
+  });
+}
+
 interface Row {
   root: HTMLElement;
   icon: HTMLElement;
@@ -160,7 +194,6 @@ export class Ui {
     $('#money-coin').innerHTML = ui('coin');
     $('#ico-sec').innerHTML = ui('bolt');
     $('#ico-tap').innerHTML = ui('finger');
-    $('#hint').textContent = t('tapHint');
     $('#rush-title').textContent = t('rushTitle');
     $('.loading span')?.replaceChildren(t('title'));
     $('#sound').setAttribute('aria-label', t('sound'));
@@ -216,9 +249,10 @@ export class Ui {
       info.append(name, desc, ms);
       const btn = el('button', 'btn') as HTMLButtonElement;
       btn.type = 'button';
-      btn.addEventListener('click', () => {
+      const buyNow = () => {
         if (this.lastState) actions.buy(u.id, bulkAmount(this.lastState, u, this.mode));
-      });
+      };
+      holdRepeat(btn, buyNow);
       root.append(ic, info, btn);
       list.append(root);
       this.rows.set(u.id, { root, icon: ic, lv, name, desc, ms, msBar, msText, btn, lastLevel: -1, seen: false });
@@ -231,6 +265,14 @@ export class Ui {
     const sum = (k: BoxKind, from: Rarity) => RARITIES.slice(RARITIES.indexOf(from)).reduce((a, r) => a + BOX_ODDS[k][r], 0);
     $('#box-odds').textContent = t('boxOdds', Math.round(sum('common', 'epic')));
     $('#gbox-odds').textContent = t('gboxOdds', Math.round(sum('golden', 'mythic')));
+    // нажатие на деньги показывает число полностью и что значит сокращение
+    $('#money-pill').addEventListener('click', () => {
+      const m = this.lastState?.money ?? 0;
+      const tier = numberTier(m);
+      const lines = [t('numInfo', fullNumber(m, lang()))];
+      if (tier >= 2) lines.push(t('numTier').replace('{n}', t(`num_${tier}`)).replace('{z}', String(tier * 3)));
+      this.toast(lines.join(' · '));
+    });
     $('#box-buy').addEventListener('click', () => actions.buyBox());
     $('#gbox-buy').addEventListener('click', () => actions.adBox());
     $('#gbox-buy').classList.add('ad');
@@ -385,7 +427,7 @@ export class Ui {
     $('#rate-sec').textContent = t('perSec', fmt(incomePerSecond(s, now)));
     $('#rate-tap').textContent = t('perTap', fmt(tapValue(s, now)));
     $('#place').textContent = placeName(LOCATIONS[s.location].id, s.stars);
-    $('#hint').hidden = s.taps > 5;
+    this.renderCoach(s, now);
     if (this.soundIcon !== s.muted) {
       this.soundIcon = s.muted;
       $('#sound').innerHTML = ui(s.muted ? 'mute' : 'sound');
@@ -405,6 +447,36 @@ export class Ui {
     if (this.tab === 'quests') this.renderQuests(s, now);
     if (this.tab === 'move') this.renderMove(s, now);
     if (this.tab === 'shop') this.renderShop(s, now);
+  }
+
+  // Первые минуты новичка: подсказка ведёт по шагам «тапай → нож → Тунг Тунг → ящик».
+  // Шаг выводится из сохранения, отдельного поля не нужно; опытный игрок подсказок не видит.
+  private coachKey = '';
+  private renderCoach(s: GameState, now: number) {
+    let step = '';
+    let target: HTMLElement | null = null;
+    const fresh = s.location === 0 && s.stars === 0;
+    const row = (id: string) => this.rows.get(id)?.root ?? null;
+    if (s.taps < 8 && s.bought === 0) step = 'coachTap';
+    else if (fresh && s.bought === 0 && canBuyN(s, 'knife', 1)) {
+      step = 'coachKnife';
+      target = this.tab === 'upgrades' ? row('knife') : $('#tab-upgrades');
+    } else if (fresh && s.bought < 4 && !(s.levels.grill_helper ?? 0) && canBuyN(s, 'grill_helper', 1)) {
+      step = 'coachHelper';
+      target = this.tab === 'upgrades' ? row('grill_helper') : $('#tab-upgrades');
+    } else if (s.boxesOpened === 0 && s.bought >= 3 && canBuyBox(s, now)) {
+      step = 'coachBox';
+      target = this.tab === 'pets' ? $('#box-buy') : $('#tab-pets');
+    }
+    const key = `${step}:${target?.id || target?.dataset.id || ''}:${this.tab}`;
+    if (key === this.coachKey) return;
+    this.coachKey = key;
+    document.querySelectorAll('.coach').forEach((e) => e.classList.remove('coach'));
+    target?.classList.add('coach');
+    const hint = $('#hint');
+    hint.hidden = !step;
+    hint.classList.toggle('plain', step !== 'coachTap');
+    if (step) hint.textContent = t(step);
   }
 
   private renderBuffs(s: GameState, now: number) {
