@@ -21,7 +21,7 @@ export interface LbResult {
 }
 
 export interface Platform {
-  name: 'local' | 'yandex';
+  name: 'local' | 'yandex' | 'vk';
   lang: string;
   // сообщить площадке, что игра загрузилась и можно играть
   ready(): void;
