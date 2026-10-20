@@ -401,9 +401,11 @@ export function comboMult(combo: number): number {
 
 // Новый рекорд серии показываем на экране, только когда старый рекорд уже был заметным
 // (иначе у новичка «рекорд» всплывал бы на каждом тапе первых серий).
+// oldBest — рекорд на начало текущей серии: сама серия обновляет bestCombo на каждом тапе,
+// и без этого у новичка «рекорд» всплывал уже в самой первой серии после 10 тапов.
 export const RECORD_SHOW_FROM = 10;
-export function beatsRecord(state: GameState, combo: number): boolean {
-  return combo > state.bestCombo && state.bestCombo >= RECORD_SHOW_FROM;
+export function beatsRecord(oldBest: number, combo: number): boolean {
+  return combo > oldBest && oldBest >= RECORD_SHOW_FROM;
 }
 
 export function recordCombo(state: GameState, combo: number): GameState {

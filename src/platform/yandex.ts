@@ -92,16 +92,40 @@ export async function createYandexPlatform(): Promise<Platform | null> {
     }
   };
 
+  // Покупки, которые игра уже выдала, но площадка не дала списать. При следующем запуске их нужно
+  // списать ещё раз, но не выдавать повторно (раньше игрок получал пакет денег дважды).
+  const GRANTED_KEY = 'shawarma-idle-granted';
+  const granted = (): string[] => {
+    try {
+      const v = JSON.parse(localStorage.getItem(GRANTED_KEY) ?? '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  };
+  const setGranted = (list: string[]) => {
+    try {
+      localStorage.setItem(GRANTED_KEY, JSON.stringify(list.slice(-50)));
+    } catch {
+      // хранилище недоступно
+    }
+  };
+
+  // Списывает расходуемые покупки и возвращает, сколько из них ещё не выдано игроку.
   async function consumeCash(purchases: any[], id = 'cash_pack'): Promise<number> {
     let count = 0;
     for (const p of purchases) {
       if (p.productID !== id) continue;
+      const token = String(p.purchaseToken);
+      const already = granted().includes(token);
       try {
         await payments.consumePurchase(p.purchaseToken);
-        count++;
+        if (already) setGranted(granted().filter((t) => t !== token));
       } catch {
-        // не получилось списать — выдадим при следующем запуске
+        // не получилось списать — спишем при следующем запуске, а выдачу запоминаем
+        if (!already) setGranted([...granted(), token]);
       }
+      if (!already) count++;
     }
     return count;
   }

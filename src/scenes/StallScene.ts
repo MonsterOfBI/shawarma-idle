@@ -420,6 +420,16 @@ export class StallScene extends Phaser.Scene {
     }
   }
 
+  // RenderTexture.resize в Phaser 3.90 не пересоздаёт текстуру видеокарты: после поворота телефона
+  // или изменения окна фон растягивался или рисовался только в углу. Поэтому при новом размере
+  // создаём текстуру заново на том же месте.
+  private freshRT(old: Phaser.GameObjects.RenderTexture, w: number, h: number) {
+    const rt = this.add.renderTexture(0, 0, w, h).setOrigin(0, 0).setDepth(old.depth);
+    this.children.moveAbove(rt as never, old as never);
+    old.destroy();
+    return rt;
+  }
+
   private redrawWorld() {
     const phase = ((((this.clock / 1000) / DAY_SECONDS + DAY_START) % 1) + 1) % 1;
     // градиент неба, солнце и луна меняются медленно: в текстуру раз в полсекунды
@@ -427,7 +437,7 @@ export class StallScene extends Phaser.Scene {
     const resized = this.skyRT.width !== sw || this.skyRT.height !== sh;
     if (resized || this.clock - this.skyAt >= 500) {
       this.drawSky(phase);
-      if (resized) this.skyRT.resize(sw, sh);
+      if (resized) this.skyRT = this.freshRT(this.skyRT, sw, sh);
       this.skyRT.clear().draw(this.sky);
     } else this.nightK = this.skyNight(phase);
     // Фон — десятки тысяч фигур. Перерисовываем его, только когда заметно сменился свет
@@ -439,7 +449,7 @@ export class StallScene extends Phaser.Scene {
       this.backdropNight = this.nightK;
       this.backdrop.g.clear();
       BACKDROPS[LOCATIONS[this.location].id](this.backdrop, this.ctx());
-      if (this.backdropRT.width !== width || this.backdropRT.height !== height) this.backdropRT.resize(width, height);
+      if (this.backdropRT.width !== width || this.backdropRT.height !== height) this.backdropRT = this.freshRT(this.backdropRT, width, height);
       this.backdropRT.clear().draw(this.backdrop.g);
       this.backdrop.g.clear();
     }
@@ -665,7 +675,8 @@ export class StallScene extends Phaser.Scene {
     }
     this.skyAt = -1e9;
     this.buildProps();
-    this.customers.forEach((cu) => cu.c.root.setScale(this.critterScale(cu.c)));
+    // гости стоят на земле и после поворота экрана, а не висят на старой высоте
+    this.customers.forEach((cu) => cu.c.root.setScale(this.critterScale(cu.c)).setY(this.groundY + 4 * this.unit));
     this.placePets();
     this.redrawWorld();
   }
@@ -853,6 +864,16 @@ export class StallScene extends Phaser.Scene {
     this.rush = on;
   }
 
+  // Крупная надпись по центру ларька не должна вылезать за края экрана (длинный текст на телефоне).
+  private fitCentered(text: Phaser.GameObjects.Text, size: number, x: number, y: number) {
+    const w = this.scale.width;
+    text.setScale(1).setFontSize(size);
+    const max = w - 24;
+    if (text.width > max) text.setFontSize(Math.max(10, Math.floor((size * max) / text.width)));
+    const half = Math.min(text.width, max) / 2;
+    text.setPosition(Phaser.Math.Clamp(x, half + 12, w - half - 12), y);
+  }
+
   setCombo(combo: number, mult: number) {
     if (combo < 3) {
       this.comboText.setAlpha(0);
@@ -861,9 +882,10 @@ export class StallScene extends Phaser.Scene {
     const u = this.unit;
     this.comboText
       .setText(`${t('combo', combo)}  ×${lang() === 'ru' ? mult.toFixed(2).replace('.', ',') : mult.toFixed(2)}`)
-      .setFontSize(Math.round(15 * u + Math.min(combo, 50) * 0.12 * u))
-      .setColor(combo >= 50 ? '#ffd86b' : combo >= 25 ? '#ffb02e' : '#fff4dc')
-      .setPosition(this.stallX, Math.min(this.scale.height - 16 * u, this.groundY + 32 * u))
+      .setColor(combo >= 50 ? '#ffd86b' : combo >= 25 ? '#ffb02e' : '#fff4dc');
+    // запас под прыжок ×1,25 в начале анимации
+    this.fitCentered(this.comboText, Math.round((15 * u + Math.min(combo, 50) * 0.12 * u) / 1.25), this.stallX, Math.min(this.scale.height - 16 * u, this.groundY + 32 * u));
+    this.comboText
       .setAlpha(1)
       .setScale(1.25);
     this.tweens.killTweensOf(this.comboText);
@@ -876,10 +898,9 @@ export class StallScene extends Phaser.Scene {
   setRecord(combo: number, first: boolean) {
     const u = this.unit;
     const y = Math.min(this.scale.height - 16 * u, this.groundY + 32 * u) - 30 * u;
+    this.recordText.setText(t('comboRecord', combo));
+    this.fitCentered(this.recordText, Math.round(17 * u), this.stallX, y);
     this.recordText
-      .setText(t('comboRecord', combo))
-      .setFontSize(Math.round(17 * u))
-      .setPosition(this.stallX, y)
       .setAlpha(1)
       .setScale(first ? 1.6 : 1.15);
     this.tweens.killTweensOf(this.recordText);
@@ -937,7 +958,8 @@ export class StallScene extends Phaser.Scene {
     } else pop.setText(text);
     const tilt = Phaser.Math.Between(-8, 8);
     pop
-      .setPosition(x + Phaser.Math.Between(-14, 14) * this.unit, y - 20 * this.unit)
+      // не даём надписи уйти за край экрана (гость у самого края, крит на большом числе)
+      .setPosition(Phaser.Math.Clamp(x + Phaser.Math.Between(-14, 14) * this.unit, pop.width / 2 + 6, Math.max(pop.width / 2 + 6, this.scale.width - pop.width / 2 - 6)), y - 20 * this.unit)
       .setVisible(true)
       .setAlpha(1)
       .setScale(size > 1 ? 0.3 : 0.55)
@@ -1178,7 +1200,7 @@ export class StallScene extends Phaser.Scene {
     // облачко запекаем в картинку, пока оно на экране; текстуру убираем вместе с облачком
     const img = bake(g, this.resFor(u));
     bubble.once(Phaser.GameObjects.Events.DESTROY, () => dropTexture(this, img));
-    bubble.setData('h', bh);
+    bubble.setData('h', bh).setData('w', bw);
     this.tweens.add({ targets: bubble, scale: 1, duration: 220, ease: 'Back.out' });
     return bubble;
   }
@@ -1377,7 +1399,7 @@ export class StallScene extends Phaser.Scene {
       }
     });
     for (const c of this.customers) {
-      if (c.bubble) c.bubble.setPosition(c.c.root.x + 6 * u, c.c.root.y - c.c.height * c.c.root.scaleY - (c.bubble.getData('h') / 2 + 12 * u));
+      if (c.bubble) c.bubble.setPosition(Phaser.Math.Clamp(c.c.root.x + 6 * u, c.bubble.getData('w') / 2 + 6, this.scale.width - c.bubble.getData('w') / 2 - 6), c.c.root.y - c.c.height * c.c.root.scaleY - (c.bubble.getData('h') / 2 + 12 * u));
       if (c.state !== 'leaving') continue;
       c.vx += (vmax * 1.15 - c.vx) * Math.min(1, delta / 320);
       c.c.root.x += c.vx * delta;

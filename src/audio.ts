@@ -3,8 +3,12 @@
 let ctx: AudioContext | null = null;
 let muted = false;
 let paused = false;
+// До первого действия игрока звук не создаём: браузер всё равно не даст его запустить
+// и засыпает консоль предупреждениями на каждый звук.
+let unlocked = false;
 
 function audio(): AudioContext | null {
+  if (!unlocked) return null;
   if (!ctx) {
     try {
       ctx = new AudioContext();
@@ -354,9 +358,11 @@ export function setMusic(on: boolean) {
 }
 
 // Первый тап: разбудить звук и, если можно, запустить музыку.
-export function unlockAudio(withMusic: boolean) {
-  audio();
+export function unlockAudio(withMusic: boolean): boolean {
+  unlocked = true;
+  const a = audio();
   if (withMusic) setMusic(true);
+  return a?.state === 'running';
 }
 
 // Пауза от площадки (реклама, свёрнутая вкладка): звук обязан замолчать.

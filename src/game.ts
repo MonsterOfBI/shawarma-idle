@@ -95,6 +95,7 @@ export class Game {
   private lastSave = 0;
   private combo = 0;
   private recordInStreak = false; // в этой серии рекорд уже побит
+  private streakBest = 0; // рекорд на начало текущей серии
   private lastTapAt = 0;
   private rushUntil = 0;
   private nextRushAt = Date.now() + 90_000;
@@ -154,13 +155,14 @@ export class Game {
     void this.scene.portraits(Object.keys(BRAINROT_BY_ID)).then((p) => this.ui.setPortraits(p));
     this.ui.setPreviewSource((i) => this.scene.placePreview(i));
     // звук и музыка просыпаются только после первого действия игрока
+    // На телефонах звук разрешается только по отпусканию пальца (touchend/click), поэтому слушаем все
+    // эти события и снимаем слушатели, только когда звук действительно запустился.
+    const wakeEvents = ['pointerdown', 'touchend', 'click', 'keydown'];
     const wake = () => {
-      unlockAudio(!this.state.musicOff && !this.state.muted);
-      window.removeEventListener('pointerdown', wake);
-      window.removeEventListener('keydown', wake);
+      if (!unlockAudio(!this.state.musicOff && !this.state.muted)) return;
+      wakeEvents.forEach((e) => window.removeEventListener(e, wake, true));
     };
-    window.addEventListener('pointerdown', wake);
-    window.addEventListener('keydown', wake);
+    wakeEvents.forEach((e) => window.addEventListener(e, wake, true));
 
     const restored = await this.platform.restorePurchases();
     this.applyOwned(restored.owned);
@@ -184,17 +186,22 @@ export class Game {
           }
         }
         if (changed) this.applyPause();
-        if (this.modalOpen && !this.ui.anyModalOpen()) this.modalOpen = false;
+        if (this.modalOpen && !this.ui.anyModalOpen()) {
+          this.modalOpen = false;
+          this.gameplayStart();
+        }
       },
       { capture: true },
     );
     window.addEventListener('beforeunload', () => void this.save());
+    // на телефонах beforeunload часто не приходит: страницу просто выгружают из фона
+    window.addEventListener('pagehide', () => void this.save());
 
     this.platform.ready();
     this.ui.render(this.state, now);
     document.getElementById('loading')?.remove();
     await this.welcomeBack(now);
-    this.platform.gameplayStart();
+    this.gameplayStart();
 
     setInterval(() => this.loop(), 100);
     // начало сюжета: только у совсем нового игрока
@@ -292,7 +299,7 @@ export class Game {
       return;
     }
     this.modalOpen = true;
-    this.platform.gameplayStop();
+    this.gameplayStop();
     try {
       const away = Math.min((now - this.state.lastSeen) / 1000, OFFLINE_CAP_SECONDS);
       const choice = await this.ui.offline(earned, away, incomePerSecond(this.state, now, false) * OFFLINE_RATE);
@@ -308,7 +315,7 @@ export class Game {
       this.state = { ...this.state, lastSeen: Date.now() };
     } finally {
       this.modalOpen = false;
-      this.platform.gameplayStart();
+      this.gameplayStart();
     }
     void this.save();
   }
@@ -356,8 +363,11 @@ export class Game {
     if (this.paused || this.modalOpen) return;
     const now = Date.now();
     this.combo = now - this.lastTapAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
-    if (this.combo === 1) this.recordInStreak = false;
-    const record = beatsRecord(this.state, this.combo);
+    if (this.combo === 1) {
+      this.recordInStreak = false;
+      this.streakBest = this.state.bestCombo;
+    }
+    const record = beatsRecord(this.streakBest, this.combo);
     this.lastTapAt = now;
     const rush = now < this.rushUntil;
     const crit = isCrit(Math.random());
@@ -461,7 +471,12 @@ export class Game {
 
   // Ящик: за деньги, за рекламу (золотой) или бесплатно (подарок, задание).
   private async openBox(kind: BoxKind, how: 'buy' | 'ad' | 'free', title = '') {
-    if (this.revealing) return;
+    if (this.revealing) {
+      // подарочный ящик (переезд, подарок дня, задание, покупка) ждёт своей очереди, а не пропадает:
+      // раньше ящик за переезд терялся, если игрок за 3 секунды ожидания успевал открыть другой
+      if (how !== 'free') return;
+      while (this.revealing) await wait(150);
+    }
     let now = Date.now();
     let r: { state: GameState; drop: Drop } | null = null;
     if (how === 'buy') r = buyBox(this.state, now, Math.random);
@@ -643,13 +658,26 @@ export class Game {
     this.paused = p;
     setAudioPaused(p);
     if (p) {
-      this.platform.gameplayStop();
+      this.gameplayStop();
       void this.save();
       this.scene.scene.pause();
     } else {
       this.scene.scene.resume();
-      this.platform.gameplayStart();
+      this.gameplayStart();
     }
+  }
+
+  // Яндекс просит сообщать о начале и конце игрового процесса парами, без повторов.
+  private gameplay = false;
+  private gameplayStart() {
+    if (this.gameplay || this.paused || this.modalOpen) return;
+    this.gameplay = true;
+    this.platform.gameplayStart();
+  }
+  private gameplayStop() {
+    if (!this.gameplay) return;
+    this.gameplay = false;
+    this.platform.gameplayStop();
   }
 
   private async save() {

@@ -163,6 +163,11 @@ describe('числа', () => {
     expect(formatNumber(1e12, 'ru')).toBe('1 трлн');
     expect(formatNumber(100_000, 'en')).toBe('100K');
     expect(formatNumber(250_000_000, 'ru')).toBe('250 млн');
+    // звёзды дворца уводят деньги далеко за квинтиллионы: строка не должна разрастаться
+    expect(formatNumber(1.5e21, 'ru')).toBe('1,5 скст.');
+    expect(formatNumber(2e33, 'en')).toBe('2Dc');
+    expect(formatNumber(1.234e40, 'ru')).toBe('1,23e40');
+    for (let e = 3; e < 80; e++) expect(formatNumber(9.99 * 10 ** e, 'ru').length).toBeLessThanOrEqual(12);
   });
 });
 
@@ -599,16 +604,28 @@ import { RECORD_SHOW_FROM, beatsRecord } from './economy';
 describe('рекорд серии тапов', () => {
   it('рекорд запоминается и показывается, только когда побит', () => {
     let s = { ...newGame(0), bestCombo: 20 };
-    expect(beatsRecord(s, 20)).toBe(false);
-    expect(beatsRecord(s, 21)).toBe(true);
+    expect(beatsRecord(s.bestCombo, 20)).toBe(false);
+    expect(beatsRecord(s.bestCombo, 21)).toBe(true);
     s = recordCombo(s, 21);
     expect(s.bestCombo).toBe(21);
     expect(recordCombo(s, 5).bestCombo).toBe(21);
   });
 
   it('у новичка с маленьким рекордом надпись не всплывает', () => {
-    expect(beatsRecord({ ...newGame(0), bestCombo: RECORD_SHOW_FROM - 1 }, 30)).toBe(false);
-    expect(beatsRecord({ ...newGame(0), bestCombo: RECORD_SHOW_FROM }, RECORD_SHOW_FROM + 1)).toBe(true);
+    expect(beatsRecord(RECORD_SHOW_FROM - 1, 30)).toBe(false);
+    expect(beatsRecord(RECORD_SHOW_FROM, RECORD_SHOW_FROM + 1)).toBe(true);
+  });
+
+  it('в самой первой длинной серии рекорд не всплывает, хотя bestCombo растёт по ходу', () => {
+    let s = newGame(0);
+    const startBest = s.bestCombo;
+    for (let combo = 1; combo <= 60; combo++) {
+      expect(beatsRecord(startBest, combo)).toBe(false);
+      s = recordCombo(s, combo);
+    }
+    expect(s.bestCombo).toBe(60);
+    // следующая серия сравнивается уже с 60
+    expect(beatsRecord(s.bestCombo, 61)).toBe(true);
   });
 });
 
