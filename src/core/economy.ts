@@ -37,8 +37,8 @@ export const FRENZY_MULT = 7;
 export const FRENZY_SECONDS = 30;
 export const TAP_FRENZY_MULT = 10;
 export const TAP_FRENZY_SECONDS = 15;
-// Бесплатный золотой ящик за рекламу — не чаще раза в 4 минуты.
-export const AD_BOX_COOLDOWN_MS = 4 * 60 * 1000;
+// Золотой ящик за рекламу — без отката (версия 2.11): ограничивает сама реклама.
+export const AD_BOX_COOLDOWN_MS = 0;
 
 export interface GameState {
   version: number;
@@ -230,6 +230,7 @@ function output(u: UpgradeDef, lv: number): number {
   return u.amount * lv * milestoneMult(lv);
 }
 
+
 export function tapValue(state: GameState, now: number): number {
   let base = 1;
   for (const u of UPGRADES) if (u.kind === 'tap') base += output(u, level(state, u.id));
@@ -246,8 +247,15 @@ export function incomePerSecond(state: GameState, now: number, includeBoost = tr
   return base * m;
 }
 
+// Наценка на улучшения по точкам (версия 2.11). Работает как урезанный вдвое доход,
+// но тап по-прежнему стоит целый 1 ₽. На помойке наценка меньше, чтобы новичок быстрее переехал.
+export const PRICE_MULT = [1.5, 2, 2, 2, 2];
+export function priceAt(state: GameState, def: UpgradeDef, lvl: number): number {
+  return Math.ceil(upgradeCost(def, lvl) * (PRICE_MULT[state.location] ?? 2));
+}
+
 export function costOf(state: GameState, def: UpgradeDef): number {
-  return upgradeCost(def, level(state, def.id));
+  return priceAt(state, def, level(state, def.id));
 }
 
 export function isMaxed(state: GameState, def: UpgradeDef): boolean {
@@ -267,7 +275,7 @@ const BULK_LIMIT = 1000;
 export function bulkCost(state: GameState, def: UpgradeDef, n: number): number {
   let sum = 0;
   const from = level(state, def.id);
-  for (let i = 0; i < n; i++) sum += upgradeCost(def, from + i);
+  for (let i = 0; i < n; i++) sum += priceAt(state, def, from + i);
   return sum;
 }
 
@@ -278,7 +286,7 @@ export function maxAffordable(state: GameState, def: UpgradeDef): number {
   let n = 0;
   let sum = 0;
   while (n < cap) {
-    const next = sum + upgradeCost(def, from + n);
+    const next = sum + priceAt(state, def, from + n);
     if (next > state.money) break;
     sum = next;
     n++;
@@ -419,9 +427,12 @@ export function minutesOfIncome(state: GameState, now: number, minutes: number):
 
 // ---------- ящики с брейнротами ----------
 
-// Обычный ящик стоит примерно 3 минуты дохода и дорожает с каждым открытым.
+// Обычный ящик стоит примерно 2 минуты дохода (с тапами 3 раза в секунду)
+// и дорожает на 2 % с каждым открытым ящиком (версия 2.11; было 6 минут и +4 %).
+export const BOX_MINUTES = 2;
+export const BOX_GROWTH = 0.02;
 export function boxCost(state: GameState, now: number): number {
-  return Math.round(minutesOfIncome(state, now, 3) * (1 + state.boxesOpened * 0.04) * 2);
+  return Math.round(minutesOfIncome(state, now, BOX_MINUTES) * (1 + state.boxesOpened * BOX_GROWTH));
 }
 
 export function canBuyBox(state: GameState, now: number): boolean {
@@ -434,7 +445,7 @@ export function buyBox(state: GameState, now: number, rand: () => number) {
 }
 
 export function adBoxReady(state: GameState, now: number): boolean {
-  return now >= state.adBoxAt;
+  return AD_BOX_COOLDOWN_MS === 0 || now >= state.adBoxAt;
 }
 
 export function freeBox(state: GameState, now: number, kind: BoxKind, rand: () => number, fromAd = false) {

@@ -33,7 +33,7 @@ export function questDone(s: GameState, q: Quest): boolean {
 
 function makeQuest(s: GameState, now: number, kind: QuestKind, r: number): Quest {
   const step = 1 + Math.min(s.questsDone, 40) * 0.15; // задания медленно усложняются
-  const reward: { minutes?: number; box?: BoxKind } = r < 0.25 ? { box: r < 0.04 ? 'golden' : 'common' } : { minutes: Math.round(4 + 8 * step) };
+  const reward: { minutes?: number; box?: BoxKind } = r < 0.25 ? { box: r < 0.04 ? 'golden' : 'common' } : { minutes: Math.round(1 + 1.5 * step) }; // версия 2.11: награда деньгами в 4 раза меньше
   switch (kind) {
     case 'taps':
       return { kind, target: Math.round(80 * step / 10) * 10, start: s.taps, reward };
@@ -72,7 +72,8 @@ export function claimQuest(s: GameState, i: number, now: number, rand: () => num
   let state: GameState = { ...s, quests: s.quests.filter((_, k) => k !== i), questsDone: s.questsDone + 1 };
   let money = 0;
   if (q.reward.minutes) {
-    money = minutesOfIncome(s, now, q.reward.minutes);
+    // задания из старых сохранений тоже платят по-новому, не больше 12 минут
+    money = minutesOfIncome(s, now, Math.min(q.reward.minutes, 12));
     state = addMoney(state, money);
   }
   state = ensureQuests(state, now, rand);

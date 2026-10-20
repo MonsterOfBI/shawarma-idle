@@ -424,7 +424,7 @@ export class Ui {
     const ab = $('#btn-adbox');
     ab.classList.toggle('ready', adReady);
     ab.classList.toggle('wait', !adReady);
-    (ab.querySelector('.badge') as HTMLElement).hidden = !adReady;
+    (ab.querySelector('.badge') as HTMLElement).hidden = true; // ящик за рекламу доступен всегда, не дёргаем игрока
     $('#adbox-label').textContent = adReady ? t('sideBox') : formatDuration((s.adBoxAt - now) / 1000, lang());
   }
 
@@ -436,7 +436,7 @@ export class Ui {
     };
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
-    set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
+    set('pets', canBuyBox(s, now) || anyMerge(s) ? '!' : '');
     const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');
@@ -671,6 +671,7 @@ export class Ui {
       { id: 'x2_forever', ico: 'x2', name: t('shopX2'), text: t('shopX2Text'), owned: s.owned.x2Forever, hot: true },
       { id: 'no_ads', ico: 'play', name: t('shopNoAds'), text: t('shopNoAdsText'), owned: s.owned.noAds },
       { id: 'cash_pack', ico: 'bag', name: t('shopCash'), text: t('shopCashText', fmt(cashPackAmount(s, now))), owned: false },
+      { id: 'god_pet', ico: 'goldcrate', name: t('shopGod'), text: t('shopGodText'), owned: false },
     ];
     if (box.childElementCount !== items.length + 1) {
       box.replaceChildren();
@@ -767,7 +768,7 @@ export class Ui {
   async reveal(drop: Drop, kind: BoxKind, again: string | null, onOpen: () => void): Promise<'again' | 'ok'> {
     const box = $('#reveal');
     const crate = box.querySelector('.reveal-crate') as HTMLElement;
-    crate.classList.toggle('gold', kind === 'golden');
+    crate.classList.toggle('gold', kind !== 'common');
     box.className = 'reveal shake';
     box.hidden = false;
     let skip!: () => void;

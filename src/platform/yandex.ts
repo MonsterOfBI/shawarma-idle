@@ -10,7 +10,9 @@ declare global {
   }
 }
 
-const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack'];
+const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack', 'god_pet'];
+// расходуемые покупки: их списывают сразу после выдачи
+const CONSUMABLE = ['cash_pack', 'god_pet'];
 // Технические имена лидербордов. Их нужно создать в консоли Яндекс Игр (см. docs/yandex-publish.md).
 export const LEADERBOARD_NAMES: Record<Board, string> = { week: 'shawarmaWeek', total: 'shawarmaTotal' };
 
@@ -90,10 +92,10 @@ export async function createYandexPlatform(): Promise<Platform | null> {
     }
   };
 
-  async function consumeCash(purchases: any[]): Promise<number> {
+  async function consumeCash(purchases: any[], id = 'cash_pack'): Promise<number> {
     let count = 0;
     for (const p of purchases) {
-      if (p.productID !== 'cash_pack') continue;
+      if (p.productID !== id) continue;
       try {
         await payments.consumePurchase(p.purchaseToken);
         count++;
@@ -183,21 +185,22 @@ export async function createYandexPlatform(): Promise<Platform | null> {
       if (!payments) return false;
       try {
         const p = await payments.purchase({ id });
-        if (id === 'cash_pack') await consumeCash([p]);
+        if (CONSUMABLE.includes(id)) await consumeCash([p], id);
         return true;
       } catch {
         return false;
       }
     },
     async restorePurchases() {
-      if (!payments) return { owned: [], pendingCash: 0 };
+      if (!payments) return { owned: [], pendingCash: 0, pendingGods: 0 };
       try {
         const list: any[] = await payments.getPurchases();
         const owned = list.map((p) => p.productID).filter((id: string) => id === 'no_ads' || id === 'x2_forever');
         const pendingCash = await consumeCash(list);
-        return { owned, pendingCash };
+        const pendingGods = await consumeCash(list, 'god_pet');
+        return { owned, pendingCash, pendingGods };
       } catch {
-        return { owned: [], pendingCash: 0 };
+        return { owned: [], pendingCash: 0, pendingGods: 0 };
       }
     },
     onPause(cb) {

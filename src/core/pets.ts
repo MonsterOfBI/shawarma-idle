@@ -62,13 +62,15 @@ export const PET_RARITY: Record<string, Rarity> = {
   strawberry: 'god',
 };
 
-export type BoxKind = 'common' | 'golden';
+// god — ящик из магазина за настоящие деньги: всегда божественный брейнрот.
+export type BoxKind = 'common' | 'golden' | 'god';
 
 // Шансы редкостей в процентах.
 export const BOX_ODDS: Record<BoxKind, Record<Rarity, number>> = {
-  // версия 2.8: редкие чуть чаще (легендарный 2,5 → 3,2 %, мифический 0,45 → 0,65 %, божественный 0,05 → 0,15 %)
-  common: { common: 58, rare: 27.5, epic: 10.5, legendary: 3.2, mythic: 0.65, god: 0.15 },
-  golden: { common: 0, rare: 45, epic: 34, legendary: 15.5, mythic: 4.4, god: 1.1 },
+  // версия 2.11: редкие заметно чаще (легендарный 3,2 → 7 %, мифический 0,65 → 2 %, божественный 0,15 → 0,5 %)
+  common: { common: 44, rare: 30, epic: 16.5, legendary: 7, mythic: 2, god: 0.5 },
+  golden: { common: 0, rare: 34, epic: 36, legendary: 20, mythic: 7.5, god: 2.5 },
+  god: { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0, god: 100 },
 };
 
 // Мутации: 0 — обычный, 1 — золотой (×2), 2 — алмазный (×5).
@@ -131,7 +133,7 @@ export function rollRarity(kind: BoxKind, r: number): Rarity {
     left -= odds[rar];
     if (left < 0) return rar;
   }
-  return kind === 'golden' ? 'rare' : 'common';
+  return kind === 'god' ? 'god' : kind === 'golden' ? 'rare' : 'common';
 }
 
 // Открыть ящик: rand — источник случайных чисел от 0 до 1 (в тестах подменяется).

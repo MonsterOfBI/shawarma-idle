@@ -173,23 +173,23 @@ describe('баланс', () => {
     expect(minutes).toBeLessThan(33);
   });
 
-  it('каждый следующий переезд занимает от 26 до 130 минут и дольше предыдущего', () => {
+  it('каждый следующий переезд занимает от 26 до 200 минут и дольше предыдущего', () => {
     let prev = 0;
     for (let loc = 1; loc < LOCATIONS.length - 1; loc++) {
       const minutes = secondsToEarn(LOCATIONS[loc + 1].threshold, 3, { ...newGame(0), location: loc }) / 60;
       expect(minutes).toBeGreaterThan(26);
-      expect(minutes).toBeLessThan(130);
+      expect(minutes).toBeLessThan(200);
       expect(minutes).toBeGreaterThan(prev);
       prev = minutes;
     }
   });
 
-  it('первые звёзды дворца тоже занимают от 5 минут до полутора часов', () => {
+  it('первые звёзды дворца тоже занимают от 5 минут до двух с половиной часов', () => {
     for (let stars = 0; stars < 3; stars++) {
       const s = { ...newGame(0), location: LOCATIONS.length - 1, stars };
       const minutes = secondsToEarn(nextMove(s).threshold, 3, s) / 60;
       expect(minutes).toBeGreaterThan(5);
-      expect(minutes).toBeLessThan(90);
+      expect(minutes).toBeLessThan(150);
     }
   });
 
@@ -239,14 +239,14 @@ describe('баланс', () => {
     const ten = buyN({ ...newGame(0), money: 1e6 }, 'knife', 10);
     expect(ten.levels.knife).toBe(10);
     expect(ten.money).toBeCloseTo(one.money);
-    expect(bulkCost(newGame(0), def, 1)).toBe(10);
+    expect(bulkCost(newGame(0), def, 1)).toBe(15); // 10 ₽ × наценка помойки 1,5
   });
 
   it('пачку нельзя купить без денег, а максимум считает доступное', () => {
     const def = UPGRADE_BY_ID.knife;
-    const s: GameState = { ...newGame(0), money: 25 };
+    const s: GameState = { ...newGame(0), money: 35 };
     expect(canBuyN(s, 'knife', 10)).toBe(false);
-    expect(maxAffordable(s, def)).toBe(2); // 10 + 12 = 22
+    expect(maxAffordable(s, def)).toBe(2); // 15 + 18 = 33
     expect(bulkAmount(s, def, 'max')).toBe(2);
     expect(bulkAmount(newGame(0), def, 'max')).toBe(1);
   });
@@ -508,5 +508,52 @@ describe('продажи для лидерборда', () => {
     const s = normalize({ version: 8, taps: 500 }, mon);
     expect(s.sold).toBe(500);
     expect(s.week).toEqual({ id: weekId(mon), sold: 0 });
+  });
+});
+
+import { PRICE_MULT, adBoxReady, boxCost, freeBox, minutesOfIncome } from './economy';
+import { openBox } from './pets';
+import { claimQuest } from './quests';
+
+describe('версия 2.11', () => {
+  it('улучшения на помойке дороже в 1,5 раза, дальше вдвое', () => {
+    const def = UPGRADE_BY_ID.knife;
+    expect(PRICE_MULT[0]).toBe(1.5);
+    expect(bulkCost(newGame(0), def, 1)).toBe(Math.ceil(upgradeCost(def, 0) * 1.5));
+    expect(bulkCost({ ...newGame(0), location: 2 }, def, 1)).toBe(Math.ceil(upgradeCost(def, 0) * 2));
+  });
+
+  it('шансы ящиков складываются в 100 %, редкие чаще прежнего', () => {
+    for (const k of ['common', 'golden', 'god'] as const) {
+      expect(Object.values(BOX_ODDS[k]).reduce((a, b) => a + b, 0)).toBeCloseTo(100);
+    }
+    expect(BOX_ODDS.common.legendary).toBeGreaterThanOrEqual(7);
+    expect(BOX_ODDS.common.god).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('божественный ящик всегда даёт бога', () => {
+    for (const r of [0, 0.3, 0.99]) {
+      const d = openBox(newGame(0), 'god', () => r).drop;
+      expect(d.rarity).toBe('god');
+      expect(PET_RARITY[d.id]).toBe('god');
+    }
+  });
+
+  it('ящик стоит 2 минуты дохода и дорожает на 2 % за открытый', () => {
+    const s = { ...newGame(0), levels: { knife: 20, grill: 10 } };
+    expect(boxCost(s, 0)).toBe(minutesOfIncome(s, 0, 2));
+    expect(boxCost({ ...s, boxesOpened: 50 }, 0)).toBe(Math.round(minutesOfIncome(s, 0, 2) * 2));
+  });
+
+  it('золотой ящик за рекламу можно открывать подряд', () => {
+    const r = freeBox(newGame(0), 1000, 'golden', () => 0.5, true);
+    expect(adBoxReady(r.state, 1000)).toBe(true);
+    expect(adBoxReady({ ...newGame(0), adBoxAt: 1e15 }, 0)).toBe(true);
+  });
+
+  it('задание платит не больше 12 минут дохода, даже из старого сохранения', () => {
+    const s = { ...newGame(0), levels: { knife: 20, grill: 10 }, taps: 1000, quests: [{ kind: 'taps' as const, target: 10, start: 0, reward: { minutes: 60 } }] };
+    const r = claimQuest(s, 0, 0, () => 0.9)!;
+    expect(r.money).toBe(minutesOfIncome(s, 0, 12));
   });
 });

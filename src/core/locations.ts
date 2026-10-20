@@ -17,10 +17,10 @@ export interface LocationDef {
 // В версии 2.10 пороги подняты так, чтобы каждый переезд занимал на 30 % больше времени (всего около 3 ч 40 мин).
 export const LOCATIONS: LocationDef[] = [
   { id: 'dump', threshold: 0, mult: 1, body: 0xc49a62, roof: 0x3d6fb6, width: 170 },
-  { id: 'metro', threshold: 1_000_000_000_000, mult: 4, body: 0xe4472b, roof: 0xffb02e, width: 200 },
-  { id: 'desert', threshold: 31_000_000_000_000, mult: 25, body: 0xd98b4a, roof: 0xfff4dc, width: 260 },
-  { id: 'piazza', threshold: 540_000_000_000_000, mult: 150, body: 0xc8553d, roof: 0x2f6b4f, width: 300 },
-  { id: 'palace', threshold: 7_200_000_000_000_000, mult: 1000, body: 0xf6e7c1, roof: 0xffcf3f, width: 340 },
+  { id: 'metro', threshold: 1_500_000_000_000, mult: 4, body: 0xe4472b, roof: 0xffb02e, width: 200 },
+  { id: 'desert', threshold: 62_000_000_000_000, mult: 25, body: 0xd98b4a, roof: 0xfff4dc, width: 260 },
+  { id: 'piazza', threshold: 1_080_000_000_000_000, mult: 150, body: 0xc8553d, roof: 0x2f6b4f, width: 300 },
+  { id: 'palace', threshold: 14_400_000_000_000_000, mult: 1000, body: 0xf6e7c1, roof: 0xffcf3f, width: 340 },
 ];
 
 // Сохранения версии 7 жили на семи точках: переводим номер точки на новую карту из пяти.

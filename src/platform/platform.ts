@@ -1,6 +1,6 @@
 // Слой-адаптер площадки. Игра обращается к Яндексу, VK или браузеру только через этот интерфейс.
 
-export type ProductId = 'no_ads' | 'x2_forever' | 'cash_pack';
+export type ProductId = 'no_ads' | 'x2_forever' | 'cash_pack' | 'god_pet';
 
 export interface Product {
   id: ProductId;
@@ -37,7 +37,7 @@ export interface Platform {
   // true, если покупка прошла
   purchase(id: ProductId): Promise<boolean>;
   // разовые покупки, которые игрок уже сделал (например no_ads), и не выданные пакеты денег
-  restorePurchases(): Promise<{ owned: ProductId[]; pendingCash: number }>;
+  restorePurchases(): Promise<{ owned: ProductId[]; pendingCash: number; pendingGods: number }>;
   // площадка просит поставить игру на паузу (реклама, свёрнутая вкладка)
   onPause(cb: (paused: boolean) => void): void;
   // есть ли таблицы игроков (только на Яндекс Играх)
@@ -100,7 +100,7 @@ export function createLocalPlatform(): Platform {
       return false;
     },
     async restorePurchases() {
-      return { owned: [], pendingCash: 0 };
+      return { owned: [], pendingCash: 0, pendingGods: 0 };
     },
     onPause: onVisibility,
     leaderboards: false,

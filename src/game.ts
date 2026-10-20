@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
-import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, petBonus } from './core/pets';
+import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, openBox, petBonus } from './core/pets';
 import { claimQuest, ensureQuests } from './core/quests';
 import {
   type GameState,
@@ -143,6 +143,7 @@ export class Game {
     const restored = await this.platform.restorePurchases();
     this.applyOwned(restored.owned);
     for (let i = 0; i < restored.pendingCash; i++) this.state = addMoney(this.state, cashPackAmount(this.state, now));
+    for (let i = 0; i < restored.pendingGods; i++) this.state = openBox(this.state, 'god', Math.random).state;
     this.ui.setProducts(await this.platform.getProducts(), this.platform.purchasesAvailable);
 
     this.platform.onPause((p) => this.setPaused(p));
@@ -235,7 +236,7 @@ export class Game {
     const s = this.state;
     const out: string[] = [];
     if (canRelocate(s)) out.push('barkMove');
-    if (adBoxReady(s, now) || canBuyBox(s, now)) out.push('barkBox');
+    if (canBuyBox(s, now)) out.push('barkBox');
     if (canClaimDaily(s, dayKey(new Date()))) out.push('barkDaily');
     // новичку подсказываем про улучшения, опытному не надоедаем
     if (s.bought < 10 && UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1))) out.push('barkUp');
@@ -515,6 +516,10 @@ export class Game {
     this.setPaused(false);
     if (!ok) return;
     const now = Date.now();
+    if (id === 'god_pet') {
+      await this.openBox('god', 'free');
+      return;
+    }
     if (id === 'cash_pack') this.state = addMoney(this.state, cashPackAmount(this.state, now));
     else this.applyOwned([id]);
     sfx.reward();
