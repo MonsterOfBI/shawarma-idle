@@ -33,8 +33,23 @@ function loadScript(src: string, timeoutMs: number): Promise<boolean> {
   });
 }
 
+// Игра на Яндексе живёт на поддоменах yandex.net / yandex.ru (и в их фрейме).
+// Вне Яндекса /sdk.js не грузим вовсе: без лишнего запроса, 404 в консоли и 5 секунд ожидания.
+// ?yandex в адресе — принудительно попробовать SDK (для отладки).
+export function looksLikeYandex(host: string, referrer: string, search: string): boolean {
+  if (/[?&]yandex\b/.test(search)) return true;
+  const ya = /(^|\.)(yandex\.(ru|net|com|by|kz|uz|com\.tr|com\.am|com\.ge|az|fr)|yandex-team\.ru|playhop\.com)$/i;
+  if (ya.test(host)) return true;
+  try {
+    return referrer !== '' && ya.test(new URL(referrer).hostname);
+  } catch {
+    return false;
+  }
+}
+
 // Возвращает платформу Яндекса или null, если игра запущена не на Яндекс Играх.
 export async function createYandexPlatform(): Promise<Platform | null> {
+  if (!window.YaGames && !looksLikeYandex(location.hostname, document.referrer, location.search)) return null;
   if (!window.YaGames && !(await loadScript('/sdk.js', 5000))) return null;
   if (!window.YaGames) return null;
 
