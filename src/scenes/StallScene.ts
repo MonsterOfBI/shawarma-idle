@@ -6,31 +6,22 @@ import { sfx } from '../audio';
 import { lang, t } from '../i18n';
 import { BACKDROPS, type Ctx, type Mover, spawnCourier, spawnMover } from './backdrops';
 import { drawBrainrot, drawMascot, setBakeRes, type Critter } from './brainrots';
-import { UPGRADES } from '../core/upgrades';
-import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, lerpColor, rng, shade } from './draw';
+import { DISPLAY_FONT, OUTLINE, Pen, rng } from './draw';
 import { type StallParts, buildStall } from './stall';
 import { Weather } from './weather';
 import { bake, dropTexture } from './bake';
+import { DAY_SECONDS, DAY_START, paintSky, skyNight } from './sky';
+import { makeSceneTextures } from './textures';
+import { makeEmitters } from './effects';
+import { guardLostTouches } from './touch';
+import { buildProps } from './props';
+import { placePreview, portraits } from './snapshots';
 
 export { DISPLAY_FONT };
 
 // Сцена только рисует: небо со сменой дня и ночи, фон локации, ларёк, очередь брейнротов,
 // Бомбардиро с мешком денег, частицы. Логика денег — в src/core, сцену дёргает src/game.ts.
 
-// Сутки в игре длятся 8 минут. Ключевые точки неба: [фаза, верх, низ, ночь 0..1].
-const DAY_SECONDS = 480;
-const SKY: [number, number, number, number][] = [
-  [0.0, 0x3fa9f5, 0xbfe9ff, 0],
-  [0.3, 0x45a0ef, 0xffe0a0, 0],
-  [0.42, 0x6a4fc0, 0xff9a4a, 0.2],
-  [0.52, 0x3a2a80, 0xe0508a, 0.5],
-  [0.6, 0x1c2a66, 0x4a3a9a, 0.75],
-  [0.84, 0x1c2a66, 0x4a3a9a, 0.75],
-  [0.93, 0x6a6ad0, 0xffb07a, 0.3],
-  [1.0, 0x3fa9f5, 0xbfe9ff, 0],
-];
-// игра начинается солнечным днём, закат наступает через пару минут
-const DAY_START = 0.12;
 const WALK_SPEED = 0.15; // пикселей за мс при масштабе 1
 
 export interface StallCallbacks {
@@ -185,7 +176,7 @@ export class StallScene extends Phaser.Scene {
   // ---------- создание ----------
 
   create() {
-    this.makeTextures();
+    makeSceneTextures(this);
     this.weather = new Weather(this);
     // сочнее цвета всей улицы: чуть больше насыщенности и контраста (только WebGL)
     if (this.renderer.type === Phaser.WEBGL) {
@@ -207,75 +198,7 @@ export class StallScene extends Phaser.Scene {
     this.night = this.add.rectangle(0, 0, 10, 10, 0x140a2a, 0).setOrigin(0, 0).setDepth(8);
     this.lampGlow = this.add.ellipse(0, 0, 10, 10, 0xffc861, 0).setDepth(9).setBlendMode(Phaser.BlendModes.ADD);
 
-    this.steam = this.add
-      .particles(0, 0, 'puff', {
-        lifespan: 1800,
-        speedY: { min: -40, max: -22 },
-        speedX: { min: -8, max: 8 },
-        scale: { start: 0.2, end: 0.8 },
-        alpha: { start: 0.22, end: 0 },
-        emitting: false,
-      })
-      .setDepth(9.5);
-    this.coins = this.add
-      .particles(0, 0, 'coin', {
-        lifespan: 900,
-        speed: { min: 140, max: 320 },
-        angle: { min: 220, max: 320 },
-        gravityY: 700,
-        rotate: { min: 0, max: 360 },
-        scale: { start: 1, end: 0.6 },
-        emitting: false,
-      })
-      .setDepth(11);
-    this.sparks = this.add
-      .particles(0, 0, 'spark', {
-        lifespan: 700,
-        speed: { min: 60, max: 220 },
-        scale: { start: 1, end: 0 },
-        blendMode: Phaser.BlendModes.ADD,
-        emitting: false,
-      })
-      .setDepth(11);
-    this.confetti = this.add
-      .particles(0, 0, 'confetti', {
-        lifespan: 1600,
-        speed: { min: 120, max: 300 },
-        angle: { min: 230, max: 310 },
-        gravityY: 400,
-        rotate: { min: 0, max: 360 },
-        tint: [TOMATO, AMBER, 0x7ff0d0, 0x5e9c3a, 0xf28cb1, CREAM],
-        scale: { start: 1, end: 0.7 },
-        emitting: false,
-      })
-      .setDepth(11);
-
-    // пыль от земли, когда ларёк перестраивается
-    this.dust = this.add
-      .particles(0, 0, 'puff', {
-        lifespan: 850,
-        speedX: { min: -150, max: 150 },
-        speedY: { min: -60, max: -10 },
-        scale: { start: 0.35, end: 1.1 },
-        alpha: { start: 0.75, end: 0 },
-        tint: 0xf1e2c2,
-        emitting: false,
-      })
-      .setDepth(9.6);
-
-    // во дворце с неба падают монеты
-    this.goldRain = this.add
-      .particles(0, 0, 'coin', {
-        lifespan: 2600,
-        speedY: { min: 60, max: 140 },
-        speedX: { min: -20, max: 20 },
-        gravityY: 60,
-        rotate: { min: 0, max: 360 },
-        scale: { min: 0.5, max: 0.9 },
-        alpha: { start: 1, end: 0.2 },
-        emitting: false,
-      })
-      .setDepth(4.5);
+    ({ steam: this.steam, coins: this.coins, sparks: this.sparks, confetti: this.confetti, dust: this.dust, goldRain: this.goldRain } = makeEmitters(this));
 
     this.comboText = this.add
       .text(0, 0, '', { fontFamily: DISPLAY_FONT, fontSize: '20px', color: '#fff4dc', fontStyle: '800', stroke: '#2a1b3d', strokeThickness: 6 })
@@ -293,24 +216,8 @@ export class StallScene extends Phaser.Scene {
     this.hitZone = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true }).setDepth(10);
     this.input.addPointer(3);
     this.input.setDefaultCursor('pointer');
-    // Страховка от «мёртвых» тапов на телефоне. Phaser держит 4 указателя для пальцев и отдаёт новое касание
-    // только свободному. Если браузер не прислал конец касания (палец ушёл за край, системный жест,
-    // реклама поверх игры), указатель навсегда считается прижатым; когда так застрянут все — тапы пропадают
-    // до перезагрузки. Перед каждым новым касанием освобождаем указатели пальцев, которых уже нет на экране.
-    const freeLost = (e: TouchEvent) => {
-      const alive = new Set(Array.from(e.touches, (t) => t.identifier));
-      const ptrs = this.input.manager.pointers;
-      for (let i = 1; i < ptrs.length; i++) {
-        const p = ptrs[i];
-        if (p.active && !alive.has(p.identifier)) {
-          p.active = false;
-          p.isDown = false;
-          p.buttons = 0;
-        }
-      }
-    };
-    window.addEventListener('touchstart', freeLost, { capture: true, passive: true });
-    window.addEventListener('touchend', freeLost, { capture: false, passive: true });
+    // потерянные касания освобождаются перед новым тапом (см. touch.ts)
+    guardLostTouches(this.input);
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.some((o) => o !== this.hitZone)) return;
       if (this.overMascot(p.worldX, p.worldY)) this.poke();
@@ -330,78 +237,10 @@ export class StallScene extends Phaser.Scene {
     this.readyResolve();
   }
 
-  private makeTextures() {
-    const g = this.make.graphics({}, false);
-    g.fillStyle(0xffffff, 1).fillCircle(16, 16, 16);
-    g.generateTexture('puff', 32, 32);
-    g.clear();
-    g.fillStyle(0x8a5a10, 1).fillCircle(10, 10, 10);
-    g.fillStyle(0xffcf3f, 1).fillCircle(10, 9, 8);
-    g.fillStyle(0xffe89a, 1).fillRect(8, 4, 4, 10);
-    g.generateTexture('coin', 20, 20);
-    g.clear();
-    g.fillStyle(0xffffff, 1).fillCircle(4, 4, 4);
-    g.generateTexture('spark', 8, 8);
-    g.clear();
-    g.fillStyle(0xffffff, 1).fillRect(0, 0, 8, 5);
-    g.generateTexture('confetti', 8, 5);
-    g.clear();
-    // облако из трёх овалов, 200×80
-    g.fillStyle(0xffffff, 1).fillEllipse(100, 56, 200, 64).fillEllipse(60, 40, 100, 72).fillEllipse(136, 44, 84, 60);
-    g.generateTexture('cloud', 200, 80);
-    g.clear();
-    // мягкая тень под ногами
-    g.fillStyle(0x2a1b3d, 0.16).fillEllipse(32, 10, 64, 20);
-    g.fillStyle(0x2a1b3d, 0.16).fillEllipse(32, 10, 46, 13);
-    g.generateTexture('shadow', 64, 20);
-    g.destroy();
-  }
-
   // ---------- небо и фон ----------
 
-  private skyNight(phase: number) {
-    let i = 0;
-    while (i < SKY.length - 2 && SKY[i + 1][0] <= phase) i++;
-    const a = SKY[i], b = SKY[i + 1];
-    const k = (phase - a[0]) / Math.max(1e-6, b[0] - a[0]);
-    return a[3] + (b[3] - a[3]) * k;
-  }
-
   private drawSky(phase: number) {
-    const { width } = this.scale;
-    let i = 0;
-    while (i < SKY.length - 2 && SKY[i + 1][0] <= phase) i++;
-    const a = SKY[i], b = SKY[i + 1];
-    const k = (phase - a[0]) / Math.max(1e-6, b[0] - a[0]);
-    const top = lerpColor(a[1], b[1], k);
-    const bottom = lerpColor(a[2], b[2], k);
-    this.nightK = a[3] + (b[3] - a[3]) * k;
-
-    const hy = this.horizonY;
-    const bands = 48;
-    this.sky.clear();
-    for (let j = 0; j < bands; j++) {
-      this.sky.fillStyle(lerpColor(top, bottom, j / (bands - 1)), 1);
-      this.sky.fillRect(0, (hy * j) / bands, width, hy / bands + 1);
-    }
-    this.sky.fillStyle(bottom, 1).fillRect(0, hy, width, this.scale.height - hy);
-
-    // солнце днём, луна ночью; идут дугой по небу
-    const u = this.unit;
-    const sunT = (phase + 0.1) % 1;
-    if (sunT < 0.55) {
-      const p = sunT / 0.55;
-      const sx = width * (0.1 + 0.8 * p);
-      const sy = hy - Math.sin(p * Math.PI) * hy * 0.7;
-      this.sky.fillStyle(0xfff1b8, 0.25).fillCircle(sx, sy, 34 * u);
-      this.sky.fillStyle(0xffe07a, 1).fillCircle(sx, sy, 20 * u);
-    } else {
-      const p = (sunT - 0.55) / 0.45;
-      const mx = width * (0.1 + 0.8 * p);
-      const my = hy - Math.sin(p * Math.PI) * hy * 0.7;
-      this.sky.fillStyle(0xf3f0ff, 1).fillCircle(mx, my, 14 * u);
-      this.sky.fillStyle(top, 1).fillCircle(mx + 6 * u, my - 3 * u, 12 * u);
-    }
+    this.nightK = paintSky(this.sky, phase, this.scale.width, this.scale.height, this.horizonY, this.unit);
     this.skyAt = this.clock;
   }
 
@@ -442,7 +281,7 @@ export class StallScene extends Phaser.Scene {
       this.drawSky(phase);
       if (resized) this.skyRT = this.freshRT(this.skyRT, sw, sh);
       this.skyRT.clear().draw(this.sky);
-    } else this.nightK = this.skyNight(phase);
+    } else this.nightK = skyNight(phase);
     // Фон — десятки тысяч фигур. Перерисовываем его, только когда заметно сменился свет
     // (рассвет и закат) или размер экрана и точка. Днём и ночью он стоит готовой картинкой.
     const { width, height } = this.scale;
@@ -461,142 +300,31 @@ export class StallScene extends Phaser.Scene {
     this.stall?.winGlow.setAlpha(0.05 + 0.3 * this.nightK);
   }
 
-  // Неподвижные предметы фона: знак метро, фонарь, а также франшиза, билборд и фудтрак.
+  // Неподвижные предметы фона (props.ts): знак метро, фонарь, франшиза, билборд и фудтрак.
   private propsBaked: string[] = [];
   private buildProps() {
     this.props.removeAll(true);
     this.extras.removeAll(true);
     this.propsBaked.forEach((k) => this.textures.exists(k) && this.textures.remove(k));
-    this.propsBaked = [];
-    this.flame = undefined;
-    const u = this.unit;
-    const w = this.scale.width;
-    const hy = this.horizonY;
-    const gy = this.groundY;
-    const id = LOCATIONS[this.location].id;
-    if (id === 'metro') {
-      this.props.add(this.add.text(w * 0.1, hy - 88 * u, 'M', { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(20 * u)}px`, color: '#e4472b', fontStyle: '900' }).setOrigin(0.5));
-    }
-
-    // фонарь слева от ларька
-    const left = this.stallX + (this.stall?.left ?? -120) * this.stallScale;
-    const lx = Math.max(22 * u, left - 34 * u);
-    const g = this.add.graphics();
-    const p = new Pen(g, 2.5);
-    if (id === 'dump') {
-      // бочка с костром, у которой греются
-      p.rect(lx - 14 * u, gy - 40 * u, 28 * u, 40 * u, 0x5a5a6a, 3 * u);
-      p.line(lx - 14 * u, gy - 28 * u, lx + 14 * u, gy - 28 * u, 2, 0x3a3a4a);
-      p.line(lx - 14 * u, gy - 12 * u, lx + 14 * u, gy - 12 * u, 2, 0x3a3a4a);
-      p.flat(0x8a4a2a, 0.6).fillCircle(lx + 6 * u, gy - 20 * u, 4 * u);
-      const flame = this.add.graphics();
-      flame.fillStyle(0xff6a2b, 1).fillTriangle(-12, 0, 12, 0, 0, -30);
-      flame.fillStyle(0xff8a2b, 1).fillTriangle(-14, 0, -2, 0, -8, -20);
-      flame.fillStyle(0xffd86b, 1).fillTriangle(-6, 0, 6, 0, 0, -16);
-      flame.setPosition(lx, gy - 40 * u).setScale(u);
-      this.props.add(flame);
-      this.flame = flame;
-      this.lampGlow.setPosition(lx, gy - 50 * u);
-    } else if (id === 'metro' || id === 'piazza' || id === 'palace') {
-      const pole = id === 'piazza' ? 0x2f3a2f : id === 'palace' ? 0xffcf3f : 0x3a3150;
-      p.rect(lx - 3 * u, gy - 130 * u, 6 * u, 130 * u, pole, 2);
-      p.rect(lx - 8 * u, gy - 8 * u, 16 * u, 8 * u, pole, 2);
-      if (id === 'piazza' || id === 'palace') {
-        p.poly([[lx - 10 * u, gy - 130 * u], [lx + 10 * u, gy - 130 * u], [lx + 7 * u, gy - 150 * u], [lx - 7 * u, gy - 150 * u]], 0xffe2a0);
-        p.poly([[lx - 12 * u, gy - 150 * u], [lx + 12 * u, gy - 150 * u], [lx, gy - 160 * u]], pole);
-        this.lampGlow.setPosition(lx, gy - 100 * u);
-      } else {
-        p.rect(lx - 3 * u, gy - 132 * u, 30 * u, 5 * u, pole, 2);
-        p.rect(lx + 16 * u, gy - 128 * u, 16 * u, 7 * u, 0xffe2a0, 3);
-        this.lampGlow.setPosition(lx + 24 * u, gy - 70 * u);
-      }
-    } else {
-      // факел тики или фонарь на шесте
-      p.rect(lx - 3 * u, gy - 96 * u, 6 * u, 96 * u, 0x8a5a33, 2);
-      p.poly([[lx - 9 * u, gy - 96 * u], [lx + 9 * u, gy - 96 * u], [lx + 6 * u, gy - 110 * u], [lx - 6 * u, gy - 110 * u]], id === 'desert' ? 0x9a6a3e : 0xc9b26a);
-      const flame = this.add.graphics();
-      flame.fillStyle(0xff8a2b, 1).fillTriangle(-7, 0, 7, 0, 0, -22);
-      flame.fillStyle(0xffd86b, 1).fillTriangle(-4, 0, 4, 0, 0, -13);
-      flame.setPosition(lx, gy - 110 * u).setScale(u);
-      this.props.add(flame);
-      this.flame = flame;
-      this.lampGlow.setPosition(lx, gy - 112 * u);
-    }
-    this.props.addAt(g, 0);
-    this.lampGlow.setSize(160 * u, 160 * u);
-
-    const S = this.look.stages;
-    if (S.franchise > 0) {
-      // вторая точка вдалеке
-      const fx = w * 0.32, s = 0.38 * u;
-      const loc = LOCATIONS[this.location];
-      const fg = this.add.graphics();
-      const fp = new Pen(fg, 2);
-      fp.rect(fx - 60 * s, hy - 70 * s, 120 * s, 70 * s, shade(loc.body, -0.1), 2);
-      fp.rect(fx - 36 * s, hy - 56 * s, 50 * s, 30 * s, 0x3b2a4f, 0, 2);
-      fp.rect(fx - 70 * s, hy - 86 * s, 140 * s, 16 * s, loc.roof, 3);
-      fp.rect(fx - 40 * s, hy - 110 * s, 80 * s, 22 * s, OUTLINE, 3, 2);
-      fp.flat(0xffd86b).fillRect(fx - 28 * s, hy - 101 * s, 56 * s, 5 * s);
-      if (S.franchise >= 3) {
-        fp.rect(fx + 70 * s, hy - 60 * s, 90 * s, 60 * s, shade(loc.body, -0.2), 2);
-        fp.rect(fx + 64 * s, hy - 74 * s, 102 * s, 14 * s, loc.roof, 3);
-      }
-      this.props.add(fg);
-    }
-    if (S.meme_ads > 0) {
-      // билборд с брейнротом: справа от ларька, но не за боковыми кнопками;
-      // если места мало, щит становится меньше
-      const st = this.stall, ss = this.stallScale;
-      const safe = this.rightSafe(w);
-      const right = st ? this.stallX + st.right * ss + 2 * u : w * 0.7;
-      let k = 1, bx = Math.min(w * 0.88, safe - 50 * u), by = hy - 60 * u;
-      if (st && bx - 48 * u < right) {
-        // справа тесно: щит поменьше и повыше, над правым краем крыши, но ниже шапки с деньгами
-        k = Phaser.Math.Clamp((safe - right) / (98 * u), 0.7, 1);
-        bx = safe - 50 * u * k;
-        by = Math.min(hy - 60 * u, gy + st.top * ss - 2 * u);
-        by = Math.max(by, this.hudBottom + 66 * u * k);
-      }
-      const v = u * k;
-      const bg = this.add.graphics();
-      const bp = new Pen(bg, 2.5);
-      bp.rect(bx - 3 * v, by - 4 * u, 6 * v, Math.max(64 * u, hy - by), 0x5a5270, 2);
-      bp.rect(bx - 48 * v, by - 62 * v, 96 * v, 64 * v, CREAM, 6 * v, 3);
-      bp.rect(bx - 44 * v, by - 58 * v, 40 * v, 56 * v, 0xffd86b, 4 * v, 0);
-      this.props.add(bg);
-      const star = drawBrainrot(this, 'tralalero');
-      star.root.setPosition(bx - 24 * v, by - 4 * v).setScale((50 / star.height) * v);
-      this.props.add(star.root);
-      this.props.add(
-        this.add
-          .text(bx + 22 * v, by - 30 * v, t('memeBoard'), { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(8 * v)}px`, fontStyle: '900', color: '#e4472b', align: 'center' })
-          .setOrigin(0.5),
-      );
-    }
-    if (S.food_truck > 0) {
-      // фудтрак у края
-      const tx = Math.max(4 * u, lx - 130 * u), ty = gy - 2 * u, s = u;
-      const tg = this.add.graphics();
-      const tp = new Pen(tg, 2.5);
-      tp.rect(tx, ty - 62 * s, 96 * s, 52 * s, AMBER, 8 * s);
-      tp.rect(tx + 92 * s, ty - 46 * s, 30 * s, 36 * s, shade(AMBER, -0.15), 6 * s);
-      tp.rect(tx + 98 * s, ty - 42 * s, 18 * s, 14 * s, 0xbfe3f2, 3 * s, 2);
-      tp.rect(tx + 12 * s, ty - 52 * s, 50 * s, 22 * s, 0x3b2a4f, 3 * s, 2);
-      for (let i = 0; i < 5; i++) tp.rect(tx + 8 * s + i * 12 * s, ty - 68 * s, 12 * s, 8 * s, i % 2 ? TOMATO : CREAM, 0, 2);
-      tp.circle(tx + 22 * s, ty - 8 * s, 10 * s, OUTLINE, 0);
-      tp.circle(tx + 96 * s, ty - 8 * s, 10 * s, OUTLINE, 0);
-      tp.circle(tx + 22 * s, ty - 8 * s, 4 * s, 0x9a9aa8, 0);
-      tp.circle(tx + 96 * s, ty - 8 * s, 4 * s, 0x9a9aa8, 0);
-      this.extras.add(tg);
-    }
-    // неподвижные предметы улицы тоже запекаем в картинки (огонь в бочке остаётся живым)
-    const res = this.resFor(u);
-    for (const o of [...this.props.list, ...this.extras.list]) {
-      if (o instanceof Phaser.GameObjects.Graphics && o !== this.flame) {
-        const img = bake(o, res);
-        if (img instanceof Phaser.GameObjects.Image) this.propsBaked.push(img.texture.key);
-      }
-    }
+    const r = buildProps(this, {
+      props: this.props,
+      extras: this.extras,
+      lampGlow: this.lampGlow,
+      u: this.unit,
+      w: this.scale.width,
+      hy: this.horizonY,
+      gy: this.groundY,
+      location: this.location,
+      look: this.look,
+      stallX: this.stallX,
+      stall: this.stall,
+      stallScale: this.stallScale,
+      safe: this.rightSafe(this.scale.width),
+      hudBottom: this.hudBottom,
+      res: this.resFor(this.unit),
+    });
+    this.flame = r.flame;
+    this.propsBaked = r.baked;
   }
 
   // ---------- ларёк ----------
@@ -1139,55 +867,12 @@ export class StallScene extends Phaser.Scene {
 
   // Открытка следующей точки для вкладки «Переезд»: фон и прокачанный ларёк этой точки, днём.
   placePreview(index: number): Promise<string> {
-    const W = 360, H = 180, u = 0.62;
-    const hy = H * 0.56, gy = H * 0.84;
-    const sky = this.make.graphics({}, false);
-    for (let j = 0; j < 24; j++) sky.fillStyle(lerpColor(SKY[0][1], SKY[0][2], j / 23), 1).fillRect(0, (hy * j) / 24, W, hy / 24 + 1);
-    sky.fillStyle(SKY[0][2], 1).fillRect(0, hy, W, H - hy);
-    const pen = new Pen(this.make.graphics({}, false), 1.5);
-    const loc = LOCATIONS[index];
-    BACKDROPS[loc.id](pen, { w: W, h: H, hy, gy, u, night: 0, clock: 0, seed: 17 + index * 101 });
-    const levels = Object.fromEntries(UPGRADES.map((up) => [up.id, 25]));
-    const st = buildStall(this, index, lookOf(levels));
-    st.root.setScale(Math.min(0.62, (gy - 12) / -st.top, (W * 0.6) / Math.max(1, st.right - st.left)));
-    const rt = this.add.renderTexture(-3000, -3000, W, H).setVisible(false);
-    rt.draw(sky).draw(pen.g).draw(st.root, W / 2, gy);
-    st.staff.forEach((c) => c.root.destroy());
-    st.root.destroy();
-    st.glow.destroy();
-    sky.destroy();
-    pen.g.destroy();
-    return new Promise((resolve) =>
-      rt.snapshot((img) => {
-        resolve((img as HTMLImageElement).src);
-        rt.destroy();
-      }),
-    );
+    return placePreview(this as Phaser.Scene, index);
   }
 
-  // Портреты брейнротов для коллекции: рисуем каждого в текстуру и отдаём картинку.
+  // Портреты брейнротов для коллекции.
   portraits(ids: string[]): Promise<Record<string, string>> {
-    const out: Record<string, string> = {};
-    return Promise.all(
-      ids.map(
-        (id) =>
-          new Promise<void>((resolve) => {
-            const size = 120;
-            const c = drawBrainrot(this, id);
-            const wide = id === 'bombardiro';
-            const sc = Math.min(108 / c.height, 114 / c.width);
-            c.root.setScale(sc);
-            const rt = this.add.renderTexture(-500, -500, size, size).setVisible(false);
-            rt.draw(c.root, size / 2 + (wide ? 4 : -2), wide ? size / 2 + 6 : size - 8);
-            c.root.destroy();
-            rt.snapshot((img) => {
-              out[id] = (img as HTMLImageElement).src;
-              rt.destroy();
-              resolve();
-            });
-          }),
-      ),
-    ).then(() => out);
+    return portraits(this, ids);
   }
 
   // ---------- очередь ----------
