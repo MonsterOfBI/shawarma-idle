@@ -1,6 +1,7 @@
 // Чистая логика экономики: без Phaser и без браузера, чтобы её можно было тестировать.
 
 import { achievementMult } from './achievements';
+import { type Weekly, emptyWeekly } from './weekly';
 import { LOCATIONS, LOCATION_FROM_V7 } from './locations';
 import { payOf } from './brainrots';
 import { type BoxKind, type Pet, MAX_STARS, openBox, petMult } from './pets';
@@ -59,9 +60,13 @@ export interface GameState {
   location: number; // индекс в LOCATIONS
   stars: number; // звёзды дворца: сколько раз расширяли дворец после конца сюжета
   boostUntil: number; // мс; до этого момента доход ×2
-  owned: { noAds: boolean; x2Forever: boolean };
+  owned: { noAds: boolean; x2Forever: boolean; starter: boolean }; // starter — стартовый набор куплен (продаётся один раз)
+  starterUntil: number; // мс; ×2 ко всему доходу от стартового набора (сутки)
   muted: boolean;
   musicOff: boolean; // музыка выключена отдельно от звуков
+  musicVol: number; // громкость музыки 0..1 (окно настроек)
+  sfxVol: number; // громкость звуков 0..1
+  langPref: string; // язык, выбранный игроком: '' — как у площадки, 'ru' или 'en'
   lastSeen: number; // мс, Date.now()
   achievements: string[]; // id полученных достижений, не сгорают при переезде
   goldenCaught: number; // сколько щедрых гостей поймано
@@ -84,6 +89,7 @@ export interface GameState {
   week: { id: number; sold: number }; // продано за текущую неделю (номер недели по Москве)
   runStart: number; // мс; когда начался путь на текущей точке (для рекорда скорости переезда)
   moveBest: Record<string, number>; // лучшее время каждого переезда в мс, ключ — moveKey
+  weekly: Weekly; // недельный сундук: в какие дни этой недели игрок заходил (версия 2.18)
 }
 
 export type QuestKind = 'taps' | 'buy' | 'golden' | 'box' | 'earn' | 'combo';
@@ -105,9 +111,13 @@ export function newGame(now: number): GameState {
     location: 0,
     stars: 0,
     boostUntil: 0,
-    owned: { noAds: false, x2Forever: false },
+    owned: { noAds: false, x2Forever: false, starter: false },
+    starterUntil: 0,
     muted: false,
     musicOff: false,
+    musicVol: 0.7,
+    sfxVol: 1,
+    langPref: '',
     lastSeen: now,
     achievements: [],
     goldenCaught: 0,
@@ -128,6 +138,7 @@ export function newGame(now: number): GameState {
     merges: 0,
     runStart: now,
     moveBest: {},
+    weekly: emptyWeekly(),
     sold: 0,
     week: { id: weekId(now), sold: 0 },
   };
@@ -160,9 +171,13 @@ export function normalize(raw: unknown, now: number): GameState {
     location: fresh ? 0 : migrateLocation(num(r.version, 0), Math.floor(num(r.location, 0))),
     stars: fresh ? 0 : Math.floor(num(r.stars, 0)),
     boostUntil: num(r.boostUntil, 0),
-    owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever },
+    owned: { noAds: !!r.owned?.noAds, x2Forever: !!r.owned?.x2Forever, starter: !!r.owned?.starter },
+    starterUntil: num(r.starterUntil, 0),
     muted: !!r.muted,
     musicOff: !!r.musicOff,
+    musicVol: Math.min(1, num(r.musicVol, 0.7)),
+    sfxVol: Math.min(1, num(r.sfxVol, 1)),
+    langPref: r.langPref === 'ru' || r.langPref === 'en' ? r.langPref : '',
     lastSeen: num(r.lastSeen, now),
     achievements: Array.isArray(r.achievements) ? r.achievements.filter((a: unknown) => typeof a === 'string') : [],
     goldenCaught: Math.floor(num(r.goldenCaught, 0)),
@@ -195,6 +210,11 @@ export function normalize(raw: unknown, now: number): GameState {
       r.moveBest && typeof r.moveBest === 'object'
         ? Object.fromEntries(Object.entries(r.moveBest).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0)) as Record<string, number>
         : {},
+    weekly: {
+      week: typeof r.weekly?.week === 'string' ? r.weekly.week : '',
+      days: Array.isArray(r.weekly?.days) ? r.weekly.days.filter((d: unknown) => typeof d === 'string').slice(0, 7) : [],
+      claimed: !!r.weekly?.claimed,
+    },
   };
 }
 
@@ -234,6 +254,7 @@ export function boostActive(state: GameState, now: number): boolean {
 function multFor(state: GameState, now: number, includeBoost: boolean, target: 'all' | 'tap'): number {
   let m = locationMult(state) * achievementMult(state) * petMult(state);
   if (state.owned.x2Forever) m *= 2;
+  if (state.starterUntil > now) m *= 2; // стартовый набор: ×2 на сутки
   if (includeBoost && boostActive(state, now)) m *= 2;
   for (const u of UPGRADES) {
     if (u.kind !== 'mult' || level(state, u.id) === 0) continue;
@@ -401,9 +422,11 @@ export function comboMult(combo: number): number {
 
 // Новый рекорд серии показываем на экране, только когда старый рекорд уже был заметным
 // (иначе у новичка «рекорд» всплывал бы на каждом тапе первых серий).
+// oldBest — рекорд на начало текущей серии: сама серия обновляет bestCombo на каждом тапе,
+// и без этого у новичка «рекорд» всплывал уже в самой первой серии после 10 тапов.
 export const RECORD_SHOW_FROM = 10;
-export function beatsRecord(state: GameState, combo: number): boolean {
-  return combo > state.bestCombo && state.bestCombo >= RECORD_SHOW_FROM;
+export function beatsRecord(oldBest: number, combo: number): boolean {
+  return combo > oldBest && oldBest >= RECORD_SHOW_FROM;
 }
 
 export function recordCombo(state: GameState, combo: number): GameState {
@@ -613,6 +636,21 @@ export function cashPackAmount(state: GameState, now: number): number {
   return Math.max(1000, Math.round(incomePerSecond(state, now, false) * 1800 + tapValue(state, now) * 300));
 }
 
+// Начать сюжет заново из окна настроек: покупки за деньги и настройки остаются.
+export function resetProgress(state: GameState, now: number): GameState {
+  return { ...newGame(now), owned: state.owned, starterUntil: state.starterUntil, muted: state.muted, musicOff: state.musicOff, musicVol: state.musicVol, sfxVol: state.sfxVol, langPref: state.langPref };
+}
+
 export function addMoney(state: GameState, amount: number): GameState {
   return earn(state, amount);
+}
+
+// Стартовый набор (версия 2.18): ×2 ко всему доходу на сутки, золотой ящик и 30 минут дохода.
+// Продаётся один раз; ящик выдаёт контроллер.
+export const STARTER_HOURS = 24;
+export const STARTER_MINUTES = 30;
+export function grantStarter(state: GameState, now: number): { state: GameState; money: number } {
+  const money = minutesOfIncome(state, now, STARTER_MINUTES);
+  const s = addMoney(state, money);
+  return { state: { ...s, owned: { ...s.owned, starter: true }, starterUntil: Math.max(s.starterUntil, now) + STARTER_HOURS * 3600_000 }, money };
 }

@@ -10,9 +10,10 @@ declare global {
   }
 }
 
-const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack', 'god_pet'];
+const PRODUCT_IDS: ProductId[] = ['no_ads', 'x2_forever', 'cash_pack', 'god_pet', 'starter_pack'];
 // расходуемые покупки: их списывают сразу после выдачи
-const CONSUMABLE = ['cash_pack', 'god_pet'];
+// starter_pack тоже расходуемый: «продан один раз» помнит само сохранение (owned.starter)
+const CONSUMABLE = ['cash_pack', 'god_pet', 'starter_pack'];
 // Технические имена лидербордов. Их нужно создать в консоли Яндекс Игр (см. docs/yandex-publish.md).
 export const LEADERBOARD_NAMES: Record<Board, string> = { week: 'shawarmaWeek', total: 'shawarmaTotal' };
 
@@ -33,8 +34,23 @@ function loadScript(src: string, timeoutMs: number): Promise<boolean> {
   });
 }
 
+// Игра на Яндексе живёт на поддоменах yandex.net / yandex.ru (и в их фрейме).
+// Вне Яндекса /sdk.js не грузим вовсе: без лишнего запроса, 404 в консоли и 5 секунд ожидания.
+// ?yandex в адресе — принудительно попробовать SDK (для отладки).
+export function looksLikeYandex(host: string, referrer: string, search: string): boolean {
+  if (/[?&]yandex\b/.test(search)) return true;
+  const ya = /(^|\.)(yandex\.(ru|net|com|by|kz|uz|com\.tr|com\.am|com\.ge|az|fr)|yandex-team\.ru|playhop\.com)$/i;
+  if (ya.test(host)) return true;
+  try {
+    return referrer !== '' && ya.test(new URL(referrer).hostname);
+  } catch {
+    return false;
+  }
+}
+
 // Возвращает платформу Яндекса или null, если игра запущена не на Яндекс Играх.
 export async function createYandexPlatform(): Promise<Platform | null> {
+  if (!window.YaGames && !looksLikeYandex(location.hostname, document.referrer, location.search)) return null;
   if (!window.YaGames && !(await loadScript('/sdk.js', 5000))) return null;
   if (!window.YaGames) return null;
 
@@ -92,16 +108,40 @@ export async function createYandexPlatform(): Promise<Platform | null> {
     }
   };
 
+  // Покупки, которые игра уже выдала, но площадка не дала списать. При следующем запуске их нужно
+  // списать ещё раз, но не выдавать повторно (раньше игрок получал пакет денег дважды).
+  const GRANTED_KEY = 'shawarma-idle-granted';
+  const granted = (): string[] => {
+    try {
+      const v = JSON.parse(localStorage.getItem(GRANTED_KEY) ?? '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  };
+  const setGranted = (list: string[]) => {
+    try {
+      localStorage.setItem(GRANTED_KEY, JSON.stringify(list.slice(-50)));
+    } catch {
+      // хранилище недоступно
+    }
+  };
+
+  // Списывает расходуемые покупки и возвращает, сколько из них ещё не выдано игроку.
   async function consumeCash(purchases: any[], id = 'cash_pack'): Promise<number> {
     let count = 0;
     for (const p of purchases) {
       if (p.productID !== id) continue;
+      const token = String(p.purchaseToken);
+      const already = granted().includes(token);
       try {
         await payments.consumePurchase(p.purchaseToken);
-        count++;
+        if (already) setGranted(granted().filter((t) => t !== token));
       } catch {
-        // не получилось списать — выдадим при следующем запуске
+        // не получилось списать — спишем при следующем запуске, а выдачу запоминаем
+        if (!already) setGranted([...granted(), token]);
       }
+      if (!already) count++;
     }
     return count;
   }
@@ -192,15 +232,16 @@ export async function createYandexPlatform(): Promise<Platform | null> {
       }
     },
     async restorePurchases() {
-      if (!payments) return { owned: [], pendingCash: 0, pendingGods: 0 };
+      if (!payments) return { owned: [], pendingCash: 0, pendingGods: 0, pendingStarters: 0 };
       try {
         const list: any[] = await payments.getPurchases();
         const owned = list.map((p) => p.productID).filter((id: string) => id === 'no_ads' || id === 'x2_forever');
         const pendingCash = await consumeCash(list);
         const pendingGods = await consumeCash(list, 'god_pet');
-        return { owned, pendingCash, pendingGods };
+        const pendingStarters = await consumeCash(list, 'starter_pack');
+        return { owned, pendingCash, pendingGods, pendingStarters };
       } catch {
-        return { owned: [], pendingCash: 0, pendingGods: 0 };
+        return { owned: [], pendingCash: 0, pendingGods: 0, pendingStarters: 0 };
       }
     },
     onPause(cb) {

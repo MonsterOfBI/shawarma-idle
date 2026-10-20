@@ -1,6 +1,6 @@
 // Слой-адаптер площадки. Игра обращается к Яндексу, VK или браузеру только через этот интерфейс.
 
-export type ProductId = 'no_ads' | 'x2_forever' | 'cash_pack' | 'god_pet';
+export type ProductId = 'no_ads' | 'x2_forever' | 'cash_pack' | 'god_pet' | 'starter_pack';
 
 export interface Product {
   id: ProductId;
@@ -21,7 +21,7 @@ export interface LbResult {
 }
 
 export interface Platform {
-  name: 'local' | 'yandex';
+  name: 'local' | 'yandex' | 'vk';
   lang: string;
   // сообщить площадке, что игра загрузилась и можно играть
   ready(): void;
@@ -37,7 +37,7 @@ export interface Platform {
   // true, если покупка прошла
   purchase(id: ProductId): Promise<boolean>;
   // разовые покупки, которые игрок уже сделал (например no_ads), и не выданные пакеты денег
-  restorePurchases(): Promise<{ owned: ProductId[]; pendingCash: number; pendingGods: number }>;
+  restorePurchases(): Promise<{ owned: ProductId[]; pendingCash: number; pendingGods: number; pendingStarters: number }>;
   // площадка просит поставить игру на паузу (реклама, свёрнутая вкладка)
   // reason: 'hidden' — вкладка свёрнута, 'platform' — пауза по событию площадки
   onPause(cb: (paused: boolean, reason: PauseReason) => void): void;
@@ -50,6 +50,8 @@ export interface Platform {
   setScore(board: Board, score: number): Promise<void>;
   // лучшие игроки и соседи игрока; null, если таблица недоступна
   getBoard(board: Board): Promise<LbResult | null>;
+  // своё окно рейтинга площадки (VK): если есть, кубок открывает его вместо нашего окна
+  showNativeBoard?(score: number): Promise<void>;
 }
 
 const KEY = 'shawarma-idle-save';
@@ -103,7 +105,7 @@ export function createLocalPlatform(): Platform {
       return false;
     },
     async restorePurchases() {
-      return { owned: [], pendingCash: 0, pendingGods: 0 };
+      return { owned: [], pendingCash: 0, pendingGods: 0, pendingStarters: 0 };
     },
     onPause: onVisibility,
     leaderboards: false,

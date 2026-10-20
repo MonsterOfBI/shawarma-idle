@@ -4,6 +4,7 @@
 
 import { ACHIEVEMENTS, ACHIEVEMENT_BONUS } from './core/achievements';
 import { DAILY, canClaimDaily, dayKey, nextDailyIndex } from './core/daily';
+import { WEEKLY_DAYS, canClaimWeekly, weekStart, weekday } from './core/weekly';
 import {
   type BuyMode,
   type GameState,
@@ -34,7 +35,7 @@ import {
   MILESTONES,
   tapValue,
 } from './core/economy';
-import { formatDuration, formatNumber } from './core/format';
+import { formatDuration, formatNumber, fullNumber, numberTier } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { BRAINROTS, BRAINROT_BY_ID, payOf } from './core/brainrots';
 import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult, pityLeft } from './core/pets';
@@ -46,7 +47,7 @@ import type { Board, LbResult, Product, ProductId } from './platform/platform';
 
 export interface UiActions {
   buy(id: string, n: number): void;
-  toggleMusic(): void;
+  openSettings(): void;
   toggleSound(): void;
   boost(): void;
   relocate(): void;
@@ -54,6 +55,7 @@ export interface UiActions {
   buyBox(): void;
   adBox(): void;
   claimDaily(): void;
+  claimWeekly(): void;
   openDaily(): void;
   claimQuest(i: number): void;
   merge(id: string): void;
@@ -101,6 +103,40 @@ function today(offsetDays = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   return dayKey(d);
+}
+
+// Кнопка с удержанием: обычное нажатие срабатывает один раз, а если держать палец,
+// через 0,4 с начинает повторяться всё быстрее (покупка подряд, пока хватает денег).
+function holdRepeat(btn: HTMLButtonElement, fire: () => void) {
+  let timer = 0;
+  let repeated = false;
+  const stop = () => {
+    clearTimeout(timer);
+    timer = 0;
+  };
+  const step = (delay: number) => {
+    timer = window.setTimeout(() => {
+      if (btn.disabled) return stop();
+      repeated = true;
+      fire();
+      step(Math.max(60, delay * 0.85));
+    }, delay);
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    repeated = false;
+    stop();
+    step(400);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) btn.addEventListener(ev, stop);
+  btn.addEventListener('click', () => {
+    // после серии повторов отпускание пальца не должно купить ещё раз
+    if (repeated) {
+      repeated = false;
+      return;
+    }
+    fire();
+  });
 }
 
 interface Row {
@@ -160,14 +196,13 @@ export class Ui {
     $('#money-coin').innerHTML = ui('coin');
     $('#ico-sec').innerHTML = ui('bolt');
     $('#ico-tap').innerHTML = ui('finger');
-    $('#hint').textContent = t('tapHint');
     $('#rush-title').textContent = t('rushTitle');
     $('.loading span')?.replaceChildren(t('title'));
     $('#sound').setAttribute('aria-label', t('sound'));
-    $('#music').setAttribute('aria-label', t('music'));
-    $('#music').innerHTML = ui('music');
+    $('#settings-btn').setAttribute('aria-label', t('settings'));
+    $('#settings-btn').innerHTML = ui('gear');
     $('#sound').addEventListener('click', () => actions.toggleSound());
-    $('#music').addEventListener('click', () => actions.toggleMusic());
+    $('#settings-btn').addEventListener('click', () => actions.openSettings());
     $('#lb-btn').innerHTML = ui('trophy');
     $('#lb-btn').setAttribute('aria-label', t('lbBtn'));
     $('#lb-btn').addEventListener('click', () => actions.openLeaderboard());
@@ -216,9 +251,10 @@ export class Ui {
       info.append(name, desc, ms);
       const btn = el('button', 'btn') as HTMLButtonElement;
       btn.type = 'button';
-      btn.addEventListener('click', () => {
+      const buyNow = () => {
         if (this.lastState) actions.buy(u.id, bulkAmount(this.lastState, u, this.mode));
-      });
+      };
+      holdRepeat(btn, buyNow);
       root.append(ic, info, btn);
       list.append(root);
       this.rows.set(u.id, { root, icon: ic, lv, name, desc, ms, msBar, msText, btn, lastLevel: -1, seen: false });
@@ -231,6 +267,14 @@ export class Ui {
     const sum = (k: BoxKind, from: Rarity) => RARITIES.slice(RARITIES.indexOf(from)).reduce((a, r) => a + BOX_ODDS[k][r], 0);
     $('#box-odds').textContent = t('boxOdds', Math.round(sum('common', 'epic')));
     $('#gbox-odds').textContent = t('gboxOdds', Math.round(sum('golden', 'mythic')));
+    // нажатие на деньги показывает число полностью и что значит сокращение
+    $('#money-pill').addEventListener('click', () => {
+      const m = this.lastState?.money ?? 0;
+      const tier = numberTier(m);
+      const lines = [t('numInfo', fullNumber(m, lang()))];
+      if (tier >= 2) lines.push(t('numTier').replace('{n}', t(`num_${tier}`)).replace('{z}', String(tier * 3)));
+      this.toast(lines.join(' · '));
+    });
     $('#box-buy').addEventListener('click', () => actions.buyBox());
     $('#gbox-buy').addEventListener('click', () => actions.adBox());
     $('#gbox-buy').classList.add('ad');
@@ -269,6 +313,10 @@ export class Ui {
     $('#h-daily').textContent = t('hDaily');
     $('#h-quests').textContent = t('hQuests');
     $('#daily-claim').addEventListener('click', () => actions.claimDaily());
+    $('#h-weekly').textContent = t('hWeekly');
+    $('#weekly-claim').addEventListener('click', () => actions.claimWeekly());
+    const wk = $('#weekly-days');
+    for (let i = 0; i < 7; i++) wk.append(el('span', 'wk-day', t(`wd_${i}`)));
     $('#ach-title').textContent = t('achTitle');
     const awards = $('#awards');
     for (const a of ACHIEVEMENTS) {
@@ -385,13 +433,12 @@ export class Ui {
     $('#rate-sec').textContent = t('perSec', fmt(incomePerSecond(s, now)));
     $('#rate-tap').textContent = t('perTap', fmt(tapValue(s, now)));
     $('#place').textContent = placeName(LOCATIONS[s.location].id, s.stars);
-    $('#hint').hidden = s.taps > 5;
+    this.renderCoach(s, now);
     if (this.soundIcon !== s.muted) {
       this.soundIcon = s.muted;
       $('#sound').innerHTML = ui(s.muted ? 'mute' : 'sound');
     }
     $('#sound').classList.toggle('off', s.muted);
-    $('#music').classList.toggle('off', s.musicOff || s.muted);
     // боковые кнопки держим под шапкой
     const hud = $('#hud');
     $('#stage').style.setProperty('--side-top', `${hud.offsetTop + hud.offsetHeight + 34}px`);
@@ -407,10 +454,41 @@ export class Ui {
     if (this.tab === 'shop') this.renderShop(s, now);
   }
 
+  // Первые минуты новичка: подсказка ведёт по шагам «тапай → нож → Тунг Тунг → ящик».
+  // Шаг выводится из сохранения, отдельного поля не нужно; опытный игрок подсказок не видит.
+  private coachKey = '';
+  private renderCoach(s: GameState, now: number) {
+    let step = '';
+    let target: HTMLElement | null = null;
+    const fresh = s.location === 0 && s.stars === 0;
+    const row = (id: string) => this.rows.get(id)?.root ?? null;
+    if (s.taps < 8 && s.bought === 0) step = 'coachTap';
+    else if (fresh && s.bought === 0 && canBuyN(s, 'knife', 1)) {
+      step = 'coachKnife';
+      target = this.tab === 'upgrades' ? row('knife') : $('#tab-upgrades');
+    } else if (fresh && s.bought < 4 && !(s.levels.grill_helper ?? 0) && canBuyN(s, 'grill_helper', 1)) {
+      step = 'coachHelper';
+      target = this.tab === 'upgrades' ? row('grill_helper') : $('#tab-upgrades');
+    } else if (s.boxesOpened === 0 && s.bought >= 3 && canBuyBox(s, now)) {
+      step = 'coachBox';
+      target = this.tab === 'pets' ? $('#box-buy') : $('#tab-pets');
+    }
+    const key = `${step}:${target?.id || target?.dataset.id || ''}:${this.tab}`;
+    if (key === this.coachKey) return;
+    this.coachKey = key;
+    document.querySelectorAll('.coach').forEach((e) => e.classList.remove('coach'));
+    target?.classList.add('coach');
+    const hint = $('#hint');
+    hint.hidden = !step;
+    hint.classList.toggle('plain', step !== 'coachTap');
+    if (step) hint.textContent = t(step);
+  }
+
   private renderBuffs(s: GameState, now: number) {
     const left = (until: number) => formatDuration(Math.max(0, (until - now) / 1000), lang());
     const items: [string, string, string][] = [];
     if (boostActive(s, now)) items.push(['boost', 'x2', t('buffBoost', left(s.boostUntil))]);
+    if (now < s.starterUntil) items.push(['starter', 'gift', t('buffBoost', left(s.starterUntil))]);
     if (now < s.frenzyUntil) items.push(['frenzy', 'frenzy', t('buffFrenzy', left(s.frenzyUntil))]);
     if (now < s.tapFrenzyUntil) items.push(['taps', 'finger', t('buffTaps', left(s.tapFrenzyUntil))]);
     const stage = $('#stage');
@@ -471,7 +549,7 @@ export class Ui {
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
     set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
-    const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0);
+    const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0) + (canClaimWeekly(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');
     set('shop', '');
@@ -616,7 +694,7 @@ export class Ui {
   // Полоска из 7 дней. Используется и во вкладке, и в окне подарка.
   private fillDaily(box: HTMLElement, s: GameState, now: number) {
     const can = canClaimDaily(s, today());
-    const next = can ? nextDailyIndex(s, today(-1)) : -1;
+    const next = can ? nextDailyIndex(s, today()) : -1;
     const done = can ? next : s.daily.streak;
     box.replaceChildren(
       ...DAILY.map((d, i) => {
@@ -631,12 +709,34 @@ export class Ui {
     return can;
   }
 
+  private renderWeekly(s: GameState) {
+    const day = today();
+    const thisWeek = s.weekly.week === weekStart(day);
+    const days = thisWeek ? s.weekly.days : [];
+    const played = new Set(days.map(weekday));
+    const cells = $('#weekly-days').children;
+    for (let i = 0; i < 7; i++) {
+      cells[i].classList.toggle('on', played.has(i));
+      cells[i].classList.toggle('now', i === weekday(day));
+    }
+    $('#weekly-count').textContent = `${Math.min(days.length, WEEKLY_DAYS)} / ${WEEKLY_DAYS}`;
+    const can = canClaimWeekly(s, day);
+    const claimed = thisWeek && s.weekly.claimed;
+    $('#weekly-note').textContent = claimed ? t('weeklyDone') : can ? t('weeklyReady') : t('weeklyNote', WEEKLY_DAYS - days.length);
+    const btn = $<HTMLButtonElement>('#weekly-claim');
+    btn.disabled = !can;
+    btn.classList.toggle('pulse', can);
+    btn.textContent = claimed ? t('dailyTaken') : t('weeklyClaim');
+  }
+
   private renderQuests(s: GameState, now: number) {
     const can = this.fillDaily($('#daily-strip'), s, now);
-    $('#daily-streak').textContent = t('dailyStreak', can ? nextDailyIndex(s, today(-1)) : s.daily.streak);
+    $('#daily-streak').textContent = t('dailyStreak', can ? nextDailyIndex(s, today()) : s.daily.streak);
     const claim = $<HTMLButtonElement>('#daily-claim');
     claim.disabled = !can;
     claim.textContent = can ? t('dailyClaim') : t('dailyTaken');
+
+    this.renderWeekly(s);
 
     const box = $('#quests');
     const waits = [...(s.questWait ?? [])].sort((a, b) => a - b).slice(0, Math.max(0, QUEST_SLOTS - s.quests.length));
@@ -778,6 +878,7 @@ export class Ui {
   private renderShop(s: GameState, now: number) {
     const box = $('#shop');
     const items: { id: ProductId; ico: string; name: string; text: string; owned: boolean; hot?: boolean }[] = [
+      { id: 'starter_pack', ico: 'gift', name: t('shopStarter'), text: t('shopStarterText'), owned: s.owned.starter, hot: true },
       { id: 'x2_forever', ico: 'x2', name: t('shopX2'), text: t('shopX2Text'), owned: s.owned.x2Forever, hot: true },
       { id: 'no_ads', ico: 'play', name: t('shopNoAds'), text: t('shopNoAdsText'), owned: s.owned.noAds },
       { id: 'cash_pack', ico: 'bag', name: t('shopCash'), text: t('shopCashText', fmt(cashPackAmount(s, now))), owned: false },
@@ -884,7 +985,7 @@ export class Ui {
     const box = $('#reveal');
     const crate = box.querySelector('.reveal-crate') as HTMLElement;
     crate.classList.toggle('gold', kind !== 'common');
-    crate.classList.toggle('legend', kind === 'legend' || kind === 'god');
+    crate.classList.toggle('legend', kind === 'legend' || kind === 'legendary' || kind === 'god');
     const head = $('#rv-title');
     head.textContent = title;
     head.hidden = !title;
@@ -951,6 +1052,58 @@ export class Ui {
       $('#mg-ok').onclick = () => {
         box.hidden = true;
         resolve();
+      };
+    });
+  }
+
+  // Окно настроек: громкость, язык и начало заново (в два нажатия).
+  async settings(s: GameState, on: { music(v: number): void; sfx(v: number): void; lang(l: 'ru' | 'en'): void; reset(): void }) {
+    const modal = $('#settings');
+    $('#st-title').textContent = t('settings');
+    $('#st-music').textContent = t('stMusic');
+    $('#st-sfx').textContent = t('stSfx');
+    $('#st-lang').textContent = t('stLang');
+    $('#st-close').textContent = t('stClose');
+    const mv = $<HTMLInputElement>('#st-music-vol');
+    const sv = $<HTMLInputElement>('#st-sfx-vol');
+    mv.value = String(Math.round((s.musicOff ? 0 : s.musicVol) * 100));
+    sv.value = String(Math.round(s.sfxVol * 100));
+    mv.oninput = () => on.music(Number(mv.value) / 100);
+    sv.oninput = () => on.sfx(Number(sv.value) / 100);
+    const seg = $('#st-lang-seg');
+    const current = lang();
+    seg.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.lang === current));
+      b.onclick = () => {
+        if (b.dataset.lang !== current) on.lang(b.dataset.lang as 'ru' | 'en');
+      };
+    });
+    const reset = $<HTMLButtonElement>('#st-reset');
+    const note = $('#st-reset-note');
+    let armed = false;
+    reset.textContent = t('stReset');
+    reset.classList.remove('armed');
+    note.hidden = true;
+    note.textContent = t('stResetNote');
+    reset.onclick = () => {
+      if (!armed) {
+        armed = true;
+        reset.textContent = t('stResetSure');
+        reset.classList.add('armed');
+        note.hidden = false;
+        return;
+      }
+      on.reset();
+    };
+    modal.hidden = false;
+    return new Promise<void>((resolve) => {
+      const close = () => {
+        modal.hidden = true;
+        resolve();
+      };
+      $('#st-close').onclick = close;
+      modal.onclick = (e) => {
+        if (e.target === modal) close();
       };
     });
   }

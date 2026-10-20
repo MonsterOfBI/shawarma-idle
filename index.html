@@ -14,7 +14,7 @@
             <span id="place" class="ribbon"></span>
             <span class="hud-btns">
               <button id="lb-btn" class="round-btn trophy" type="button"></button>
-              <button id="music" class="round-btn" type="button"></button>
+              <button id="settings-btn" class="round-btn" type="button"></button>
               <button id="sound" class="round-btn" type="button"></button>
             </span>
           </div>
@@ -79,6 +79,12 @@
           <div class="panel-head"><h2 id="h-daily"></h2><span id="daily-streak" class="pill"></span></div>
           <div id="daily-strip" class="daily"></div>
           <button id="daily-claim" class="btn btn-red wide" type="button"></button>
+          <div class="panel-head"><h2 id="h-weekly"></h2><span id="weekly-count" class="pill"></span></div>
+          <div class="card weekly">
+            <div id="weekly-days" class="wk-days"></div>
+            <p id="weekly-note" class="wk-note"></p>
+            <button id="weekly-claim" class="btn btn-amber wide" type="button"></button>
+          </div>
           <div class="panel-head"><h2 id="h-quests"></h2></div>
           <div id="quests" class="list"></div>
           <div class="panel-head"><h2 id="ach-title"></h2><span id="ach-count" class="pill"></span></div>
@@ -178,6 +184,23 @@
         </div>
       </div>
 
+      <div id="settings" class="modal" hidden>
+        <div class="sheet settings">
+          <h2 id="st-title"></h2>
+          <label class="st-row"><span id="st-music"></span><input id="st-music-vol" type="range" min="0" max="100" step="5"></label>
+          <label class="st-row"><span id="st-sfx"></span><input id="st-sfx-vol" type="range" min="0" max="100" step="5"></label>
+          <div class="st-row"><span id="st-lang"></span>
+            <div id="st-lang-seg" class="seg" role="radiogroup">
+              <button type="button" role="radio" data-lang="ru">Русский</button>
+              <button type="button" role="radio" data-lang="en">English</button>
+            </div>
+          </div>
+          <button id="st-reset" class="btn btn-ghost wide st-reset" type="button"></button>
+          <p id="st-reset-note" class="st-note" hidden></p>
+          <button id="st-close" class="btn btn-amber wide" type="button"></button>
+        </div>
+      </div>
+
       <div id="lb-modal" class="modal" hidden>
         <div class="sheet lb">
           <i class="lb-cup ico" aria-hidden="true"></i>
@@ -205,8 +228,9 @@
       </div>
       <div id="loading" class="loading">
         <div class="loading-spit" aria-hidden="true"><i></i></div>
-        <span>Шаурма-лавка</span>
+        <span class="loading-title">Шаурма-лавка</span>
         <div class="loading-bar"><i></i></div>
+        <p class="loading-tip"></p>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

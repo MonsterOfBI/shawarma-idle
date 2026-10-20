@@ -29,16 +29,29 @@ export function canClaimDaily(s: GameState, today: string): boolean {
   return s.daily.last !== today;
 }
 
+// Сколько дней между двумя датами ГГГГ-ММ-ДД (по календарю, без часовых поясов).
+export function daysBetween(from: string, to: string): number {
+  const ms = (k: string) => {
+    const [y, m, d] = k.split('-').map(Number);
+    return Date.UTC(y, (m || 1) - 1, d || 1);
+  };
+  if (!from || !to) return Infinity;
+  return Math.round((ms(to) - ms(from)) / 86_400_000);
+}
+
 // Какой день серии (0–6) получит игрок, если заберёт награду сегодня.
-export function nextDailyIndex(s: GameState, yesterday: string): number {
-  if (s.daily.last !== yesterday || s.daily.streak >= 7) return 0;
-  return s.daily.streak;
+// Пропуск не обнуляет серию: каждый пропущенный день откатывает её на один шаг назад.
+export function nextDailyIndex(s: GameState, today: string): number {
+  const base = s.daily.streak >= 7 ? 0 : s.daily.streak;
+  const missed = daysBetween(s.daily.last, today) - 1;
+  if (!Number.isFinite(missed)) return 0;
+  return Math.max(0, base - Math.max(0, missed));
 }
 
 // Забрать награду дня. Ящики возвращаются списком, открывает их контроллер с анимацией.
-export function claimDaily(s: GameState, now: number, today: string, yesterday: string): { state: GameState; reward: DailyReward; boxes: BoxKind[]; money: number } | null {
+export function claimDaily(s: GameState, now: number, today: string): { state: GameState; reward: DailyReward; boxes: BoxKind[]; money: number } | null {
   if (!canClaimDaily(s, today)) return null;
-  const i = nextDailyIndex(s, yesterday);
+  const i = nextDailyIndex(s, today);
   const reward = DAILY[i];
   let state: GameState = { ...s, daily: { streak: i + 1, last: today } };
   let money = 0;

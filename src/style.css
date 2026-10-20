@@ -65,6 +65,7 @@ button:disabled { cursor: default; }
   padding: calc(env(safe-area-inset-top, 0px) + 8px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
 }
 #hud button { pointer-events: auto; }
+#hud .money-pill { pointer-events: auto; cursor: pointer; }
 .hud-row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .hud-btns { display: flex; gap: 8px; }
 
@@ -167,6 +168,13 @@ button:disabled { cursor: default; }
   animation: hop 1s ease-in-out infinite;
 }
 .hint::after { content: ''; position: absolute; left: 50%; bottom: -11px; margin-left: -8px; border: 8px solid transparent; border-bottom: 0; border-top-color: var(--plum); }
+/* подсказка-шаг для новичка: без хвостика, над улицей, цель подсвечена кольцом */
+.hint.plain { bottom: 30%; white-space: normal; width: max-content; max-width: min(320px, calc(100% - 150px)); text-align: center; line-height: 1.25; }
+.hint.plain::after { display: none; }
+/* без бесконечной анимации тени (греет телефон): рамка стоит, а элемент мягко «дышит» масштабом */
+.coach { position: relative; z-index: 3; outline: 3px solid var(--gold); outline-offset: 2px; animation: coach 1.1s ease-in-out infinite; }
+@keyframes coach { 50% { transform: scale(1.035); } }
+@media (prefers-reduced-motion: reduce) { .coach { animation: none; } }
 @keyframes hop { 50% { transform: translate(-50%, -6px); } }
 
 .toast {
@@ -509,6 +517,17 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 .sheet .kicker { color: var(--gold); }
 .sheet .daily { margin-bottom: 8px; }
 
+/* недельный сундук */
+.weekly { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; margin-bottom: 16px; }
+.wk-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.wk-day {
+  display: grid; place-items: center; height: 30px; border-radius: 10px; font-family: var(--display); font-weight: 800; font-size: 10px;
+  background: rgba(42, 27, 61, 0.08); color: rgba(42, 27, 61, 0.55); box-shadow: inset 0 0 0 2px rgba(42, 27, 61, 0.12);
+}
+.wk-day.on { background: var(--pickle); color: var(--cream); box-shadow: 0 0 0 2px var(--plum-0); }
+.wk-day.now:not(.on) { box-shadow: inset 0 0 0 2px var(--gold); color: var(--plum); }
+.wk-note { margin: 0; font-size: 12px; line-height: 1.3; color: rgba(42, 27, 61, 0.75); }
+
 /* ---------- открытие ящика ---------- */
 .reveal {
   --r: var(--r-common);
@@ -592,8 +611,17 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 }
 @keyframes spit { to { background-position: 0 32px; } }
 .loading-bar { width: 180px; height: 12px; border-radius: 999px; background: var(--plum-0); overflow: hidden; box-shadow: 0 0 0 2.5px var(--plum-0); }
-.loading-bar i { display: block; height: 100%; width: 40%; border-radius: 999px; background: repeating-linear-gradient(-45deg, var(--tomato) 0 7px, var(--amber) 7px 14px); animation: load 1.1s ease-in-out infinite; }
-@keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+/* полоска показывает настоящий ход загрузки (main.ts двигает --p), полосы бегут внутри */
+.loading-bar { width: 220px; height: 14px; }
+.loading-bar i { display: block; height: 100%; width: var(--p, 6%); border-radius: 999px; background: repeating-linear-gradient(-45deg, var(--tomato) 0 7px, var(--amber) 7px 14px); background-size: 20px 20px; transition: width 0.35s ease-out; animation: load 0.6s linear infinite; }
+@keyframes load { to { background-position: 20px 0; } }
+.loading-title { font-size: clamp(26px, 7vw, 40px); color: var(--gold); -webkit-text-stroke: 2px var(--plum-0); paint-order: stroke fill; transform: rotate(-3deg); }
+.loading-tip { max-width: min(320px, 86vw); margin: 0; text-align: center; font-family: var(--body, system-ui); font-weight: 700; font-size: 14px; line-height: 1.35; color: var(--on-dark-soft); text-shadow: none; min-height: 2.7em; }
+.pet:not(.unknown) img { animation: petSway 2.8s ease-in-out infinite; transform-origin: 50% 92%; }
+.pet:nth-child(3n + 1) img { animation-delay: -0.9s; }
+.pet:nth-child(3n + 2) img { animation-delay: -1.8s; animation-duration: 3.2s; }
+@keyframes petSway { 0%, 100% { transform: rotate(-3deg) scale(1, 1); } 25% { transform: rotate(0deg) scale(1.03, 0.97); } 50% { transform: rotate(3deg) scale(1, 1); } 75% { transform: rotate(0deg) scale(0.98, 1.03); } }
+@media (prefers-reduced-motion: reduce) { .pet img, .loading-bar i { animation: none !important; } }
 
 /* узкие телефоны */
 @media (max-width: 360px) {
@@ -813,3 +841,10 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 /* тост с наградой приземляется с лёгким покачиванием */
 .toast.show { animation: drop 0.5s cubic-bezier(.2, 1.4, .4, 1); }
 @keyframes drop { 0% { transform: translate(-50%, -30px) scale(0.7) rotate(-3deg); opacity: 0; } 60% { transform: translate(-50%, 3px) scale(1.03) rotate(1deg); opacity: 1; } }
+
+/* окно настроек */
+.settings { gap: 12px; }
+.st-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 800; font-size: 14px; color: var(--cream); text-align: left; }
+.st-row input[type='range'] { flex: 1; max-width: 200px; accent-color: var(--amber); height: 28px; }
+.st-reset.armed { background: var(--tomato); color: var(--cream); box-shadow: 0 0 0 2.5px var(--plum-0), 0 4px 0 2.5px var(--plum-0); }
+.st-note { margin: -4px 0 0; font-size: 12px; font-weight: 700; color: var(--on-dark-soft); }

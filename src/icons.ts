@@ -37,6 +37,14 @@ const ICONS: Record<string, string> = {
   combo: svg(`<path d="M18 3 L7 18 h8 l-2 11 L25 13 h-8 Z" fill="${A}"/>`),
   move: svg(`<path d="M4 20 L16 9 L28 20" /><rect x="8" y="20" width="16" height="7" fill="${T}"/><path d="M16 3 v6"/>`),
   lock: svg(`<rect x="8" y="14" width="16" height="12" rx="2" fill="${C}"/><path d="M11 14 v-3 a5 5 0 0 1 10 0 v3"/>`),
+  // награды версии 2.18
+  met: svg(`<circle cx="11" cy="13" r="5" fill="${C}"/><circle cx="22" cy="13" r="5" fill="${A}"/><path d="M3 27 a8 8 0 0 1 16 0 Z" fill="${C}"/><path d="M14 27 a8 8 0 0 1 16 0 Z" fill="${A}"/>`),
+  pets: svg(`<ellipse cx="16" cy="21" rx="7" ry="6" fill="${A}"/><circle cx="8" cy="12" r="3" fill="${A}"/><circle cx="13" cy="7" r="3" fill="${A}"/><circle cx="19" cy="7" r="3" fill="${A}"/><circle cx="24" cy="12" r="3" fill="${A}"/>`),
+  mut: svg(`<path d="M16 4 L27 13 L16 28 L5 13 Z" fill="#8ad7ff"/><path d="M5 13 h22 M11 13 l5 15 5-15 M11 13 l5-9 5 9"/>`),
+  boxes: svg(`<rect x="3" y="15" width="13" height="12" rx="1.5" fill="#c8813a"/><rect x="16" y="15" width="13" height="12" rx="1.5" fill="#c8813a"/><rect x="9" y="4" width="14" height="11" rx="1.5" fill="${A}"/><path d="M3 21 h13 M16 21 h13 M9 9.5 h14"/>`),
+  legend: svg(`<path d="M5 24 L7 9 l5 6 4-9 4 9 5-6 2 15 Z" fill="${A}"/><circle cx="16" cy="19" r="2.5" fill="${T}"/><path d="M5 27 h22"/>`),
+  star3: svg(`<path d="M16 3 l2.4 5 5.4.8 -3.9 3.8 .9 5.4 -4.8-2.6 -4.8 2.6 .9-5.4 -3.9-3.8 5.4-.8 Z" fill="${A}"/><path d="M8 16 l1.7 3.5 3.8.6 -2.8 2.6 .7 3.8 -3.4-1.8 -3.4 1.8 .7-3.8 -2.8-2.6 3.8-.6 Z" fill="${A}"/><path d="M24 16 l1.7 3.5 3.8.6 -2.8 2.6 .7 3.8 -3.4-1.8 -3.4 1.8 .7-3.8 -2.8-2.6 3.8-.6 Z" fill="${A}"/>`),
+  god: svg(`<ellipse cx="16" cy="7" rx="8" ry="3" stroke="${A}" stroke-width="3"/><circle cx="16" cy="19" r="8" fill="${C}"/><path d="M12 18 h.1 M20 18 h.1" stroke-width="3"/><path d="M12 22 q4 3 8 0"/>`),
   // интерфейс
   coin: svg(`<circle cx="16" cy="16" r="12" fill="${A}"/><circle cx="16" cy="16" r="8" fill="#ffd86b" stroke="#c98a12"/><path d="M16 11 v10 M13 13.5 h5" stroke="#c98a12"/>`),
   bolt: svg(`<path d="M18 3 L7 18 h8 l-2 11 L25 13 h-8 Z" fill="${A}"/>`),
@@ -49,6 +57,7 @@ const ICONS: Record<string, string> = {
   truck: svg(`<rect x="3" y="9" width="17" height="13" rx="1" fill="${T}"/><path d="M20 13 h5 l4 5 v4 h-9 Z" fill="${C}"/><circle cx="9" cy="24" r="3" fill="${C}"/><circle cx="24" cy="24" r="3" fill="${C}"/>`),
   bag: svg(`<path d="M6 11 h20 l-2 16 h-16 Z" fill="${A}"/><path d="M11 11 v-2 a5 5 0 0 1 10 0 v2"/>`),
   up: svg(`<circle cx="16" cy="16" r="12" fill="${G}"/><path d="M16 23 V10 M10 15 l6-6 6 6" stroke="${C}" stroke-width="3"/>`),
+  gear: svg(`<circle cx="16" cy="16" r="11" stroke-width="5" stroke-dasharray="4.3 4.3" stroke-linecap="butt"/><circle cx="16" cy="16" r="8.5" fill="${C}"/><circle cx="16" cy="16" r="3.2" fill="${A}"/>`),
   music: svg(`<path d="M12 23 V8 l13-3 v15" /><circle cx="9" cy="23" r="3.5" fill="${C}"/><circle cx="22" cy="20" r="3.5" fill="${C}"/>`),
   sound: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 11 a6 6 0 0 1 0 10 M24 7 a11 11 0 0 1 0 18"/>`),
   mute: svg(`<path d="M5 12 h5 l7-6 v20 l-7-6 h-5 Z" fill="${C}"/><path d="M21 12 l7 8 M28 12 l-7 8"/>`),
