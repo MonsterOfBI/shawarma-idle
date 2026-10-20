@@ -5,10 +5,11 @@ import { type Look, lookKey, lookOf } from '../core/look';
 import { sfx } from '../audio';
 import { lang, t } from '../i18n';
 import { BACKDROPS, type Ctx, type Mover, spawnCourier, spawnMover } from './backdrops';
-import { drawBrainrot, drawMascot, type Critter } from './brainrots';
+import { drawBrainrot, drawMascot, setBakeRes, type Critter } from './brainrots';
 import { UPGRADES } from '../core/upgrades';
 import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, lerpColor, rng, shade } from './draw';
 import { type StallParts, buildStall } from './stall';
+import { bake } from './bake';
 
 export { DISPLAY_FONT };
 
@@ -82,6 +83,8 @@ export class StallScene extends Phaser.Scene {
   private stars!: Phaser.GameObjects.Graphics;
   private backdrop!: Pen;
   private backdropRT!: Phaser.GameObjects.RenderTexture;
+  private backdropKey = '';
+  private backdropNight = -1;
   private props!: Phaser.GameObjects.Container;
   private extras!: Phaser.GameObjects.Container;
   private night!: Phaser.GameObjects.Rectangle;
@@ -260,6 +263,24 @@ export class StallScene extends Phaser.Scene {
     this.hitZone = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true }).setDepth(10);
     this.input.addPointer(3);
     this.input.setDefaultCursor('pointer');
+    // Страховка от «мёртвых» тапов на телефоне. Phaser держит 4 указателя для пальцев и отдаёт новое касание
+    // только свободному. Если браузер не прислал конец касания (палец ушёл за край, системный жест,
+    // реклама поверх игры), указатель навсегда считается прижатым; когда так застрянут все — тапы пропадают
+    // до перезагрузки. Перед каждым новым касанием освобождаем указатели пальцев, которых уже нет на экране.
+    const freeLost = (e: TouchEvent) => {
+      const alive = new Set(Array.from(e.touches, (t) => t.identifier));
+      const ptrs = this.input.manager.pointers;
+      for (let i = 1; i < ptrs.length; i++) {
+        const p = ptrs[i];
+        if (p.active && !alive.has(p.identifier)) {
+          p.active = false;
+          p.isDown = false;
+          p.buttons = 0;
+        }
+      }
+    };
+    window.addEventListener('touchstart', freeLost, { capture: true, passive: true });
+    window.addEventListener('touchend', freeLost, { capture: false, passive: true });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.some((o) => o !== this.hitZone)) return;
       if (this.overMascot(p.worldX, p.worldY)) this.poke();
@@ -359,20 +380,31 @@ export class StallScene extends Phaser.Scene {
   private redrawWorld() {
     const phase = ((((this.clock / 1000) / DAY_SECONDS + DAY_START) % 1) + 1) % 1;
     this.drawSky(phase);
-    this.backdrop.g.clear();
-    BACKDROPS[LOCATIONS[this.location].id](this.backdrop, this.ctx());
+    // Фон — десятки тысяч фигур. Перерисовываем его, только когда заметно сменился свет
+    // (рассвет и закат) или размер экрана и точка. Днём и ночью он стоит готовой картинкой.
     const { width, height } = this.scale;
-    if (this.backdropRT.width !== width || this.backdropRT.height !== height) this.backdropRT.resize(width, height);
-    this.backdropRT.clear().draw(this.backdrop.g);
+    const key = `${this.location}:${width}x${height}:${this.horizonY}:${this.groundY}`;
+    if (key !== this.backdropKey || Math.abs(this.nightK - this.backdropNight) >= 0.03) {
+      this.backdropKey = key;
+      this.backdropNight = this.nightK;
+      this.backdrop.g.clear();
+      BACKDROPS[LOCATIONS[this.location].id](this.backdrop, this.ctx());
+      if (this.backdropRT.width !== width || this.backdropRT.height !== height) this.backdropRT.resize(width, height);
+      this.backdropRT.clear().draw(this.backdrop.g);
+      this.backdrop.g.clear();
+    }
     this.night.setFillStyle(0x1a1450, 0.2 * this.nightK);
     this.lampGlow.setAlpha(0.12 + 0.4 * this.nightK);
     this.stall?.winGlow.setAlpha(0.05 + 0.3 * this.nightK);
   }
 
   // Неподвижные предметы фона: знак метро, фонарь, а также франшиза, билборд и фудтрак.
+  private propsBaked: string[] = [];
   private buildProps() {
     this.props.removeAll(true);
     this.extras.removeAll(true);
+    this.propsBaked.forEach((k) => this.textures.exists(k) && this.textures.remove(k));
+    this.propsBaked = [];
     this.flame = undefined;
     const u = this.unit;
     const w = this.scale.width;
@@ -482,14 +514,31 @@ export class StallScene extends Phaser.Scene {
       tp.circle(tx + 96 * s, ty - 8 * s, 4 * s, 0x9a9aa8, 0);
       this.extras.add(tg);
     }
+    // неподвижные предметы улицы тоже запекаем в картинки (огонь в бочке остаётся живым)
+    const res = this.resFor(u);
+    for (const o of [...this.props.list, ...this.extras.list]) {
+      if (o instanceof Phaser.GameObjects.Graphics && o !== this.flame) {
+        const img = bake(o, res);
+        if (img instanceof Phaser.GameObjects.Image) this.propsBaked.push(img.texture.key);
+      }
+    }
   }
 
   // ---------- ларёк ----------
 
+  private stallRes = 0;
+  // подробность запекания под нынешний размер на экране (шаг 0,5, от 1 до 3)
+  private resFor(scale: number) {
+    return Math.min(3, Math.max(1, Math.ceil(scale * 2) / 2));
+  }
+
   private rebuildStall() {
-    this.stall?.root.destroy();
-    this.stall?.glow.destroy();
-    this.stall = buildStall(this, this.location, this.look);
+    const old = this.stall;
+    old?.root.destroy();
+    old?.glow.destroy();
+    old?.baked.forEach((k) => this.textures.exists(k) && this.textures.remove(k));
+    this.stallRes = this.resFor(this.stallScale || this.unit);
+    this.stall = buildStall(this, this.location, this.look, this.stallRes);
   }
 
   // Ларёк «приседает» от тапа как пружина: частые тапы не дёргают его рывками, а копятся и плавно отпускают.
@@ -518,6 +567,13 @@ export class StallScene extends Phaser.Scene {
     const k = id === 'dump' ? 0.8 : 1;
     const frac = id === 'palace' ? 0.47 : 0.39;
     this.stallScale = k * Math.min(this.unit, (width * frac) / half, Math.max(50, room) / -st.top);
+    setBakeRes(this.resFor(this.unit * 1.3));
+    // ларёк заметно вырос или уменьшился — перезапекаем его в нужной чёткости
+    if (this.resFor(this.stallScale) !== this.stallRes) {
+      this.rebuildStall();
+      this.layout();
+      return;
+    }
     const sx = this.stallX, gy = this.groundY, s = this.stallScale;
     st.root.setPosition(sx, gy).setScale(s);
     st.glow.setPosition(sx, gy).setScale(s);

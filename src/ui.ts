@@ -225,7 +225,7 @@ export class Ui {
     $('#gbox-name').textContent = t('gboxName');
     const sum = (k: BoxKind, from: Rarity) => RARITIES.slice(RARITIES.indexOf(from)).reduce((a, r) => a + BOX_ODDS[k][r], 0);
     $('#box-odds').textContent = t('boxOdds', Math.round(sum('common', 'epic')));
-    $('#gbox-odds').textContent = t('gboxOdds', Math.round(sum('golden', 'legendary')));
+    $('#gbox-odds').textContent = t('gboxOdds', Math.round(sum('golden', 'mythic')));
     $('#box-buy').addEventListener('click', () => actions.buyBox());
     $('#gbox-buy').addEventListener('click', () => actions.adBox());
     $('#gbox-buy').classList.add('ad');
@@ -774,6 +774,11 @@ export class Ui {
     box.classList.add('show');
     clearTimeout((box as any)._t);
     (box as any)._t = setTimeout(() => (box.hidden = true), kind === 'medal' ? 3200 : 2600);
+  }
+
+  // Открыто ли окно офлайн-дохода (страховка от зависшего флага в контроллере).
+  anyModalOpen(): boolean {
+    return !$('#offline').hidden;
   }
 
   // Окно «Пока вас не было» в виде чека. Возвращает выбор игрока.

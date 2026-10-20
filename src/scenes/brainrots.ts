@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bake } from './bake';
 import { DRAW2 } from './brainrots2';
 import { DRAW3 } from './brainrots3';
 import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE } from './draw';
@@ -11,7 +12,7 @@ import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE } from './draw';
 export interface Critter {
   root: Phaser.GameObjects.Container;
   body: Phaser.GameObjects.Container;
-  legs: Phaser.GameObjects.Graphics[];
+  legs: (Phaser.GameObjects.Graphics | Phaser.GameObjects.Image)[];
   height: number;
   width: number;
   top: number; // верх головы (для колпака повара)
@@ -423,6 +424,10 @@ export const BRAINROT_IDS = Object.keys(DRAW);
 // Уровень 1 — нищий: картонка и бумажный рупор. 2 — красная кепка и жёлтый мегафон. 3 — корона и всё золотое.
 // Надпись на щите добавляет сцена (текст на языке игрока). Щит: x −31…31, y −58…−14.
 export function drawMascot(scene: Phaser.Scene, level = 2): Critter {
+  return bakeCritter(drawMascotShapes(scene, level), `mascot:${level}`);
+}
+
+function drawMascotShapes(scene: Phaser.Scene, level: number): Critter {
   const gold = 0xffcf3f;
   const shoe = level >= 3 ? gold : level === 2 ? TOMATO : 0x6a5a4a;
   return assemble(scene, makeLegs(scene, { skin: 0xb07a4a, shoe, len: 14, spread: 10, width: 8, sole: level >= 2 ? WHITE : undefined, swoosh: level >= 2 }), (p) => {
@@ -500,6 +505,22 @@ export function drawMascot(scene: Phaser.Scene, level = 2): Critter {
   }, 132, 96, level >= 3 ? 152 : 136);
 }
 
+// Насколько подробно запекать персонажей в текстуры (сцена ставит по размеру экрана).
+let BAKE_RES = 2;
+export function setBakeRes(r: number) {
+  BAKE_RES = r;
+}
+
+// Ноги и тело персонажа превращаются из фигур в картинки (см. bake.ts): выглядит так же, но не грузит телефон.
+export function bakeCritter(c: Critter, key: string): Critter {
+  c.legs = c.legs.map((l, i) => (l instanceof Phaser.GameObjects.Graphics ? bake(l, BAKE_RES, `${key}:l${i}`) : l));
+  [...c.body.list].forEach((o, i) => {
+    if (o instanceof Phaser.GameObjects.Graphics) bake(o, BAKE_RES, `${key}:b${i}`);
+  });
+  return c;
+}
+
 export function drawBrainrot(scene: Phaser.Scene, id: string): Critter {
-  return (DRAW[id] ?? DRAW.tralalero)(scene);
+  const key = DRAW[id] ? id : 'tralalero';
+  return bakeCritter(DRAW[key](scene), `br:${key}`);
 }

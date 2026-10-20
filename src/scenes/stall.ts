@@ -3,6 +3,7 @@ import type { Look } from '../core/look';
 import { LOCATIONS } from '../core/locations';
 import { t } from '../i18n';
 import { drawBrainrot, type Critter } from './brainrots';
+import { bake } from './bake';
 import { AMBER, CREAM, DISPLAY_FONT, LEAF, MEAT, MEAT_DARK, OUTLINE, Pen, TOMATO, WHITE, WOOD, shade } from './draw';
 
 // Ларёк собирается из слоёв. Стиль корпуса и крыши свой на каждой локации,
@@ -29,6 +30,7 @@ export interface StallParts {
   right: number;
   top: number;
   hit: { x: number; y: number; w: number; h: number };
+  baked: string[]; // ключи текстур запечённых слоёв: удалить при перестройке ларька
 }
 
 type Pt = [number, number];
@@ -48,7 +50,7 @@ function star(cx: number, cy: number, r1: number, r2: number, n = 5): Pt[] {
   return pts;
 }
 
-export function buildStall(scene: Phaser.Scene, location: number, look: Look): StallParts {
+export function buildStall(scene: Phaser.Scene, location: number, look: Look, res = 2): StallParts {
   const loc = LOCATIONS[location];
   const style = loc.id;
   const S = look.stages;
@@ -62,12 +64,14 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
   const parts: StallParts = {
     root, glow, stripes: [], heaters: [], bulbs: [], pulses: [], beams: [], staff: [],
     winGlow: undefined as unknown as Phaser.GameObjects.Rectangle,
-    steam: [], left: -W / 2 - 24, right: W / 2 + 24, top: -H - 80,
+    steam: [], baked: [], left: -W / 2 - 24, right: W / 2 + 24, top: -H - 80,
     hit: { x: 0, y: -H / 2 - 30, w: W + 60, h: H + 110 },
   };
+  const layers: Phaser.GameObjects.Graphics[] = [];
   const layer = () => {
     const g = scene.add.graphics();
     root.add(g);
+    layers.push(g);
     return new Pen(g, 3);
   };
   const addGlow = (o: Phaser.GameObjects.GameObject) => {
@@ -300,6 +304,7 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
       p.flat(WHITE).fillRect(-9, top - 4, 18, 7);
       if (hat >= 4) p.circle(0, top + 4, 3, 0xffd86b, 1.5);
       c.body.add(g);
+      bake(g, res, `hat:${id}:${hat >= 4 ? 2 : 1}`);
     }
     root.add(c.root);
     parts.staff.push(c);
@@ -736,6 +741,11 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look): S
 
   parts.top = Math.min(signY - signH / 2 - (look.tier >= 3 ? 30 : 6), roofTop - 30);
   parts.hit = { x: (parts.left + parts.right) / 2, y: parts.top / 2, w: parts.right - parts.left + 20, h: -parts.top + 20 };
+  // неподвижные слои ларька запекаем в картинки (см. bake.ts)
+  for (const g of layers) {
+    const img = bake(g, res);
+    if (img instanceof Phaser.GameObjects.Image) parts.baked.push(img.texture.key);
+  }
   return parts;
 }
 

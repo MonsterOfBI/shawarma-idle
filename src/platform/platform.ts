@@ -39,7 +39,8 @@ export interface Platform {
   // разовые покупки, которые игрок уже сделал (например no_ads), и не выданные пакеты денег
   restorePurchases(): Promise<{ owned: ProductId[]; pendingCash: number; pendingGods: number }>;
   // площадка просит поставить игру на паузу (реклама, свёрнутая вкладка)
-  onPause(cb: (paused: boolean) => void): void;
+  // reason: 'hidden' — вкладка свёрнута, 'platform' — пауза по событию площадки
+  onPause(cb: (paused: boolean, reason: PauseReason) => void): void;
   // есть ли таблицы игроков (только на Яндекс Играх)
   leaderboards: boolean;
   // вошёл ли игрок в Яндекс ID: записывать результат могут только вошедшие
@@ -70,8 +71,10 @@ function localSave(data: unknown) {
   }
 }
 
-function onVisibility(cb: (paused: boolean) => void) {
-  document.addEventListener('visibilitychange', () => cb(document.hidden));
+export type PauseReason = 'hidden' | 'platform';
+
+export function onVisibility(cb: (paused: boolean, reason: PauseReason) => void) {
+  document.addEventListener('visibilitychange', () => cb(document.hidden, 'hidden'));
 }
 
 // Версия для браузера и разработки: сохранение в localStorage, реклама «показывается» мгновенно.
@@ -117,4 +120,4 @@ export function createLocalPlatform(): Platform {
   };
 }
 
-export { localLoad, localSave, onVisibility };
+export { localLoad, localSave };

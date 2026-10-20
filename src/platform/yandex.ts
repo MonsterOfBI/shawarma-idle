@@ -1,7 +1,7 @@
 // Реализация Platform для Яндекс Игр. Документация SDK: https://yandex.ru/dev/games/doc/ru/sdk/sdk-about
 // SDK подключается скриптом /sdk.js, который Яндекс отдаёт со своего хостинга игры.
 
-import { type Board, type LbEntry, type Platform, type Product, type ProductId, localLoad, localSave, onVisibility } from './platform';
+import { type Board, type LbEntry, type PauseReason, type Platform, type Product, type ProductId, localLoad, localSave, onVisibility } from './platform';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -59,8 +59,8 @@ export async function createYandexPlatform(): Promise<Platform | null> {
     payments = null;
   }
 
-  const pauseListeners: ((paused: boolean) => void)[] = [];
-  const emitPause = (p: boolean) => pauseListeners.forEach((cb) => cb(p));
+  const pauseListeners: ((paused: boolean, reason: PauseReason) => void)[] = [];
+  const emitPause = (p: boolean) => pauseListeners.forEach((cb) => cb(p, 'platform'));
   try {
     ysdk.on?.('game_api_pause', () => emitPause(true));
     ysdk.on?.('game_api_resume', () => emitPause(false));

@@ -4,8 +4,8 @@
 
 import type { GameState } from './economy';
 
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic' | 'god';
-export const RARITIES: Rarity[] = ['common', 'rare', 'epic', 'legendary', 'mythic', 'god'];
+export type Rarity = 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | 'god';
+export const RARITIES: Rarity[] = ['common', 'rare', 'epic', 'mythic', 'legendary', 'god'];
 
 // Бонус к доходу за питомца на первом уровне (0,03 = +3 %).
 // Урезан вдвое в версии 2.5: золотой ящик за рекламу раз в 4 минуты давал в среднем +40 % дохода навсегда,
@@ -14,8 +14,8 @@ export const RARITY_BONUS: Record<Rarity, number> = {
   common: 0.03,
   rare: 0.07,
   epic: 0.15,
-  legendary: 0.4,
-  mythic: 1,
+  mythic: 0.4,
+  legendary: 1,
   god: 3,
 };
 // Каждый повтор питомца добавляет 30 % его базового бонуса.
@@ -41,12 +41,12 @@ export const PET_RARITY: Record<string, Rarity> = {
   orangutini: 'epic',
   chicleteira: 'epic',
   espresso: 'epic',
-  tralalero: 'legendary',
-  tungtung: 'legendary',
-  spaghetti: 'legendary',
-  graipuss: 'legendary',
-  vaca: 'mythic',
-  cannelloni: 'mythic',
+  tralalero: 'mythic',
+  tungtung: 'mythic',
+  spaghetti: 'mythic',
+  graipuss: 'mythic',
+  vaca: 'legendary',
+  cannelloni: 'legendary',
   timcheese: 'common',
   tatasahur: 'common',
   zibra: 'common',
@@ -56,8 +56,8 @@ export const PET_RARITY: Record<string, Rarity> = {
   ballerino: 'rare',
   tigrullini: 'epic',
   rhino: 'epic',
-  cocofanto: 'legendary',
-  girafa: 'mythic',
+  cocofanto: 'mythic',
+  girafa: 'legendary',
   bombardiro: 'god',
   strawberry: 'god',
 };
@@ -67,12 +67,13 @@ export type BoxKind = 'common' | 'golden' | 'legend' | 'god';
 
 // Шансы редкостей в процентах.
 export const BOX_ODDS: Record<BoxKind, Record<Rarity, number>> = {
-  // версия 2.12: редкие чуть чаще, чем в 2.10 (легендарный 3,2 → 4,5 %, мифический 0,65 → 1,2 %, божественный 0,15 → 0,3 %)
-  common: { common: 52, rare: 29, epic: 13, legendary: 4.5, mythic: 1.2, god: 0.3 },
-  golden: { common: 0, rare: 41, epic: 35, legendary: 17, mythic: 5.4, god: 1.6 },
-  // легендарный ящик за переезд: только легендарные и выше
-  legend: { common: 0, rare: 0, epic: 0, legendary: 75, mythic: 20, god: 5 },
-  god: { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0, god: 100 },
+  // версия 2.14: легендарный теперь выше мифического; редкие чуть реже, чем в 2.12
+  // (обычный ящик: мифический 4,5 → 3,5 %, легендарный 1,2 → 0,8 %, божественный 0,3 → 0,2 %)
+  common: { common: 54, rare: 29, epic: 12.5, mythic: 3.5, legendary: 0.8, god: 0.2 },
+  golden: { common: 0, rare: 44, epic: 34.7, mythic: 15.5, legendary: 4.6, god: 1.2 },
+  // ящик за переезд: только мифические и выше
+  legend: { common: 0, rare: 0, epic: 0, mythic: 85, legendary: 13, god: 2 },
+  god: { common: 0, rare: 0, epic: 0, mythic: 0, legendary: 0, god: 100 },
 };
 
 // Мутации: 0 — обычный, 1 — золотой (×2), 2 — алмазный (×5).
@@ -135,7 +136,7 @@ export function rollRarity(kind: BoxKind, r: number): Rarity {
     left -= odds[rar];
     if (left < 0) return rar;
   }
-  return kind === 'god' ? 'god' : kind === 'legend' ? 'legendary' : kind === 'golden' ? 'rare' : 'common';
+  return kind === 'god' ? 'god' : kind === 'legend' ? 'mythic' : kind === 'golden' ? 'rare' : 'common';
 }
 
 // Открыть ящик: rand — источник случайных чисел от 0 до 1 (в тестах подменяется).

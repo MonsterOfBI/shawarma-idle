@@ -23,7 +23,7 @@ import {
   recordCombo,
 } from './economy';
 import { ACHIEVEMENTS, achievementMult, unlockAchievements } from './achievements';
-import { BOX_ODDS, PET_RARITY } from './pets';
+import { BOX_ODDS, PET_RARITY, RARITIES, RARITY_BONUS } from './pets';
 import { BRAINROTS, averagePay, customerPool, meet, payOf, pickCustomer } from './brainrots';
 import { CRIT_CHANCE, CRIT_MULT, bulkAmount, bulkCost, buyN, canBuyN, customerCheck, isCrit, maxAffordable, serveCustomer, serveIntervalMs } from './economy';
 import { UPGRADE_BY_ID } from './upgrades';
@@ -295,8 +295,8 @@ describe('баланс', () => {
     for (const kind of ['common', 'golden'] as const) {
       expect(Object.values(BOX_ODDS[kind]).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
     }
-    expect(BOX_ODDS.common.legendary).toBeGreaterThan(2.5);
-    expect(BOX_ODDS.golden.legendary).toBeGreaterThan(14);
+    expect(BOX_ODDS.common.mythic).toBeGreaterThan(2.5);
+    expect(BOX_ODDS.golden.mythic).toBeGreaterThan(14);
   });
 
   it('знакомство с брейнротом записывается один раз', () => {
@@ -527,8 +527,13 @@ describe('версия 2.11', () => {
     for (const k of ['common', 'golden', 'legend', 'god'] as const) {
       expect(Object.values(BOX_ODDS[k]).reduce((a, b) => a + b, 0)).toBeCloseTo(100);
     }
-    expect(BOX_ODDS.common.legendary).toBeGreaterThan(3.2);
-    expect(BOX_ODDS.common.god).toBeGreaterThan(0.15);
+    expect(BOX_ODDS.common.mythic).toBe(3.5);
+    expect(BOX_ODDS.common.legendary).toBe(0.8);
+    expect(BOX_ODDS.common.god).toBe(0.2);
+    // легендарный круче мифического: реже выпадает и сильнее
+    expect(RARITIES.indexOf('legendary')).toBeGreaterThan(RARITIES.indexOf('mythic'));
+    expect(RARITY_BONUS.legendary).toBeGreaterThan(RARITY_BONUS.mythic);
+    for (const k of ['common', 'golden', 'legend'] as const) expect(BOX_ODDS[k].legendary).toBeLessThan(BOX_ODDS[k].mythic);
   });
 
   it('божественный ящик всегда даёт бога', () => {
@@ -581,11 +586,11 @@ import { MOVE_BOX, fastMove, moveKey, runTime } from './economy';
 describe('мотивация переезда', () => {
   const ready = (now: number, extra: Partial<GameState> = {}): GameState => ({ ...newGame(now), runEarned: LOCATIONS[1].threshold, ...extra });
 
-  it('легендарный ящик за переезд даёт только легендарных и выше', () => {
+  it('ящик за переезд даёт только мифических и выше', () => {
     expect(MOVE_BOX).toBe('legend');
     for (const r of [0, 0.5, 0.74, 0.76, 0.96, 0.999]) {
       const d = openBox(newGame(0), 'legend', () => r).drop;
-      expect(['legendary', 'mythic', 'god']).toContain(d.rarity);
+      expect(['mythic', 'legendary', 'god']).toContain(d.rarity);
     }
   });
 

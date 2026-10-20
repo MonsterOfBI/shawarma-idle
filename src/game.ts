@@ -72,6 +72,9 @@ const SAVE_EVERY_MS = 10_000;
 const SCORE_EVERY_MS = 60_000;
 // если вкладка была скрыта дольше минуты, считаем это отсутствием и показываем окно офлайн-дохода
 const AWAY_MS = 60_000;
+const STUCK_PAUSE_MS = 2500;
+const AD_PAUSE_MAX_MS = 120_000;
+const BUY_PAUSE_MAX_MS = 300_000;
 // щедрый гость приходит раз в 1–2,5 минуты, час пик раз в 2,5–5 минут
 const GOLDEN_MIN_MS = 60_000;
 const GOLDEN_SPREAD_MS = 90_000;
@@ -83,6 +86,9 @@ export class Game {
   private scene: StallScene;
   private ui: Ui;
   private paused = false;
+  // Причины паузы: свёрнутая вкладка, событие площадки, наша реклама, окно покупки.
+  // Игра стоит, пока есть хоть одна причина. Раньше был один флаг на всех, и события перекрывали друг друга.
+  private pauses = new Map<string, number>();
   private modalOpen = false;
   private lastSave = 0;
   private combo = 0;
@@ -131,6 +137,9 @@ export class Game {
       scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
       scene: this.scene,
       audio: { noAudio: true },
+      // не больше 60 кадров даже на экранах 120 Гц: вдвое меньше работы видеокарте, телефон не греется
+      fps: { target: 60, limit: 60 },
+      render: { powerPreference: 'low-power', antialias: true },
     });
     await this.scene.ready;
     this.scene.setLocation(this.state.location);
@@ -156,7 +165,26 @@ export class Game {
     for (let i = 0; i < restored.pendingGods; i++) this.state = openBox(this.state, 'god', Math.random).state;
     this.ui.setProducts(await this.platform.getProducts(), this.platform.purchasesAvailable);
 
-    this.platform.onPause((p) => this.setPaused(p));
+    this.platform.onPause((p, reason) => this.hold(reason, p));
+    // Страховка от «мёртвых» тапов: если игрок тапает по видимой игре, а пауза висит дольше пары секунд
+    // (площадка не прислала «продолжить», реклама не вернула ответ), значит она застряла — снимаем.
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        if (document.hidden) return;
+        const now = Date.now();
+        let changed = false;
+        for (const [reason, since] of this.pauses) {
+          if (now - since > STUCK_PAUSE_MS) {
+            this.pauses.delete(reason);
+            changed = true;
+          }
+        }
+        if (changed) this.applyPause();
+        if (this.modalOpen && !this.ui.anyModalOpen()) this.modalOpen = false;
+      },
+      { capture: true },
+    );
     window.addEventListener('beforeunload', () => void this.save());
 
     this.platform.ready();
@@ -262,20 +290,23 @@ export class Game {
     }
     this.modalOpen = true;
     this.platform.gameplayStop();
-    const away = Math.min((now - this.state.lastSeen) / 1000, OFFLINE_CAP_SECONDS);
-    const choice = await this.ui.offline(earned, away, incomePerSecond(this.state, now, false));
-    let factor = 1;
-    if (choice === 'double') {
-      const ok = await this.platform.showRewarded();
-      if (ok) {
-        factor = 2;
-        sfx.reward();
-      } else this.ui.toast(t('adFail'));
+    try {
+      const away = Math.min((now - this.state.lastSeen) / 1000, OFFLINE_CAP_SECONDS);
+      const choice = await this.ui.offline(earned, away, incomePerSecond(this.state, now, false));
+      let factor = 1;
+      if (choice === 'double') {
+        const ok = await this.during('ad', this.platform.showRewarded(), AD_PAUSE_MAX_MS);
+        if (ok) {
+          factor = 2;
+          sfx.reward();
+        } else this.ui.toast(t('adFail'));
+      }
+      this.state = collectOffline(this.state, now, factor);
+      this.state = { ...this.state, lastSeen: Date.now() };
+    } finally {
+      this.modalOpen = false;
+      this.platform.gameplayStart();
     }
-    this.state = collectOffline(this.state, now, factor);
-    this.state = { ...this.state, lastSeen: Date.now() };
-    this.modalOpen = false;
-    this.platform.gameplayStart();
     void this.save();
   }
 
@@ -432,9 +463,7 @@ export class Game {
     else {
       // пока идёт откат, кнопка просто показывает таймер, без всплывающей надписи посреди экрана
       if (!adBoxReady(this.state, now)) return;
-      this.setPaused(true);
-      const ok = await this.platform.showRewarded();
-      this.setPaused(false);
+      const ok = await this.during('ad', this.platform.showRewarded(), AD_PAUSE_MAX_MS);
       if (!ok) {
         this.ui.toast(t('adFail'));
         return;
@@ -499,9 +528,7 @@ export class Game {
   }
 
   private async boost() {
-    this.setPaused(true);
-    const ok = await this.platform.showRewarded();
-    this.setPaused(false);
+    const ok = await this.during('ad', this.platform.showRewarded(), AD_PAUSE_MAX_MS);
     if (!ok) {
       this.ui.toast(t('adFail'));
       return;
@@ -527,9 +554,7 @@ export class Game {
     await this.save();
     // полноэкранная реклама только в этой логичной паузе и только без покупки «Без рекламы»
     if (!this.state.owned.noAds) {
-      this.setPaused(true);
-      await this.platform.showInterstitial();
-      this.setPaused(false);
+      await this.during('ad', this.platform.showInterstitial(), AD_PAUSE_MAX_MS);
     }
     // подарки за переезд: легендарный ящик всегда, золотой — за рекорд скорости
     await wait(1800);
@@ -542,9 +567,7 @@ export class Game {
   }
 
   private async purchase(id: ProductId) {
-    this.setPaused(true);
-    const ok = await this.platform.purchase(id);
-    this.setPaused(false);
+    const ok = await this.during('buy', this.platform.purchase(id), BUY_PAUSE_MAX_MS);
     if (!ok) return;
     const now = Date.now();
     if (id === 'god_pet') {
@@ -576,6 +599,32 @@ export class Game {
     setMusic(!this.state.muted && !this.state.musicOff);
     this.ui.render(this.state, Date.now());
     void this.save();
+  }
+
+  private hold(reason: string, on: boolean) {
+    if (on) {
+      if (!this.pauses.has(reason)) this.pauses.set(reason, Date.now());
+    } else this.pauses.delete(reason);
+    this.applyPause();
+  }
+
+  // Пауза на время рекламы или покупки. Если площадка не ответила за maxMs, игра всё равно оживает,
+  // а награда придёт, когда ответ всё-таки появится.
+  private async during<T>(reason: string, task: Promise<T>, maxMs: number): Promise<T> {
+    this.hold(reason, true);
+    const timer = setTimeout(() => this.hold(reason, false), maxMs);
+    try {
+      return await task;
+    } finally {
+      clearTimeout(timer);
+      this.hold(reason, false);
+      // вкладка вернулась вместе с концом рекламы — площадка могла забыть прислать «продолжить»
+      if (!document.hidden) this.hold('platform', false);
+    }
+  }
+
+  private applyPause() {
+    this.setPaused(this.pauses.size > 0);
   }
 
   private setPaused(p: boolean) {
