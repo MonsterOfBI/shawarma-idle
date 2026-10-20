@@ -62,6 +62,18 @@ function makeQuest(s: GameState, now: number, kind: QuestKind, r: number): Quest
   }
 }
 
+// После переезда улучшения обнуляются и доход падает почти до нуля, а цель «Заработать»
+// осталась от богатой старой точки и висела бы часами. Пересчитываем её по новой точке.
+export function refreshEarnQuests(s: GameState, now: number): GameState {
+  if (!s.quests.some((q) => q.kind === 'earn')) return s;
+  const quests = s.quests.map((q) => {
+    if (q.kind !== 'earn') return q;
+    const fresh = makeQuest(s, now, 'earn', 1);
+    return { ...q, target: fresh.target, start: s.lifetimeEarned };
+  });
+  return { ...s, quests };
+}
+
 const KINDS: QuestKind[] = ['taps', 'buy', 'golden', 'box', 'earn', 'combo'];
 
 // Сколько мест ждут новое задание и когда придёт ближайшее (null — никто не ждёт).

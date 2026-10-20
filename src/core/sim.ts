@@ -115,9 +115,8 @@ export function simulate(p: Profile, palaceStars = 3, seed = 987654321): SimResu
     const now0 = START + t * 1000;
     const d = dayKey(new Date(now0));
     if (d !== today) {
-      const y = dayKey(new Date(now0 - 86400_000));
       today = d;
-      const r = claimDaily(s, now0, d, y);
+      const r = claimDaily(s, now0, d);
       if (r) {
         src.daily += r.money;
         s = r.state;

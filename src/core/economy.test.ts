@@ -414,16 +414,44 @@ describe('версия 2.0', () => {
   it('ежедневная награда: серия растёт, пропуск сбрасывает, дважды в день нельзя', async () => {
     const { claimDaily } = await import('./daily');
     let s = newGame(0);
-    const d1 = claimDaily(s, 0, '2026-10-17', '2026-10-16')!;
+    const d1 = claimDaily(s, 0, '2026-10-17')!;
     expect(d1.state.daily).toEqual({ streak: 1, last: '2026-10-17' });
     expect(d1.money).toBeGreaterThan(0);
-    expect(claimDaily(d1.state, 0, '2026-10-17', '2026-10-16')).toBeNull();
-    const d2 = claimDaily(d1.state, 0, '2026-10-18', '2026-10-17')!;
+    expect(claimDaily(d1.state, 0, '2026-10-17')).toBeNull();
+    const d2 = claimDaily(d1.state, 0, '2026-10-18')!;
     expect(d2.state.daily.streak).toBe(2);
-    const d3 = claimDaily(d2.state, 0, '2026-10-19', '2026-10-18')!;
+    const d3 = claimDaily(d2.state, 0, '2026-10-19')!;
     expect(d3.boxes).toEqual(['common']);
-    const late = claimDaily(d3.state, 0, '2026-10-25', '2026-10-24')!;
+    // серия 3, пропущено 5 дней: откат на 5 шагов не уходит ниже первого дня
+    const late = claimDaily(d3.state, 0, '2026-10-25')!;
     expect(late.state.daily.streak).toBe(1);
+  });
+
+  it('пропуск дня откатывает серию на шаг за каждый пропущенный день', async () => {
+    const { claimDaily, nextDailyIndex, daysBetween } = await import('./daily');
+    expect(daysBetween('2026-10-31', '2026-11-01')).toBe(1);
+    expect(daysBetween('2026-12-31', '2027-01-02')).toBe(2);
+    const s = { ...newGame(0), daily: { streak: 5, last: '2026-10-20' } };
+    expect(nextDailyIndex(s, '2026-10-21')).toBe(5); // без пропуска: шестой день
+    expect(nextDailyIndex(s, '2026-10-22')).toBe(4); // пропустил один: снова пятый
+    expect(nextDailyIndex(s, '2026-10-24')).toBe(2); // пропустил три
+    expect(nextDailyIndex(s, '2026-11-20')).toBe(0);
+    expect(claimDaily(s, 0, '2026-10-22')!.state.daily.streak).toBe(5);
+    // после седьмого дня неделя начинается заново
+    expect(nextDailyIndex({ ...s, daily: { streak: 7, last: '2026-10-20' } }, '2026-10-21')).toBe(0);
+    expect(nextDailyIndex(newGame(0), '2026-10-21')).toBe(0);
+  });
+
+  it('после переезда цель «Заработать» считается по новой точке', async () => {
+    const { refreshEarnQuests } = await import('./quests');
+    const rich = { ...newGame(0), location: 1, levels: { cashier: 100, courier: 50 }, lifetimeEarned: 1e12 };
+    const q = { kind: 'earn' as const, target: 1e11, start: 1e12 - 5e10, reward: { minutes: 2 } };
+    const moved = { ...rich, levels: {}, location: 2, quests: [q, { kind: 'taps' as const, target: 100, start: 0, reward: { minutes: 2 } }] };
+    const r = refreshEarnQuests(moved, 0);
+    expect(r.quests[0].target).toBeLessThan(q.target / 100);
+    expect(r.quests[0].start).toBe(moved.lifetimeEarned);
+    expect(r.quests[1]).toBe(moved.quests[1]);
+    expect(refreshEarnQuests({ ...moved, quests: [] }, 0).quests).toEqual([]);
   });
 
   it('задания: три штуки, выполненное меняется на новое и даёт награду', async () => {

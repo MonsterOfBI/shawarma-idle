@@ -5,7 +5,7 @@ import { setAudioPaused, setMuted, setMusic, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
 import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, openBox, petBonus } from './core/pets';
-import { claimQuest, ensureQuests } from './core/quests';
+import { claimQuest, ensureQuests, refreshEarnQuests } from './core/quests';
 import {
   type GameState,
   COMBO_WINDOW_MS,
@@ -525,10 +525,7 @@ export class Game {
   }
 
   private async claimDaily() {
-    const d = new Date();
-    const y = new Date(d);
-    y.setDate(d.getDate() - 1);
-    const r = claimDaily(this.state, Date.now(), dayKey(d), dayKey(y));
+    const r = claimDaily(this.state, Date.now(), dayKey(new Date()));
     if (!r) return;
     this.state = r.state;
     sfx.claim();
@@ -569,6 +566,7 @@ export class Game {
     const beat = before.moveBest[moveKey(before)];
     this.state = relocate(this.state, Date.now());
     if (this.state === before) return;
+    this.state = refreshEarnQuests(this.state, Date.now());
     sfx.move();
     this.scene.setLocation(this.state.location, true);
     this.scene.setLook(this.state.levels);

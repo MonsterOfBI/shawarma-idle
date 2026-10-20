@@ -616,7 +616,7 @@ export class Ui {
   // Полоска из 7 дней. Используется и во вкладке, и в окне подарка.
   private fillDaily(box: HTMLElement, s: GameState, now: number) {
     const can = canClaimDaily(s, today());
-    const next = can ? nextDailyIndex(s, today(-1)) : -1;
+    const next = can ? nextDailyIndex(s, today()) : -1;
     const done = can ? next : s.daily.streak;
     box.replaceChildren(
       ...DAILY.map((d, i) => {
@@ -633,7 +633,7 @@ export class Ui {
 
   private renderQuests(s: GameState, now: number) {
     const can = this.fillDaily($('#daily-strip'), s, now);
-    $('#daily-streak').textContent = t('dailyStreak', can ? nextDailyIndex(s, today(-1)) : s.daily.streak);
+    $('#daily-streak').textContent = t('dailyStreak', can ? nextDailyIndex(s, today()) : s.daily.streak);
     const claim = $<HTMLButtonElement>('#daily-claim');
     claim.disabled = !can;
     claim.textContent = can ? t('dailyClaim') : t('dailyTaken');
