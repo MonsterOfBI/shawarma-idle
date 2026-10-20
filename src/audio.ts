@@ -38,10 +38,19 @@ function beep(freq: number, duration: number, type: OscillatorType, volume: numb
   osc.stop(t + duration);
 }
 
+const PENTA = [0, 2, 4, 7, 9];
+
 export const sfx = {
   // чем длиннее серия, тем выше звук тапа
+  // тише прежнего и не одинаково: ноты пентатоники вверх по серии, три тембра вперемешку
   tap(combo = 0) {
-    beep(440 + Math.min(combo, 50) * 9 + Math.random() * 30, 0.06, 'triangle', 0.08);
+    const step = Math.min(combo, 40) >> 2;
+    const deg = PENTA[(step + Math.floor(Math.random() * 2)) % PENTA.length] + 12 * Math.floor(step / PENTA.length);
+    const f = 523 * Math.pow(2, deg / 12);
+    const kind = Math.floor(Math.random() * 3);
+    if (kind === 0) beep(f, 0.05, 'triangle', 0.045);
+    else if (kind === 1) { beep(f, 0.04, 'sine', 0.05); beep(f * 2, 0.025, 'sine', 0.015); }
+    else { beep(f * 0.5, 0.05, 'triangle', 0.04); beep(f * 1.5, 0.03, 'sine', 0.015, 0.01); }
   },
   golden() {
     [1046, 1318, 1568, 2093].forEach((f, i) => beep(f, 0.18, 'sine', 0.07, i * 0.06));
@@ -162,6 +171,41 @@ function voice(freq: number, at: number, dur: number, type: OscillatorType, vol:
 function marimba(n: number, at: number, vol: number, out: AudioNode) {
   voice(midi(n), at, 0.45, 'sine', vol, 0.004, out);
   voice(midi(n) * 4, at, 0.06, 'sine', vol * 0.25, 0.002, out);
+}
+
+// Свой ведущий инструмент у каждой точки: помойка — маримба, метро — электропиано,
+// пустыня — щипковый уд, площадь — мандолина с тремоло, дворец — колокольчики.
+type Lead = 'marimba' | 'epiano' | 'oud' | 'mandolin' | 'bells';
+const LEAD_BY_LOCATION: Record<string, Lead> = { dump: 'marimba', metro: 'epiano', desert: 'oud', piazza: 'mandolin', palace: 'bells' };
+let leadKind: Lead = 'marimba';
+
+export function setInstrument(location: string) {
+  leadKind = LEAD_BY_LOCATION[location] ?? 'marimba';
+}
+
+function lead(n: number, at: number, vol: number, out: AudioNode) {
+  const f = midi(n);
+  switch (leadKind) {
+    case 'epiano':
+      voice(f, at, 0.7, 'sine', vol * 0.9, 0.006, out);
+      voice(f * 2, at, 0.25, 'sine', vol * 0.18, 0.003, out, 6);
+      voice(f * 7, at, 0.04, 'sine', vol * 0.06, 0.001, out);
+      break;
+    case 'oud':
+      voice(f, at, 0.3, 'triangle', vol * 0.9, 0.003, out);
+      voice(f * 2, at, 0.12, 'sawtooth', vol * 0.07, 0.002, out, -8);
+      break;
+    case 'mandolin':
+      for (let i = 0; i < 3; i++) voice(f, at + i * 0.055, 0.09, 'triangle', vol * (0.8 - i * 0.18), 0.003, out, i % 2 ? 5 : -5);
+      break;
+    case 'bells':
+      voice(f, at, 0.9, 'sine', vol * 0.7, 0.003, out);
+      voice(f * 2.76, at, 0.35, 'sine', vol * 0.16, 0.002, out);
+      voice(f * 5.4, at, 0.12, 'sine', vol * 0.06, 0.001, out);
+      break;
+    default:
+      marimba(n, at, vol, out);
+  }
 }
 
 // укулеле: короткий щипок, ноты аккорда чуть врассыпную
@@ -307,7 +351,7 @@ function playStep(at: number) {
   // перебор маримбы в «вприпрыжку»
   if (p === 'skip') {
     const order = [0, 1, 2, 3, 2, 1, 2, 3];
-    marimba(root + 24 + tones[order[pos] % tones.length], at, 0.022, out);
+    lead(root + 24 + tones[order[pos] % tones.length], at, 0.022, out);
   }
 
   // мелодия: мотив — ответ — мотив — новая концовка; в «перерыве» реже
@@ -321,7 +365,7 @@ function playStep(at: number) {
     if (d !== null && d !== undefined) {
       const n = melodyNote(d, pos === 0 || pos === 4, chordHigh);
       const vol = p === 'skip' ? 0.04 : 0.055;
-      marimba(n, at, vol, out);
+      lead(n, at, vol, out);
     }
   }
 

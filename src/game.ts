@@ -1,7 +1,7 @@
 // Контроллер игры: держит состояние, крутит время, сохраняет, связывает сцену, интерфейс и площадку.
 
 import Phaser from 'phaser';
-import { setAudioPaused, setMuted, setMusic, setVolumes, sfx, unlockAudio } from './audio';
+import { setAudioPaused, setInstrument, setMuted, setMusic, setVolumes, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
 import { type BoxKind, type Drop, PET_RARITY, RARITIES, canMerge, mergePet, openBox, petBonus } from './core/pets';
@@ -151,6 +151,7 @@ export class Game {
     await this.scene.ready;
     document.querySelector<HTMLElement>('.loading-bar i')?.style.setProperty('--p', '100%');
     this.scene.setLocation(this.state.location);
+    setInstrument(LOCATIONS[this.state.location].id);
     this.scene.setLook(this.state.levels);
     this.meetStaff();
     this.scene.setMet(this.state.met);
@@ -573,6 +574,7 @@ export class Game {
     this.state = refreshEarnQuests(this.state, Date.now());
     sfx.move();
     this.scene.setLocation(this.state.location, true);
+    setInstrument(LOCATIONS[this.state.location].id);
     this.scene.setLook(this.state.levels);
     this.ui.showTab('upgrades');
     const loc = LOCATIONS[this.state.location];
