@@ -114,6 +114,7 @@ interface Row {
   msText: HTMLElement;
   btn: HTMLButtonElement;
   lastLevel: number;
+  seen: boolean; // кнопку уже показывали (блик только при смене «нельзя» на «можно»)
 }
 
 interface PetCard {
@@ -142,6 +143,7 @@ export class Ui {
   private tab: Tab = 'upgrades';
   private mode: BuyMode = 'x1';
   private shownMoney = -1;
+  private soundIcon: boolean | null = null;
   private lastState?: GameState;
   private questKey = '';
   private buffKey = '';
@@ -219,7 +221,7 @@ export class Ui {
       });
       root.append(ic, info, btn);
       list.append(root);
-      this.rows.set(u.id, { root, icon: ic, lv, name, desc, ms, msBar, msText, btn, lastLevel: -1 });
+      this.rows.set(u.id, { root, icon: ic, lv, name, desc, ms, msBar, msText, btn, lastLevel: -1, seen: false });
     }
 
     // брейнроты
@@ -353,6 +355,17 @@ export class Ui {
     if (secondsLeft > 0) $('#rush-text').textContent = t('rushText', Math.ceil(secondsLeft));
   }
 
+  // Монетка из сцены долетела до кошелька: счётчик денег коротко подпрыгивает (не чаще раза в 90 мс).
+  private bumpAt = 0;
+  bumpMoney() {
+    const now = performance.now();
+    if (now - this.bumpAt < 90) return;
+    this.bumpAt = now;
+    // Web Animations: только transform, без перерасчёта раскладки страницы
+    $('#money-pill').animate([{ transform: 'scale(1.07)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'cubic-bezier(.2, 1.4, .4, 1)' });
+    $('#money-coin').animate([{ transform: 'rotateY(0) scale(1.25)' }, { transform: 'rotateY(1turn) scale(1)' }], { duration: 380, easing: 'ease-out' });
+  }
+
   // Мигнуть карточкой улучшения, когда пройдена веха.
   milestoneHit(id: string) {
     const row = this.rows.get(id);
@@ -373,7 +386,10 @@ export class Ui {
     $('#rate-tap').textContent = t('perTap', fmt(tapValue(s, now)));
     $('#place').textContent = placeName(LOCATIONS[s.location].id, s.stars);
     $('#hint').hidden = s.taps > 5;
-    $('#sound').innerHTML = ui(s.muted ? 'mute' : 'sound');
+    if (this.soundIcon !== s.muted) {
+      this.soundIcon = s.muted;
+      $('#sound').innerHTML = ui(s.muted ? 'mute' : 'sound');
+    }
     $('#sound').classList.toggle('off', s.muted);
     $('#music').classList.toggle('off', s.musicOff || s.muted);
     // боковые кнопки держим под шапкой
@@ -496,8 +512,10 @@ export class Ui {
       }
       if (row.lastLevel >= 0 && lv > row.lastLevel) {
         row.root.classList.remove('flash');
+        row.lv.classList.remove('pop');
         void row.root.offsetWidth;
         row.root.classList.add('flash');
+        row.lv.classList.add('pop');
       }
       row.lastLevel = lv;
       row.lv.hidden = lv === 0 || (u.kind === 'mult' && (u.maxLevel ?? 1) === 1);
@@ -527,7 +545,16 @@ export class Ui {
       if (maxed) row.btn.textContent = t('bought');
       else if (n === 1 && this.mode === 'x1') row.btn.textContent = `${fmt(costOf(s, u))} ₽`;
       else row.btn.innerHTML = `<small>×${n}</small>${fmt(bulkCost(s, u, n))} ₽`;
-      row.btn.disabled = maxed || !canBuyN(s, u.id, n);
+      const off = maxed || !canBuyN(s, u.id, n);
+      // цена только что стала по карману — по кнопке пробегает блик
+      if (row.btn.disabled && !off && row.seen) {
+        row.btn.classList.remove('shine');
+        void row.btn.offsetWidth;
+        row.btn.classList.add('shine');
+        window.setTimeout(() => row.btn.classList.remove('shine'), 900);
+      }
+      row.seen = true;
+      row.btn.disabled = off;
       const pulse = fresh && !pulsed && !row.btn.disabled;
       if (pulse) pulsed = true;
       row.btn.classList.toggle('pulse', pulse);

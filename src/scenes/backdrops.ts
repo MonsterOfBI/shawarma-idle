@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bake, dropTexture } from './bake';
 import { AMBER, CREAM, LEAF, OUTLINE, Pen, TOMATO, WHITE, lerpColor, rng, shade } from './draw';
 
 // Фоны семи локаций. Рисуются в один Graphics и перерисовываются 10 раз в секунду,
@@ -531,11 +532,15 @@ export interface Mover {
   bob?: number;
 }
 
+// Машины, лодки и прочее, что ездит по фону, запекаются в картинку: рисунок не пересчитывается каждый кадр.
+// Своя текстура у каждой машины (цвета случайные), её удаляем, когда машина уезжает.
 function container(scene: Phaser.Scene, draw: (p: Pen) => void) {
   const c = scene.add.container(0, 0);
   const g = scene.add.graphics();
   draw(new Pen(g, 2.5));
   c.add(g);
+  const img = bake(g, 2);
+  c.once(Phaser.GameObjects.Events.DESTROY, () => dropTexture(scene, img));
   return c;
 }
 

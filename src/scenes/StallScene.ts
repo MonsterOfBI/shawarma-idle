@@ -9,7 +9,7 @@ import { drawBrainrot, drawMascot, setBakeRes, type Critter } from './brainrots'
 import { UPGRADES } from '../core/upgrades';
 import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, lerpColor, rng, shade } from './draw';
 import { type StallParts, buildStall } from './stall';
-import { bake } from './bake';
+import { bake, dropTexture } from './bake';
 
 export { DISPLAY_FONT };
 
@@ -36,6 +36,7 @@ export interface StallCallbacks {
   onTap(x: number, y: number): void;
   onGolden(x: number, y: number): void;
   onServed(id: string, x: number, y: number): void;
+  onCoin(): void; // монетка долетела до кошелька в шапке
 }
 
 interface Customer {
@@ -48,6 +49,7 @@ interface Customer {
   wait: number; // мс до шага вперёд: очередь трогается волной, а не вся разом
   bubble?: Phaser.GameObjects.Container;
   talked: boolean;
+  jump: number; // прыжок радости после покупки: от 1 до 0
 }
 
 interface PetSprite {
@@ -80,7 +82,8 @@ export class StallScene extends Phaser.Scene {
   private met = new Set<string>();
 
   private sky!: Phaser.GameObjects.Graphics;
-  private stars!: Phaser.GameObjects.Graphics;
+  // небо со звёздами и облаками рисуется в текстуру 10 раз в секунду, а не пересчитывается каждый кадр
+  private skyRT!: Phaser.GameObjects.RenderTexture;
   private backdrop!: Pen;
   private backdropRT!: Phaser.GameObjects.RenderTexture;
   private backdropKey = '';
@@ -90,7 +93,9 @@ export class StallScene extends Phaser.Scene {
   private night!: Phaser.GameObjects.Rectangle;
   private lampGlow!: Phaser.GameObjects.Ellipse;
   private flame?: Phaser.GameObjects.Graphics;
-  private starList: { x: number; y: number; r: number; tw: number }[] = [];
+  private starList: { img: Phaser.GameObjects.Image; tw: number }[] = [];
+  private clouds: { img: Phaser.GameObjects.Image; x0: number; v: number; w: number }[] = [];
+  private skyAt = -1e9; // когда последний раз перерисовывали небо (мс игрового времени)
 
   private stall?: StallParts;
   private stallScale = 1;
@@ -120,6 +125,13 @@ export class StallScene extends Phaser.Scene {
   private moverTimer = 1500;
   private courierTimer = 5000;
 
+  private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
+  // надписи «+N ₽» и летящие в кошелёк монеты берутся из запаса, а не создаются на каждый тап
+  private pops: Phaser.GameObjects.Text[] = [];
+  private flying: Phaser.GameObjects.Image[] = [];
+  private walletXY = { x: 0, y: 0 };
+  private walletAt = -1e9;
+  private growT = 1; // ларёк «дорастает» после покупки, которая его изменила: от 0 до 1
   private comboText!: Phaser.GameObjects.Text;
   private recordText!: Phaser.GameObjects.Text;
   private serveEvery = 0;
@@ -179,8 +191,10 @@ export class StallScene extends Phaser.Scene {
       fx?.contrast(0.06, true);
       fx?.brightness(1.05, true);
     }
-    this.sky = this.add.graphics().setDepth(0);
-    this.stars = this.add.graphics().setDepth(0.5);
+    this.sky = this.make.graphics({}, false);
+    this.skyRT = this.add.renderTexture(0, 0, this.scale.width, this.scale.height).setOrigin(0, 0).setDepth(0);
+    // облака и звёзды — обычные картинки: двигаются каждый кадр почти бесплатно
+    this.clouds = Array.from({ length: 4 }, () => ({ img: this.add.image(0, 0, 'cloud').setDepth(0.4), x0: 0, v: 0, w: 0 }));
     // Фон рисуется в текстуру и только потом на экран: тысячи фигур фона
     // не пересчитываются каждый кадр, а только при перерисовке мира.
     this.backdrop = new Pen(this.make.graphics({}, false), 2);
@@ -232,6 +246,19 @@ export class StallScene extends Phaser.Scene {
         emitting: false,
       })
       .setDepth(11);
+
+    // пыль от земли, когда ларёк перестраивается
+    this.dust = this.add
+      .particles(0, 0, 'puff', {
+        lifespan: 850,
+        speedX: { min: -150, max: 150 },
+        speedY: { min: -60, max: -10 },
+        scale: { start: 0.35, end: 1.1 },
+        alpha: { start: 0.75, end: 0 },
+        tint: 0xf1e2c2,
+        emitting: false,
+      })
+      .setDepth(9.6);
 
     // во дворце с неба падают монеты
     this.goldRain = this.add
@@ -295,6 +322,8 @@ export class StallScene extends Phaser.Scene {
     this.scale.on('resize', () => this.layout());
     this.layout();
     this.input.keyboard?.on('keydown-SPACE', () => this.cb.onTap(this.stallX, this.groundY - 110 * this.stallScale));
+    // для замеров в режиме разработки: сцена доступна из консоли браузера
+    if (import.meta.env.DEV) (window as unknown as { __scene: StallScene }).__scene = this;
     this.readyResolve();
   }
 
@@ -313,10 +342,27 @@ export class StallScene extends Phaser.Scene {
     g.clear();
     g.fillStyle(0xffffff, 1).fillRect(0, 0, 8, 5);
     g.generateTexture('confetti', 8, 5);
+    g.clear();
+    // облако из трёх овалов, 200×80
+    g.fillStyle(0xffffff, 1).fillEllipse(100, 56, 200, 64).fillEllipse(60, 40, 100, 72).fillEllipse(136, 44, 84, 60);
+    g.generateTexture('cloud', 200, 80);
+    g.clear();
+    // мягкая тень под ногами
+    g.fillStyle(0x2a1b3d, 0.16).fillEllipse(32, 10, 64, 20);
+    g.fillStyle(0x2a1b3d, 0.16).fillEllipse(32, 10, 46, 13);
+    g.generateTexture('shadow', 64, 20);
     g.destroy();
   }
 
   // ---------- небо и фон ----------
+
+  private skyNight(phase: number) {
+    let i = 0;
+    while (i < SKY.length - 2 && SKY[i + 1][0] <= phase) i++;
+    const a = SKY[i], b = SKY[i + 1];
+    const k = (phase - a[0]) / Math.max(1e-6, b[0] - a[0]);
+    return a[3] + (b[3] - a[3]) * k;
+  }
 
   private drawSky(phase: number) {
     const { width } = this.scale;
@@ -353,33 +399,37 @@ export class StallScene extends Phaser.Scene {
       this.sky.fillStyle(0xf3f0ff, 1).fillCircle(mx, my, 14 * u);
       this.sky.fillStyle(top, 1).fillCircle(mx + 6 * u, my - 3 * u, 12 * u);
     }
-    // облака днём
-    const day = 1 - this.nightK;
-    if (day > 0.1) {
-      const r = rng(5 + this.location);
-      for (let c = 0; c < 4; c++) {
-        const cw = (60 + r() * 50) * u;
-        const cx = ((r() * width + (this.clock / 1000) * (4 + r() * 6) * u) % (width + cw * 2)) - cw;
-        const cy = hy * (0.15 + r() * 0.35);
-        this.sky.fillStyle(0xffffff, 0.75 * day);
-        this.sky.fillEllipse(cx, cy, cw, cw * 0.32);
-        this.sky.fillEllipse(cx - cw * 0.2, cy - cw * 0.12, cw * 0.5, cw * 0.36);
-        this.sky.fillEllipse(cx + cw * 0.18, cy - cw * 0.08, cw * 0.42, cw * 0.3);
-      }
-    }
+    this.skyAt = this.clock;
+  }
 
-    this.stars.clear();
-    if (this.nightK > 0.3) {
-      for (const s of this.starList) {
-        const tw = 0.5 + 0.5 * Math.sin(this.clock / 600 + s.tw);
-        this.stars.fillStyle(0xffffff, (this.nightK - 0.3) * tw).fillCircle(s.x, s.y, s.r * u);
-      }
+  // Облака плывут, звёзды мерцают: каждый кадр двигаем готовые картинки, ничего не перерисовывая.
+  private animateSky() {
+    const u = this.unit;
+    const w = this.scale.width;
+    const day = 1 - this.nightK;
+    for (const c of this.clouds) {
+      c.img.setVisible(day > 0.1);
+      if (day <= 0.1) continue;
+      const span = w + c.w * 2;
+      c.img.setPosition(((((c.x0 + (this.clock / 1000) * c.v * u) % span) + span) % span) - c.w, c.img.y).setAlpha(0.75 * day);
+    }
+    const on = this.nightK > 0.3;
+    for (const st of this.starList) {
+      st.img.setVisible(on);
+      if (on) st.img.setAlpha((this.nightK - 0.3) * (0.5 + 0.5 * Math.sin(this.clock / 600 + st.tw)));
     }
   }
 
   private redrawWorld() {
     const phase = ((((this.clock / 1000) / DAY_SECONDS + DAY_START) % 1) + 1) % 1;
-    this.drawSky(phase);
+    // градиент неба, солнце и луна меняются медленно: в текстуру раз в полсекунды
+    const { width: sw, height: sh } = this.scale;
+    const resized = this.skyRT.width !== sw || this.skyRT.height !== sh;
+    if (resized || this.clock - this.skyAt >= 500) {
+      this.drawSky(phase);
+      if (resized) this.skyRT.resize(sw, sh);
+      this.skyRT.clear().draw(this.sky);
+    } else this.nightK = this.skyNight(phase);
     // Фон — десятки тысяч фигур. Перерисовываем его, только когда заметно сменился свет
     // (рассвет и закат) или размер экрана и точка. Днём и ночью он стоит готовой картинкой.
     const { width, height } = this.scale;
@@ -481,20 +531,32 @@ export class StallScene extends Phaser.Scene {
       this.props.add(fg);
     }
     if (S.meme_ads > 0) {
-      // билборд с брейнротом
-      const bx = w * 0.88, by = hy - 60 * u;
+      // билборд с брейнротом: справа от ларька, но не за боковыми кнопками;
+      // если места мало, щит становится меньше
+      const st = this.stall, ss = this.stallScale;
+      const safe = this.rightSafe(w);
+      const right = st ? this.stallX + st.right * ss + 2 * u : w * 0.7;
+      let k = 1, bx = Math.min(w * 0.88, safe - 50 * u), by = hy - 60 * u;
+      if (st && bx - 48 * u < right) {
+        // справа тесно: щит поменьше и повыше, над правым краем крыши, но ниже шапки с деньгами
+        k = Phaser.Math.Clamp((safe - right) / (98 * u), 0.7, 1);
+        bx = safe - 50 * u * k;
+        by = Math.min(hy - 60 * u, gy + st.top * ss - 2 * u);
+        by = Math.max(by, this.hudBottom + 66 * u * k);
+      }
+      const v = u * k;
       const bg = this.add.graphics();
       const bp = new Pen(bg, 2.5);
-      bp.rect(bx - 3 * u, by, 6 * u, 60 * u, 0x5a5270, 2);
-      bp.rect(bx - 48 * u, by - 62 * u, 96 * u, 64 * u, CREAM, 6 * u, 3);
-      bp.rect(bx - 44 * u, by - 58 * u, 40 * u, 56 * u, 0xffd86b, 4 * u, 0);
+      bp.rect(bx - 3 * v, by - 4 * u, 6 * v, Math.max(64 * u, hy - by), 0x5a5270, 2);
+      bp.rect(bx - 48 * v, by - 62 * v, 96 * v, 64 * v, CREAM, 6 * v, 3);
+      bp.rect(bx - 44 * v, by - 58 * v, 40 * v, 56 * v, 0xffd86b, 4 * v, 0);
       this.props.add(bg);
       const star = drawBrainrot(this, 'tralalero');
-      star.root.setPosition(bx - 24 * u, by - 4 * u).setScale((50 / star.height) * u);
+      star.root.setPosition(bx - 24 * v, by - 4 * v).setScale((50 / star.height) * v);
       this.props.add(star.root);
       this.props.add(
         this.add
-          .text(bx + 22 * u, by - 30 * u, t('memeBoard'), { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(8 * u)}px`, fontStyle: '900', color: '#e4472b', align: 'center' })
+          .text(bx + 22 * v, by - 30 * v, t('memeBoard'), { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(8 * v)}px`, fontStyle: '900', color: '#e4472b', align: 'center' })
           .setOrigin(0.5),
       );
     }
@@ -553,7 +615,15 @@ export class StallScene extends Phaser.Scene {
     this.squashTarget *= Math.exp(-delta / 110);
     this.squashNow += (this.squashTarget - this.squashNow) * Math.min(1, delta / 45);
     const a = this.squashNow, s = this.stallScale;
-    for (const o of [this.stall.root, this.stall.glow]) o.setScale(s * (1 + 0.025 * a), s * (1 - 0.045 * a));
+    // после перестройки ларёк вырастает из земли с небольшим перелётом
+    let gx = 1, gy = 1;
+    if (this.growT < 1) {
+      this.growT = Math.min(1, this.growT + delta / 620);
+      const k = Phaser.Math.Easing.Back.Out(this.growT, 2.2);
+      gx = 0.9 + 0.1 * k;
+      gy = 0.72 + 0.28 * k;
+    }
+    for (const o of [this.stall.root, this.stall.glow]) o.setScale(s * (1 + 0.025 * a) * gx, s * (1 - 0.045 * a) * gy);
   }
 
   private layout() {
@@ -581,7 +651,19 @@ export class StallScene extends Phaser.Scene {
     (this.hitZone.input?.hitArea as Phaser.Geom.Rectangle | undefined)?.setTo(0, 0, st.hit.w * s, st.hit.h * s);
     this.night.setSize(width, height);
     const r = rng(17 + this.location * 101);
-    this.starList = Array.from({ length: 44 }, () => ({ x: r() * width, y: r() * this.horizonY * 0.75, r: 0.6 + r() * 1.4, tw: r() * 6 }));
+    this.starList.forEach((st) => st.img.destroy());
+    this.starList = Array.from({ length: 44 }, () => ({
+      img: this.add.image(r() * width, r() * this.horizonY * 0.75, 'spark').setScale(((0.6 + r() * 1.4) * this.unit) / 4).setDepth(0.5).setVisible(false),
+      tw: r() * 6,
+    }));
+    const rc = rng(5 + this.location);
+    for (const c of this.clouds) {
+      c.w = (60 + rc() * 50) * this.unit;
+      c.x0 = rc() * width;
+      c.v = 4 + rc() * 6;
+      c.img.setDisplaySize(c.w * 1.1, c.w * 0.44).setY(this.horizonY * (0.15 + rc() * 0.35));
+    }
+    this.skyAt = -1e9;
     this.buildProps();
     this.customers.forEach((cu) => cu.c.root.setScale(this.critterScale(cu.c)));
     this.placePets();
@@ -592,7 +674,8 @@ export class StallScene extends Phaser.Scene {
     const u = this.unit;
     const y = Math.min(this.scale.height - 4 * u, this.groundY + 40 * u);
     // маскот крупнее питомцев и стоит в самом низу слева
-    const ms = this.critterScale(this.mascot) * 0.98;
+    // на узком экране маскот скромнее, чтобы не закрывал очередь
+    const ms = this.critterScale(this.mascot) * (this.scale.height > this.scale.width * 1.2 ? 0.8 : 0.98);
     const my = Math.min(this.scale.height - 2 * u, this.groundY + 48 * u);
     this.mascot.root.setData({ s: ms, y0: my }).setPosition(Math.max(46 * u, this.scale.width * MASCOT_X), my).setScale(ms);
     for (const p of this.pets) {
@@ -636,13 +719,34 @@ export class StallScene extends Phaser.Scene {
       apply();
       return;
     }
+    // мультяшная «диафрагма»: улица сжимается в кружок, за ним уже новая точка, и ларёк вырастает из земли
     this.moving = true;
-    this.cameras.main.fadeOut(380, 42, 27, 61);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+    void this.iris(true).then(() => {
       apply();
-      this.cameras.main.fadeIn(600, 42, 27, 61);
-      this.moving = false;
-      this.time.delayedCall(450, () => this.celebrate(true));
+      this.growT = 0;
+      this.time.delayedCall(140, () => {
+        this.moving = false;
+        this.regrow();
+        void this.iris(false);
+        this.time.delayedCall(380, () => this.celebrate(true));
+      });
+    });
+  }
+
+  private iris(close: boolean): Promise<void> {
+    const el = document.getElementById('iris');
+    if (!el) return Promise.resolve();
+    return new Promise((done) => {
+      el.hidden = false;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          el.classList.toggle('closed', close);
+          window.setTimeout(() => {
+            if (!close) el.hidden = true;
+            done();
+          }, close ? 520 : 600);
+        }),
+      );
     });
   }
 
@@ -657,6 +761,7 @@ export class StallScene extends Phaser.Scene {
     if (!this.sys.isActive() || this.moving) return !first;
     this.rebuildStall();
     this.layout();
+    if (!first) this.regrow();
     return !first;
   }
 
@@ -683,6 +788,7 @@ export class StallScene extends Phaser.Scene {
         const st = this.add.star(x, -c.height - 14 - (i === 1 && stars === 3 ? 6 : 0), 5, 5, 11, 0xffb02e).setStrokeStyle(3, 0x2a1b3d);
         c.root.add(st);
       }
+      if (p.id !== 'bombardiro') this.shadow(c);
       c.root.setDepth(7.8);
       return { id: p.id, c, aura, phase: slot * 1.7, slot };
     });
@@ -705,6 +811,17 @@ export class StallScene extends Phaser.Scene {
 
   setMet(ids: string[]) {
     this.met = new Set(ids);
+  }
+
+  // Ларёк перестроился: вырастает из земли, по бокам клубится пыль.
+  private regrow() {
+    const st = this.stall;
+    if (!st) return;
+    this.growT = 0;
+    const s = this.stallScale, gy = this.groundY;
+    this.dust.explode(12, this.stallX + st.left * s * 0.9, gy);
+    this.dust.explode(12, this.stallX + st.right * s * 0.9, gy);
+    this.dust.explode(8, this.stallX, gy);
   }
 
   // Эффект покупки: большой, если на ларьке появилось что-то новое.
@@ -776,6 +893,7 @@ export class StallScene extends Phaser.Scene {
     const first = this.customers.find((c) => c.state === 'queue');
     if (!first || Math.abs(first.c.root.x - this.queueX(0)) > 3) return;
     first.state = 'leaving';
+    first.jump = 1;
     first.bubble?.destroy();
     first.bubble = undefined;
     const g = this.add.graphics();
@@ -783,8 +901,9 @@ export class StallScene extends Phaser.Scene {
     p.rect(-5, -11, 10, 22, 0xf2e3b3, 4);
     p.rect(-5, -11, 10, 7, 0xb5651d, 3, 0);
     p.flat(0x5e9c3a).fillRect(-4, -12, 3, 3);
-    g.setPosition(16, -first.c.height * 0.45).setAngle(-15);
+    g.setPosition(16, -first.c.height * 0.45);
     first.c.body.add(g);
+    bake(g, 3, 'wrap').setAngle(-15); // одна общая картинка шаурмы на всех гостей
     first.c.root.setDepth(7);
     this.cb.onServed(first.id, first.c.root.x, first.c.root.y - first.c.height * first.c.root.scaleY * 0.8);
   }
@@ -793,17 +912,96 @@ export class StallScene extends Phaser.Scene {
     this.coins.explode(count, x, y);
   }
 
+  // Надпись «+N ₽»: выпрыгивает, чуть наклонившись, всплывает и тает. Берётся из запаса из 16 надписей.
   popText(text: string, x: number, y: number, color = '#fff4dc', size = 1) {
     const u = this.unit * size;
-    const pop = this.add
-      .text(x + Phaser.Math.Between(-12, 12), y - 20, text, { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(19 * u)}px`, color, fontStyle: '800', stroke: '#2a1b3d', strokeThickness: Math.round(5 * u) })
-      .setOrigin(0.5)
-      .setDepth(12);
-    if (size > 1) {
-      pop.setScale(0.4);
-      this.tweens.add({ targets: pop, scale: 1, duration: 200, ease: 'Back.out' });
+    let pop = this.pops.find((p) => !p.visible);
+    if (!pop) {
+      if (this.pops.length < 16) {
+        pop = this.add.text(0, 0, '', { fontFamily: DISPLAY_FONT, fontStyle: '800' }).setOrigin(0.5).setDepth(12);
+        this.pops.push(pop);
+      } else {
+        pop = this.pops.shift()!;
+        this.pops.push(pop);
+      }
     }
-    this.tweens.add({ targets: pop, y: pop.y - 70 * u, alpha: 0, duration: 800 + (size > 1 ? 300 : 0), ease: 'Cubic.out', onComplete: () => pop.destroy() });
+    this.tweens.killTweensOf(pop);
+    pop.style.setStyle({ fontSize: `${Math.round(19 * u)}px`, color, stroke: '#2a1b3d', strokeThickness: Math.round(5 * u) }, false);
+    if (pop.text === text) pop.updateText();
+    else pop.setText(text);
+    const tilt = Phaser.Math.Between(-8, 8);
+    pop
+      .setPosition(x + Phaser.Math.Between(-14, 14) * this.unit, y - 20 * this.unit)
+      .setVisible(true)
+      .setAlpha(1)
+      .setScale(size > 1 ? 0.3 : 0.55)
+      .setAngle(tilt)
+      .setDepth(size > 1 ? 12.5 : 12);
+    const life = 820 + (size > 1 ? 380 : 0);
+    this.tweens.add({ targets: pop, scale: 1, angle: tilt * 0.3, duration: size > 1 ? 260 : 170, ease: 'Back.out' });
+    this.tweens.add({ targets: pop, y: pop.y - 74 * u, duration: life, ease: 'Cubic.out' });
+    this.tweens.add({ targets: pop, alpha: 0, delay: life * 0.55, duration: life * 0.45, onComplete: () => pop.setVisible(false) });
+  }
+
+  // Где на экране кошелёк (монетка в шапке): спрашиваем у страницы не чаще раза в 2 секунды.
+  // Левый край боковых кнопок у правого края улицы (в координатах сцены).
+  private rightSafe(w: number) {
+    let x = w;
+    const c = this.game.canvas.getBoundingClientRect();
+    document.querySelectorAll<HTMLElement>('.side-btn').forEach((b) => {
+      const r = b.getBoundingClientRect();
+      if (r.width && r.left - c.left > w / 2) x = Math.min(x, r.left - c.left - 6);
+    });
+    return x;
+  }
+
+  private wallet() {
+    if (this.clock - this.walletAt > 2000) {
+      this.walletAt = this.clock;
+      const coin = document.getElementById('money-coin');
+      if (coin) {
+        const r = coin.getBoundingClientRect();
+        const c = this.game.canvas.getBoundingClientRect();
+        if (r.width) this.walletXY = { x: r.left + r.width / 2 - c.left, y: r.top + r.height / 2 - c.top };
+      }
+    }
+    return this.walletXY;
+  }
+
+  // Монетки летят дугой из точки тапа в кошелёк; долетевшая монетка толкает счётчик денег.
+  flyCoins(x: number, y: number, n = 1) {
+    const u = this.unit;
+    const to = this.wallet();
+    for (let i = 0; i < n; i++) {
+      let img = this.flying.find((f) => !f.visible);
+      if (!img) {
+        if (this.flying.length >= 18) return;
+        img = this.add.image(0, 0, 'coin').setDepth(13);
+        this.flying.push(img);
+      }
+      const coin = img;
+      const sx = x + Phaser.Math.Between(-10, 10) * u, sy = y + Phaser.Math.Between(-8, 8) * u;
+      const cx = sx + (to.x - sx) * 0.25 + Phaser.Math.Between(-50, 50) * u;
+      const cy = Math.min(sy, to.y) - (60 + Math.random() * 70) * u;
+      const s0 = (0.9 + Math.random() * 0.3) * Math.min(1.3, u);
+      coin.setPosition(sx, sy).setScale(s0).setVisible(true).setAlpha(1).setAngle(0);
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: i * 55,
+        duration: 520 + Math.random() * 160,
+        ease: 'Sine.in',
+        onUpdate: (tw) => {
+          const t = tw.getValue() ?? 0, r = 1 - t;
+          coin.setPosition(r * r * sx + 2 * r * t * cx + t * t * to.x, r * r * sy + 2 * r * t * cy + t * t * to.y);
+          coin.setScale(s0 * (1 - 0.35 * t), s0 * (1 - 0.35 * t) * Math.abs(Math.cos(t * 9)) + 0.1 * s0);
+        },
+        onComplete: () => {
+          coin.setVisible(false);
+          this.cb.onCoin();
+        },
+      });
+    }
   }
 
   bigText(text: string, color = '#ffd86b') {
@@ -864,8 +1062,10 @@ export class StallScene extends Phaser.Scene {
       duration: 700,
       ease: 'Quad.in',
       onComplete: () => {
-        this.coins.explode(22, g.x, ground - 10 * u);
+        this.coins.explode(14, g.x, ground - 10 * u);
         this.confetti.explode(16, g.x, ground - 10 * u);
+        this.dust.explode(8, g.x, ground);
+        this.flyCoins(g.x, ground - 10 * u, 8);
         g.destroy();
       },
     });
@@ -926,11 +1126,18 @@ export class StallScene extends Phaser.Scene {
 
   // ---------- очередь ----------
 
+  // Мягкая тень под ногами: персонаж стоит на земле, а не висит над ней.
+  private shadow(c: Critter, k = 1) {
+    const w = Math.max(40, c.width) * 0.8 * k;
+    c.root.addAt(this.add.image(0, 3, 'shadow').setScale(w / 64, (w / 64) * 0.75), 0);
+  }
+
   private spawnCustomer() {
     const id = pickCustomer(this.location, Math.random());
     const c = drawBrainrot(this, id);
     c.root.setPosition(-50 * this.unit, this.groundY + 4 * this.unit).setScale(this.critterScale(c)).setDepth(6);
-    this.customers.push({ id, c, state: 'queue', phase: Math.random() * 6, talked: false, vx: this.walkSpeed(), wait: 0 });
+    this.shadow(c);
+    this.customers.push({ id, c, state: 'queue', phase: Math.random() * 6, talked: false, vx: this.walkSpeed(), wait: 0, jump: 0 });
   }
 
   private say(cu: Customer) {
@@ -958,6 +1165,9 @@ export class StallScene extends Phaser.Scene {
     g.fillStyle(fill, 1).fillTriangle(-6 * u, bh / 2 - 1.5, 6 * u, bh / 2 - 1.5, 0, bh / 2 + 8 * u);
     g.lineStyle(2.5, OUTLINE, 1).lineBetween(-6 * u, bh / 2, 0, bh / 2 + 8 * u).lineBetween(6 * u, bh / 2, 0, bh / 2 + 8 * u);
     const bubble = this.add.container(0, 0, [g, label]).setDepth(12).setScale(0.2);
+    // облачко запекаем в картинку, пока оно на экране; текстуру убираем вместе с облачком
+    const img = bake(g, this.resFor(u));
+    bubble.once(Phaser.GameObjects.Events.DESTROY, () => dropTexture(this, img));
     bubble.setData('h', bh);
     this.tweens.add({ targets: bubble, scale: 1, duration: 220, ease: 'Back.out' });
     return bubble;
@@ -997,6 +1207,7 @@ export class StallScene extends Phaser.Scene {
     this.mascot?.root.destroy();
     const lv = Phaser.Math.Clamp(level, 1, 3);
     const m = drawMascot(this, lv);
+    this.shadow(m, 0.9);
     m.root.setDepth(8).setVisible(level > 0);
     const style = { fontFamily: DISPLAY_FONT, fontStyle: '900' };
     if (lv === 1) {
@@ -1101,6 +1312,7 @@ export class StallScene extends Phaser.Scene {
       this.worldTimer = 100;
       this.redrawWorld();
     }
+    this.animateSky();
 
     // вертел крутится: полосы мяса бегут вниз и сужаются вместе с конусом
     const k = (this.clock / 220) % 1;
@@ -1161,6 +1373,13 @@ export class StallScene extends Phaser.Scene {
       c.c.root.x += c.vx * delta;
       c.c.root.y += (this.groundY + 22 * u - c.c.root.y) * Math.min(1, delta / 260);
       this.animateWalk(c, c.vx / vmax, delta);
+      // радостный подскок с шаурмой в руках
+      if (c.jump > 0) {
+        c.jump = Math.max(0, c.jump - delta / 520);
+        const j = Math.sin(c.jump * Math.PI);
+        c.c.body.y -= j * 22;
+        c.c.body.rotation -= j * 0.12;
+      }
       if (c.c.root.x > this.scale.width + 70 * u) c.c.root.destroy();
     }
     this.customers = this.customers.filter((c) => c.c.root.active);

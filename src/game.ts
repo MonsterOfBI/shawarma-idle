@@ -109,6 +109,7 @@ export class Game {
       onTap: (x, y) => this.onTap(x, y),
       onGolden: (x, y) => this.onGolden(x, y),
       onServed: (id, x, y) => this.served(id, x, y),
+      onCoin: () => this.ui.bumpMoney(),
     });
     this.ui = new Ui({
       buy: (id, n) => this.buy(id, n),
@@ -369,7 +370,9 @@ export class Game {
       this.scene.crit(`${t('crit')} ${text}`, x, y);
       sfx.crit();
     } else this.scene.popText(text, x, y, now < this.state.tapFrenzyUntil ? '#ff9ccb' : rush ? '#ffb02e' : '#fff4dc');
-    this.scene.burst(x, y, 2 + Math.min(6, Math.floor(this.combo / 8)) + (rush ? 3 : 0) + (crit ? 8 : 0));
+    // пара монет брызгает от пальца, одна-три летят в кошелёк
+    this.scene.burst(x, y, 1 + Math.min(4, Math.floor(this.combo / 10)) + (rush ? 2 : 0) + (crit ? 6 : 0));
+    this.scene.flyCoins(x, y, crit ? 3 : 1);
     this.scene.setCombo(this.combo, comboMult(this.combo));
     if (record) {
       this.scene.setRecord(this.combo, !this.recordInStreak);
@@ -429,6 +432,7 @@ export class Game {
     const pay = payOf(id);
     const color = pay >= 2 ? '#ff9ccb' : pay >= 1.5 ? '#ffd86b' : pay >= 1 ? '#b8f08a' : '#fff4dc';
     this.scene.popText(`+${formatNumber(check, lang())} ₽`, x, y, color, pay >= 1.5 ? 1.25 : 1);
+    this.scene.flyCoins(x, y, pay >= 1.5 ? 3 : 1);
   }
 
   private meet(id: string) {
@@ -563,7 +567,8 @@ export class Game {
       await this.during('ad', this.platform.showInterstitial(), AD_PAUSE_MAX_MS);
     }
     // подарки за переезд: мифический ящик всегда, золотой — за рекорд скорости
-    await wait(1800);
+    // ящик ждёт, пока раскроется новая улица и уедет открытка точки
+    await wait(3000);
     await this.openBox(MOVE_BOX, 'free', t('moveBoxTitle'));
     if (fast) {
       const time = runTime(before, Date.now());

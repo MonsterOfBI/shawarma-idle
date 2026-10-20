@@ -87,9 +87,9 @@ button:disabled { cursor: default; }
 
 .money-pill {
   display: inline-flex; align-items: center; gap: 8px; padding: 4px 18px 4px 5px; margin-top: -2px;
-  border-radius: 999px; background: rgba(26, 16, 40, 0.74); box-shadow: 0 0 0 2.5px var(--plum-0), inset 0 2px 0 rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  border-radius: 999px; background: rgba(26, 16, 40, 0.86); box-shadow: 0 0 0 2.5px var(--plum-0), 0 4px 0 2.5px rgba(26, 16, 40, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.1);
 }
+.money-pill .ico { transform-style: preserve-3d; }
 .money-pill .ico { width: clamp(30px, 7vw, 40px); height: clamp(30px, 7vw, 40px); }
 #money {
   font-family: var(--display); font-weight: 900; font-size: clamp(24px, 6.6vw, 40px); line-height: 1.1; letter-spacing: -0.02em;
@@ -109,12 +109,14 @@ button:disabled { cursor: default; }
   background: var(--amber); box-shadow: 0 0 0 2px var(--plum), 0 3px 0 2px var(--plum-0); animation: buffIn 0.35s cubic-bezier(.2, 1.6, .4, 1);
 }
 .buff .ico { width: 18px; height: 18px; }
-.buff.frenzy { background: var(--gold); animation: buffIn 0.35s cubic-bezier(.2, 1.6, .4, 1), glowGold 0.8s ease-in-out infinite alternate; }
-.buff.taps { background: #ff7ab8; animation: buffIn 0.35s cubic-bezier(.2, 1.6, .4, 1), glowPink 0.8s ease-in-out infinite alternate; }
+.buff { position: relative; }
+.buff.frenzy { background: var(--gold); --glow: rgba(255, 216, 107, 0.85); }
+.buff.taps { background: #ff7ab8; --glow: rgba(255, 122, 184, 0.85); }
+/* свечение — отдельный слой, мигает только прозрачностью (без перерисовки тени каждый кадр) */
+.buff.frenzy::after, .buff.taps::after { content: ''; position: absolute; inset: -2px; z-index: -1; border-radius: inherit; box-shadow: 0 0 18px 4px var(--glow); animation: glowPulse 0.8s ease-in-out infinite alternate; }
+@keyframes glowPulse { from { opacity: 0.25; } }
 .buff.rush { background: var(--tomato); color: var(--cream); }
 @keyframes buffIn { from { transform: scale(0.3); } }
-@keyframes glowGold { to { box-shadow: 0 0 0 2px var(--plum), 0 3px 0 2px var(--plum-0), 0 0 18px 4px rgba(255, 216, 107, 0.8); } }
-@keyframes glowPink { to { box-shadow: 0 0 0 2px var(--plum), 0 3px 0 2px var(--plum-0), 0 0 18px 4px rgba(255, 122, 184, 0.8); } }
 
 /* ---------- боковые кнопки поверх улицы ---------- */
 .side { position: absolute; z-index: 3; top: var(--side-top, 132px); display: flex; flex-direction: column; gap: 14px; }
@@ -339,8 +341,11 @@ button:disabled { cursor: default; }
 .pet.r-god { --r: var(--r-god); }
 .pet.r-god { box-shadow: 0 0 0 3px #fff, 0 0 0 5.5px var(--plum-0), 0 6px 0 5.5px var(--plum-0), 0 0 22px rgba(255, 92, 240, 0.7); background: radial-gradient(circle at 50% 35%, #fff, #ffe6fb 45%, #c9b8ff); }
 .pet.r-god .pet-rar { background: var(--rainbow); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; filter: none; animation: rainbow 2s linear infinite; }
-.pet.r-mythic:not(.unknown), .pet.r-legendary:not(.unknown), .pet.r-god:not(.unknown) { animation: shine 1.6s ease-in-out infinite alternate; }
-@keyframes shine { to { filter: drop-shadow(0 0 9px var(--r)); } }
+.pet.r-mythic:not(.unknown)::after, .pet.r-legendary:not(.unknown)::after, .pet.r-god:not(.unknown)::after {
+  content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 19px; pointer-events: none;
+  box-shadow: 0 0 16px 3px var(--r); animation: glowPulse 1.6s ease-in-out infinite alternate;
+}
+.pet { isolation: isolate; }
 @keyframes rainbow { to { background-position: 200% 0; } }
 .pet img { width: 70px; height: 70px; object-fit: contain; filter: drop-shadow(0 3px 0 rgba(42, 27, 61, 0.25)); }
 .pet b { font-size: 11px; line-height: 1.12; font-weight: 800; min-height: 2.24em; display: grid; place-items: center; }
@@ -754,6 +759,8 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
   #app { --sz: 1.08; }
   .side-btn { zoom: var(--sz); }
   .side-left { top: calc(var(--side-top, 132px) + 107px * var(--sz) + 28px); }
+  /* окна и открытие ящика на большом экране тоже крупнее, иначе теряются посреди монитора */
+  .reveal-card, .reveal-title, .reveal-crate, .receipt, .sheet, .move-card-in { zoom: var(--pz); }
 }
 @media (min-aspect-ratio: 1/1) and (min-width: 700px) and (min-height: 860px) {
   #app { --pz: 1.28; --sz: 1.2; }
@@ -777,3 +784,32 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
   .ribbon { max-width: calc(100% - 124px); }
   .hud-btns { gap: 6px; }
 }
+
+/* ================= v2.17: анимации и полировка ================= */
+/* переезд: улица сжимается в кружок с янтарной каймой и раскрывается уже на новой точке */
+@property --iris { syntax: '<length>'; inherits: false; initial-value: 150vmax; }
+.iris {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none; --iris: 150vmax;
+  background: radial-gradient(circle at 58% 62%, transparent var(--iris), var(--amber) calc(var(--iris) + 1px), var(--amber) calc(var(--iris) + 7px), var(--plum-0) calc(var(--iris) + 8px));
+  transition: --iris 0.5s cubic-bezier(.6, 0, .35, 1);
+}
+.iris.closed { --iris: 0px; transition-duration: 0.48s; }
+
+/* цена стала по карману: по кнопке один раз пробегает блик */
+.btn.shine::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.6) 48%, rgba(255, 255, 255, 0.15) 56%, transparent 70%) -150% 0 / 250% 100% no-repeat;
+  animation: shine 0.8s ease-out forwards;
+}
+@keyframes shine { to { background-position: 160% 0; } }
+/* купили уровень: номер уровня подпрыгивает */
+.up-lv.pop { animation: lvPop 0.45s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes lvPop { from { transform: scale(1.7) rotate(-12deg); } }
+.up.flash { animation: flash 0.5s ease-out; }
+@keyframes flash { 0% { background: #fff1b8; transform: scale(1.025); } 100% { background: var(--cream); transform: none; } }
+/* выбранная вкладка: значок коротко подпрыгивает */
+.tabs button[aria-selected='true'] .ico { animation: tabPop 0.4s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes tabPop { from { transform: scale(0.6) rotate(10deg); } }
+/* тост с наградой приземляется с лёгким покачиванием */
+.toast.show { animation: drop 0.5s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes drop { 0% { transform: translate(-50%, -30px) scale(0.7) rotate(-3deg); opacity: 0; } 60% { transform: translate(-50%, 3px) scale(1.03) rotate(1deg); opacity: 1; } }
