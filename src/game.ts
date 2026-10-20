@@ -24,6 +24,7 @@ import {
   buyBox,
   canBuyBox,
   canRelocate,
+  nextMove,
   comboMult,
   freeBox,
   goldenReward,
@@ -31,6 +32,10 @@ import {
   milestonesReached,
   pickGoldenEffect,
   recordCombo,
+  MOVE_BOX,
+  fastMove,
+  moveKey,
+  runTime,
   beatsRecord,
   cashPackAmount,
   collectOffline,
@@ -52,13 +57,15 @@ import {
   weeklyScore,
 } from './core/economy';
 import { unlockAchievements } from './core/achievements';
-import { formatNumber } from './core/format';
+import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { UPGRADES, UPGRADE_BY_ID } from './core/upgrades';
 import { lang, t } from './i18n';
 import type { Platform, ProductId } from './platform/platform';
 import { StallScene } from './scenes/StallScene';
 import { Ui } from './ui';
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const SAVE_EVERY_MS = 10_000;
 // результат в лидерборды отправляем раз в минуту (Яндекс разрешает не чаще раза в секунду)
@@ -133,6 +140,7 @@ export class Game {
     this.scene.setPets(this.topPets());
     this.scene.setMascot(this.state.levels.barker ?? 0);
     void this.scene.portraits(Object.keys(BRAINROT_BY_ID)).then((p) => this.ui.setPortraits(p));
+    this.ui.setPreviewSource((i) => this.scene.placePreview(i));
     // звук и музыка просыпаются только после первого действия игрока
     const wake = () => {
       unlockAudio(!this.state.musicOff && !this.state.muted);
@@ -175,7 +183,7 @@ export class Game {
     this.events(now);
     this.scene.setIncome(incomePerSecond(this.state, now), serveIntervalMs(this.state, now));
     this.scene.setLook(this.state.levels);
-    this.scene.setHints(this.hints(now));
+    this.scene.setHints(this.hints(now), canRelocate(this.state) ? Math.round(nextMove(this.state).mult / locationMult(this.state)) : 0);
     this.scene.setMascot(this.state.levels.barker ?? 0);
     this.ui.render(this.state, now);
     if (now - this.lastSave > SAVE_EVERY_MS) void this.save();
@@ -415,7 +423,7 @@ export class Game {
   }
 
   // Ящик: за деньги, за рекламу (золотой) или бесплатно (подарок, задание).
-  private async openBox(kind: BoxKind, how: 'buy' | 'ad' | 'free') {
+  private async openBox(kind: BoxKind, how: 'buy' | 'ad' | 'free', title = '') {
     if (this.revealing) return;
     let now = Date.now();
     let r: { state: GameState; drop: Drop } | null = null;
@@ -441,11 +449,17 @@ export class Game {
     sfx.shake();
     const again = how === 'buy' && canBuyBox(this.state, Date.now()) ? `${formatNumber(boxCost(this.state, Date.now()), lang())} ₽` : null;
     const drop = r.drop;
-    const choice = await this.ui.reveal(drop, kind, again, () => {
-      sfx.reveal(RARITIES.indexOf(drop.rarity));
-      this.scene.setPets(this.topPets());
-      this.ui.render(this.state, Date.now());
-    });
+    const choice = await this.ui.reveal(
+      drop,
+      kind,
+      again,
+      () => {
+        sfx.reveal(RARITIES.indexOf(drop.rarity));
+        this.scene.setPets(this.topPets());
+        this.ui.render(this.state, Date.now());
+      },
+      title,
+    );
     this.revealing = false;
     this.ui.render(this.state, Date.now());
     if (choice === 'again') await this.openBox(kind, 'buy');
@@ -499,6 +513,8 @@ export class Game {
 
   private async relocate() {
     const before = this.state;
+    const fast = fastMove(before, Date.now());
+    const beat = before.moveBest[moveKey(before)];
     this.state = relocate(this.state, Date.now());
     if (this.state === before) return;
     sfx.move();
@@ -514,6 +530,14 @@ export class Game {
       this.setPaused(true);
       await this.platform.showInterstitial();
       this.setPaused(false);
+    }
+    // подарки за переезд: легендарный ящик всегда, золотой — за рекорд скорости
+    await wait(1800);
+    await this.openBox(MOVE_BOX, 'free', t('moveBoxTitle'));
+    if (fast) {
+      const time = runTime(before, Date.now());
+      this.ui.toast(t('speedRecord', `${formatDuration(time / 1000, lang())} (${formatDuration(beat / 1000, lang())})`), 'medal');
+      await this.openBox('golden', 'free', t('speedBoxTitle'));
     }
   }
 

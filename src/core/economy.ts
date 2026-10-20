@@ -70,6 +70,8 @@ export interface GameState {
   merges: number; // сколько раз сливали брейнротов
   sold: number; // продано шаурмы за всё время: тапы плюс обслуженные гости (для лидерборда)
   week: { id: number; sold: number }; // продано за текущую неделю (номер недели по Москве)
+  runStart: number; // мс; когда начался путь на текущей точке (для рекорда скорости переезда)
+  moveBest: Record<string, number>; // лучшее время каждого переезда в мс, ключ — moveKey
 }
 
 export type QuestKind = 'taps' | 'buy' | 'golden' | 'box' | 'earn' | 'combo';
@@ -109,6 +111,8 @@ export function newGame(now: number): GameState {
     quests: [],
     questsDone: 0,
     merges: 0,
+    runStart: now,
+    moveBest: {},
     sold: 0,
     week: { id: weekId(now), sold: 0 },
   };
@@ -168,6 +172,11 @@ export function normalize(raw: unknown, now: number): GameState {
       id: Math.floor(num(r.week?.id, weekId(now))),
       sold: Math.floor(num(r.week?.sold, 0)),
     },
+    runStart: fresh ? now : num(r.runStart, now),
+    moveBest:
+      r.moveBest && typeof r.moveBest === 'object'
+        ? Object.fromEntries(Object.entries(r.moveBest).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0)) as Record<string, number>
+        : {},
   };
 }
 
@@ -516,11 +525,36 @@ export function canRelocate(state: GameState): boolean {
   return state.runEarned >= nextMove(state).threshold;
 }
 
+// ---------- рекорд скорости переезда ----------
+// Каждый переезд (на точку или на звезду дворца) засекается отдельно. Побил свой рекорд — золотой ящик.
+export function moveKey(state: GameState): string {
+  const n = nextMove(state);
+  return n.star ? `star${n.star}` : n.id;
+}
+
+export function runTime(state: GameState, now: number): number {
+  return Math.max(0, now - state.runStart);
+}
+
+// Быстрее ли этот переезд прошлого такого же. Первый раз сравнивать не с чем.
+export function fastMove(state: GameState, now: number): boolean {
+  const best = state.moveBest[moveKey(state)];
+  return best !== undefined && runTime(state, now) < best;
+}
+
+// Каждый переезд дарит легендарный ящик (легендарный брейнрот или выше).
+export const MOVE_BOX: BoxKind = 'legend';
+
 export function relocate(state: GameState, now: number): GameState {
   if (!canRelocate(state)) return state;
   const atEnd = !nextLocation(state);
+  const key = moveKey(state);
+  const time = runTime(state, now);
+  const best = state.moveBest[key];
   return {
     ...state,
+    runStart: now,
+    moveBest: { ...state.moveBest, [key]: best === undefined ? time : Math.min(best, time) },
     money: 0,
     runEarned: 0,
     levels: {},

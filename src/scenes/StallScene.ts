@@ -6,6 +6,7 @@ import { sfx } from '../audio';
 import { lang, t } from '../i18n';
 import { BACKDROPS, type Ctx, type Mover, spawnCourier, spawnMover } from './backdrops';
 import { drawBrainrot, drawMascot, type Critter } from './brainrots';
+import { UPGRADES } from '../core/upgrades';
 import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, lerpColor, rng, shade } from './draw';
 import { type StallParts, buildStall } from './stall';
 
@@ -109,6 +110,7 @@ export class StallScene extends Phaser.Scene {
   private mascotJump = 0;
   private barkIn = 3500;
   private barkN = 0;
+  private moveX = 0; // во сколько раз больше денег на следующей точке, 0 — переезд ещё не готов
   private hints: string[] = [];
   private bomber?: Bomber;
   private movers: Mover[] = [];
@@ -813,6 +815,34 @@ export class StallScene extends Phaser.Scene {
     });
   }
 
+  // Открытка следующей точки для вкладки «Переезд»: фон и прокачанный ларёк этой точки, днём.
+  placePreview(index: number): Promise<string> {
+    const W = 360, H = 180, u = 0.62;
+    const hy = H * 0.56, gy = H * 0.84;
+    const sky = this.make.graphics({}, false);
+    for (let j = 0; j < 24; j++) sky.fillStyle(lerpColor(SKY[0][1], SKY[0][2], j / 23), 1).fillRect(0, (hy * j) / 24, W, hy / 24 + 1);
+    sky.fillStyle(SKY[0][2], 1).fillRect(0, hy, W, H - hy);
+    const pen = new Pen(this.make.graphics({}, false), 1.5);
+    const loc = LOCATIONS[index];
+    BACKDROPS[loc.id](pen, { w: W, h: H, hy, gy, u, night: 0, clock: 0, seed: 17 + index * 101 });
+    const levels = Object.fromEntries(UPGRADES.map((up) => [up.id, 25]));
+    const st = buildStall(this, index, lookOf(levels));
+    st.root.setScale(Math.min(0.62, (gy - 12) / -st.top, (W * 0.6) / Math.max(1, st.right - st.left)));
+    const rt = this.add.renderTexture(-3000, -3000, W, H).setVisible(false);
+    rt.draw(sky).draw(pen.g).draw(st.root, W / 2, gy);
+    st.staff.forEach((c) => c.root.destroy());
+    st.root.destroy();
+    st.glow.destroy();
+    sky.destroy();
+    pen.g.destroy();
+    return new Promise((resolve) =>
+      rt.snapshot((img) => {
+        resolve((img as HTMLImageElement).src);
+        rt.destroy();
+      }),
+    );
+  }
+
   // Портреты брейнротов для коллекции: рисуем каждого в текстуру и отдаём картинку.
   portraits(ids: string[]): Promise<Record<string, string>> {
     const out: Record<string, string> = {};
@@ -880,8 +910,12 @@ export class StallScene extends Phaser.Scene {
   // ---------- маскот-зазывала ----------
 
   /** Подсказки, которые маскот выкрикивает чаще обычных фраз (ключи словаря). */
-  setHints(keys: string[]) {
+  setHints(keys: string[], moveX = 0) {
     this.hints = keys;
+    const was = this.moveX;
+    this.moveX = moveX;
+    // как только переезд стал доступен, маскот кричит об этом сразу
+    if (moveX && !was) this.barkIn = Math.min(this.barkIn, 600);
   }
 
   /** Уровень улучшения «Зазывала Тунг Тунг»: 0 — не нанят. */
@@ -936,12 +970,13 @@ export class StallScene extends Phaser.Scene {
     if (!key) {
       this.barkN++;
       const loc = LOCATIONS[this.location].id;
-      if (this.hints.length && this.barkN % 2 === 0) key = Phaser.Utils.Array.GetRandom(this.hints);
+      if (this.moveX) key = Phaser.Utils.Array.GetRandom(['barkMoveX', 'barkMove', 'barkMove2', 'barkMove3']);
+      else if (this.hints.length && this.barkN % 2 === 0) key = Phaser.Utils.Array.GetRandom(this.hints);
       else if (this.barkN % 3 === 1) key = `barkLoc_${loc}`;
       else key = `bark_${Math.floor(Math.random() * 6)}`;
     }
     this.mascotBubble?.destroy();
-    const bubble = this.bubble(t(key as Parameters<typeof t>[0]), 0xffe9a8, 12);
+    const bubble = this.bubble(t(key as Parameters<typeof t>[0], this.moveX), 0xffe9a8, 12);
     this.mascotBubble = bubble;
     this.time.delayedCall(2600, () => {
       if (this.mascotBubble !== bubble) return;
@@ -968,7 +1003,7 @@ export class StallScene extends Phaser.Scene {
     r?.setAngle(-Math.sin(this.mascotPhase) * (yell ? 18 : 8));
     this.barkIn -= delta;
     if (this.barkIn <= 0 && !this.moving && m.root.visible) {
-      this.barkIn = 7000 + Math.random() * 5000;
+      this.barkIn = this.moveX ? 4500 + Math.random() * 2000 : 7000 + Math.random() * 5000;
       this.bark();
     }
     if (this.mascotBubble) {

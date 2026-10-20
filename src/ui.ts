@@ -24,6 +24,8 @@ import {
   milestonesReached,
   minutesOfIncome,
   nextMove,
+  moveKey,
+  runTime,
   locationMult,
   nextMilestone,
   MILESTONES,
@@ -31,7 +33,7 @@ import {
 } from './core/economy';
 import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
-import { BRAINROT_BY_ID, payOf } from './core/brainrots';
+import { BRAINROTS, BRAINROT_BY_ID, payOf } from './core/brainrots';
 import { BOX_ODDS, type BoxKind, type Drop, MAX_STARS, MERGE_COPIES, PET_RARITY, RARITIES, type Rarity, anyMerge, canMerge, petBonus, petMult } from './core/pets';
 import { questDone, questProgress, counter } from './core/quests';
 import { UPGRADES } from './core/upgrades';
@@ -128,6 +130,9 @@ export class Ui {
   private medals = new Map<string, HTMLElement>();
   private petCards = new Map<string, PetCard>();
   private portraits: Record<string, string> = {};
+  private previews: Record<string, string> = {};
+  private previewLoading = new Set<string>();
+  private previewSource?: (index: number) => Promise<string>;
   private products: Product[] = [];
   private purchasesAvailable = false;
   private moveArmed = false;
@@ -173,6 +178,7 @@ export class Ui {
     side('#btn-quests', 'list', t('sideQuests'), () => this.showTab('quests'));
     side('#boost', 'x2', t('sideBoost'), () => actions.boost());
     side('#btn-adbox', 'goldcrate', t('sideBox'), () => actions.adBox());
+    side('#btn-move', 'truck', t('sideMove'), () => this.showTab('move'));
 
     // улучшения
     $('#h-upgrades').textContent = t('hUpgrades');
@@ -307,6 +313,10 @@ export class Ui {
     for (const b of document.querySelectorAll<HTMLButtonElement>('#buy-mode button')) b.setAttribute('aria-checked', String(b.dataset.mode === this.mode));
   }
 
+  setPreviewSource(fn: (index: number) => Promise<string>) {
+    this.previewSource = fn;
+  }
+
   setPortraits(map: Record<string, string>) {
     this.portraits = map;
     for (const [id, src] of Object.entries(map)) {
@@ -374,7 +384,7 @@ export class Ui {
     if (this.tab === 'upgrades') this.renderUpgrades(s, now);
     if (this.tab === 'pets') this.renderPets(s, now);
     if (this.tab === 'quests') this.renderQuests(s, now);
-    if (this.tab === 'move') this.renderMove(s);
+    if (this.tab === 'move') this.renderMove(s, now);
     if (this.tab === 'shop') this.renderShop(s, now);
   }
 
@@ -426,6 +436,11 @@ export class Ui {
     ab.classList.toggle('wait', !adReady);
     (ab.querySelector('.badge') as HTMLElement).hidden = !adReady;
     $('#adbox-label').textContent = adReady ? t('sideBox') : formatDuration((s.adBoxAt - now) / 1000, lang());
+
+    // переезд готов: на улице появляется кнопка с грузовиком, вкладка «Переезд» качается
+    const move = canRelocate(s);
+    $('#btn-move').hidden = !move;
+    $('#tab-move').classList.toggle('call', move && this.tab !== 'move');
   }
 
   private renderBadges(s: GameState, now: number) {
@@ -643,7 +658,7 @@ export class Ui {
     }
   }
 
-  private renderMove(s: GameState) {
+  private renderMove(s: GameState, now: number) {
     const cur = LOCATIONS[s.location];
     const next = nextMove(s);
     $('#move-now').textContent = t('moveNow', placeName(cur.id, s.stars));
@@ -656,12 +671,55 @@ export class Ui {
     $('#move-done').hidden = true;
     $('#move-next-name').textContent = placeName(next.id, next.star);
     $('#move-next-desc').textContent = next.star ? t('locd_star') : t(`locd_${next.id}`);
+    // превью новой точки: открытка с фоном и ларьком, новые брейнроты силуэтами
+    const nextIndex = LOCATIONS.findIndex((l) => l.id === next.id);
+    const img = $<HTMLImageElement>('#move-preview');
+    const pic = this.previews[next.id];
+    if (pic) {
+      if (img.getAttribute('src') !== pic) img.src = pic;
+      img.hidden = false;
+    } else {
+      img.hidden = true;
+      if (this.previewSource && !this.previewLoading.has(next.id)) {
+        this.previewLoading.add(next.id);
+        void this.previewSource(nextIndex).then((src) => {
+          this.previews[next.id] = src;
+          if (this.lastState) this.renderMove(this.lastState, Date.now());
+        });
+      }
+    }
+    const crew = $('#move-crew');
+    const ids = next.star ? [] : BRAINROTS.filter((b) => b.home === nextIndex).map((b) => b.id);
+    const crewKey = ids.map((id) => id + (s.met.includes(id) ? '1' : '0')).join(',') + Object.keys(this.portraits).length;
+    if (crew.dataset.k !== crewKey) {
+      crew.dataset.k = crewKey;
+      crew.replaceChildren(
+        ...ids.map((id) => {
+          const known = s.met.includes(id);
+          const sp = el('span', known ? '' : 'unknown');
+          sp.title = known ? t(`br_${id}`) : '???';
+          const im = document.createElement('img');
+          im.alt = '';
+          im.src = this.portraits[id] ?? '';
+          sp.append(im);
+          return sp;
+        }),
+      );
+    }
+    $('#move-gifts').innerHTML = `<span><i class="ico">${ui('goldcrate')}</i>${t('moveGiftLegend')}</span>`;
+    const best = s.moveBest[moveKey(s)];
+    const run = formatDuration(runTime(s, now) / 1000, lang());
+    $('#move-speed').innerHTML =
+      best === undefined
+        ? t('moveSpeedFirst', `<b>${run}</b>`)
+        : t('moveSpeedBest', `<b>${run}</b> / ${formatDuration(best / 1000, lang())}`);
     const p = Math.min(1, s.runEarned / next.threshold);
     $('#move-bar').style.width = `${(p * 100).toFixed(1)}%`;
     $('#move-progress').textContent = t('moveProgress', `${fmt(s.runEarned)} / ${fmt(next.threshold)} ₽`);
     $('#move-warn').textContent = t('moveWarn', Math.round(next.mult / locationMult(s)));
     const btn = $<HTMLButtonElement>('#move-btn');
     btn.disabled = !canRelocate(s);
+    btn.classList.toggle('pulse', canRelocate(s));
     if (!this.moveArmed) btn.textContent = t('moveBtn');
   }
 
@@ -765,10 +823,14 @@ export class Ui {
 
   // Открытие ящика: ящик трясётся, потом вылетает брейнрот в цвете редкости.
   // again — подпись кнопки «Ещё» (null, если повторить нельзя). Тап по тряске пропускает её.
-  async reveal(drop: Drop, kind: BoxKind, again: string | null, onOpen: () => void): Promise<'again' | 'ok'> {
+  async reveal(drop: Drop, kind: BoxKind, again: string | null, onOpen: () => void, title = ''): Promise<'again' | 'ok'> {
     const box = $('#reveal');
     const crate = box.querySelector('.reveal-crate') as HTMLElement;
     crate.classList.toggle('gold', kind !== 'common');
+    crate.classList.toggle('legend', kind === 'legend' || kind === 'god');
+    const head = $('#rv-title');
+    head.textContent = title;
+    head.hidden = !title;
     box.className = 'reveal shake';
     box.hidden = false;
     let skip!: () => void;

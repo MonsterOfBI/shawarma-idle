@@ -524,7 +524,7 @@ describe('версия 2.11', () => {
   });
 
   it('шансы ящиков складываются в 100 %, редкие чаще прежнего', () => {
-    for (const k of ['common', 'golden', 'god'] as const) {
+    for (const k of ['common', 'golden', 'legend', 'god'] as const) {
       expect(Object.values(BOX_ODDS[k]).reduce((a, b) => a + b, 0)).toBeCloseTo(100);
     }
     expect(BOX_ODDS.common.legendary).toBeGreaterThan(3.2);
@@ -573,5 +573,49 @@ describe('рекорд серии тапов', () => {
   it('у новичка с маленьким рекордом надпись не всплывает', () => {
     expect(beatsRecord({ ...newGame(0), bestCombo: RECORD_SHOW_FROM - 1 }, 30)).toBe(false);
     expect(beatsRecord({ ...newGame(0), bestCombo: RECORD_SHOW_FROM }, RECORD_SHOW_FROM + 1)).toBe(true);
+  });
+});
+
+import { MOVE_BOX, fastMove, moveKey, runTime } from './economy';
+
+describe('мотивация переезда', () => {
+  const ready = (now: number, extra: Partial<GameState> = {}): GameState => ({ ...newGame(now), runEarned: LOCATIONS[1].threshold, ...extra });
+
+  it('легендарный ящик за переезд даёт только легендарных и выше', () => {
+    expect(MOVE_BOX).toBe('legend');
+    for (const r of [0, 0.5, 0.74, 0.76, 0.96, 0.999]) {
+      const d = openBox(newGame(0), 'legend', () => r).drop;
+      expect(['legendary', 'mythic', 'god']).toContain(d.rarity);
+    }
+  });
+
+  it('время переезда засекается и запоминается лучшее', () => {
+    const s = ready(0);
+    expect(moveKey(s)).toBe('metro');
+    expect(runTime(s, 60_000)).toBe(60_000);
+    expect(fastMove(s, 60_000)).toBe(false); // первый раз сравнивать не с чем
+    const moved = relocate(s, 60_000);
+    expect(moved.moveBest.metro).toBe(60_000);
+    expect(moved.runStart).toBe(60_000);
+  });
+
+  it('переезд быстрее прошлого такого же — рекорд', () => {
+    const s = ready(0, { moveBest: { metro: 100_000 } });
+    expect(fastMove(s, 90_000)).toBe(true);
+    expect(fastMove(s, 110_000)).toBe(false);
+    expect(relocate(s, 90_000).moveBest.metro).toBe(90_000);
+    expect(relocate(s, 110_000).moveBest.metro).toBe(100_000);
+  });
+
+  it('звёзды дворца засекаются каждая отдельно', () => {
+    const s = { ...newGame(0), location: LOCATIONS.length - 1, stars: 1 };
+    expect(moveKey(s)).toBe('star2');
+  });
+
+  it('старые сохранения получают таймер и пустые рекорды', () => {
+    const s = normalize({ version: 8, location: 2 }, 5000);
+    expect(s.runStart).toBe(5000);
+    expect(s.moveBest).toEqual({});
+    expect(normalize({ version: 8, moveBest: { metro: 5, bad: 'x' } }, 0).moveBest).toEqual({ metro: 5 });
   });
 });

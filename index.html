@@ -29,6 +29,7 @@
         <nav class="side side-left">
           <button id="btn-daily" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden>!</b></button>
           <button id="btn-quests" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+          <button id="btn-move" class="side-btn move-call" type="button" hidden><i class="ico"></i><span></span><b class="badge">!</b></button>
         </nav>
         <nav class="side side-right">
           <button id="boost" class="side-btn ad" type="button"><i class="ico"></i><span id="boost-label"></span></button>
@@ -93,6 +94,10 @@
             <span id="move-progress" class="small num"></span>
             <p id="move-warn"></p>
             <button id="move-btn" class="btn btn-red wide" type="button"></button>
+            <div id="move-gifts" class="move-gifts"></div>
+            <p id="move-speed" class="move-speed"></p>
+            <img id="move-preview" class="move-preview" alt="" hidden />
+            <div id="move-crew" class="move-crew"></div>
           </div>
           <p id="move-done" class="ticket" hidden></p>
           <div id="route" class="route"></div>
@@ -139,6 +144,7 @@
 
       <div id="reveal" class="reveal" hidden>
         <div class="rays"></div>
+        <b id="rv-title" class="reveal-title" hidden></b>
         <div class="reveal-crate crate"></div>
         <div class="reveal-card">
           <span id="rv-rarity" class="rarity-tag"></span>
