@@ -21,7 +21,7 @@ export interface LbResult {
 }
 
 export interface Platform {
-  name: 'local' | 'yandex';
+  name: 'local' | 'yandex' | 'vk';
   lang: string;
   // сообщить площадке, что игра загрузилась и можно играть
   ready(): void;
@@ -50,6 +50,8 @@ export interface Platform {
   setScore(board: Board, score: number): Promise<void>;
   // лучшие игроки и соседи игрока; null, если таблица недоступна
   getBoard(board: Board): Promise<LbResult | null>;
+  // своё окно рейтинга площадки (VK): если есть, кубок открывает его вместо нашего окна
+  showNativeBoard?(score: number): Promise<void>;
 }
 
 const KEY = 'shawarma-idle-save';

@@ -243,7 +243,7 @@ export class Game {
   // ---------- лидерборды ----------
   private async pushScores() {
     this.lastScoreAt = Date.now();
-    if (!this.platform.leaderboards || !this.platform.isAuthorized()) return;
+    if (!(this.platform.leaderboards || this.platform.showNativeBoard) || !this.platform.isAuthorized()) return;
     const scores = { week: weeklyScore(this.state, Date.now()), total: Math.floor(this.state.sold) };
     for (const board of ['week', 'total'] as const) {
       if (scores[board] === this.sentScore[board]) continue;
@@ -255,6 +255,10 @@ export class Game {
 
   private async openLeaderboard() {
     void this.save();
+    if (this.platform.showNativeBoard) {
+      await this.during('platform', this.platform.showNativeBoard(Math.floor(this.state.sold)), AD_PAUSE_MAX_MS);
+      return;
+    }
     const pushed = this.pushScores();
     await this.ui.leaderboard({
       available: this.platform.leaderboards,

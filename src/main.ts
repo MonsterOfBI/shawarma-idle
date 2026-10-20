@@ -14,6 +14,7 @@ import './style.css';
 import { Game } from './game';
 import { setLang, t } from './i18n';
 import { createLocalPlatform } from './platform/platform';
+import { createVkPlatform } from './platform/vk';
 import { createYandexPlatform } from './platform/yandex';
 
 // Требования Яндекс Игр: без контекстного меню, выделения и перетаскивания картинок (долгий тап на телефоне).
@@ -28,8 +29,9 @@ export function loadProgress(p: number) {
 
 async function start() {
   loadProgress(20);
-  // На Яндекс Играх подключится их SDK, в браузере — локальная версия без рекламы и покупок.
-  const platform = (await createYandexPlatform()) ?? createLocalPlatform();
+  // Во ВКонтакте (в адресе есть vk_app_id) — VK Bridge, на Яндекс Играх — их SDK,
+  // в браузере — локальная версия без рекламы и покупок.
+  const platform = (await createVkPlatform()) ?? (await createYandexPlatform()) ?? createLocalPlatform();
   const save = await platform.load();
   // язык, выбранный в настройках, важнее языка площадки
   const pref = (save as { langPref?: string } | null)?.langPref;
