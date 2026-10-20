@@ -1027,12 +1027,16 @@ export class StallScene extends Phaser.Scene {
     if (this.bomber || this.moving) return;
     const u = this.unit;
     const c = drawBrainrot(this, 'bombardiro');
-    const y0 = Phaser.Math.Clamp(this.hudBottom + 50 * u, 60 * u, this.groundY - 150 * u);
-    c.root.setPosition(-90 * u, y0).setScale(u * 1.05).setDepth(10);
+    // размер по ширине улицы: размах крыльев около трети экрана на телефоне и не больше 200 px на компьютере
+    const span = c.root.getBounds().width || 160;
+    const k = Math.min(u * 1.05, (this.scale.width * 0.32) / span, 200 / span);
+    // летит ниже шапки и всплывающих сообщений, над крышей ларька
+    const y0 = this.hudBottom + (this.groundY - this.hudBottom) * 0.42;
+    c.root.setPosition(-span * k, y0).setScale(k).setDepth(10);
     const glow = this.add.circle(0, -4, 70, 0xffd86b, 0.3).setBlendMode(Phaser.BlendModes.ADD);
     c.root.addAt(glow, 0);
     this.tweens.add({ targets: glow, scale: 1.3, alpha: 0.12, yoyo: true, repeat: -1, duration: 450 });
-    const hit = this.add.rectangle(-4, 4, 190, 130, 0, 0).setInteractive({ useHandCursor: true });
+    const hit = this.add.rectangle(-4, 4, Math.max(190, 150 / k), Math.max(130, 110 / k), 0, 0).setInteractive({ useHandCursor: true });
     c.root.add(hit);
     const b: Bomber = { c, y0, caught: false };
     hit.on('pointerdown', () => {
@@ -1437,7 +1441,7 @@ export class StallScene extends Phaser.Scene {
       b.c.root.y = b.y0 + Math.sin(this.clock / 220) * 12 * u;
       b.c.root.setRotation(Math.sin(this.clock / 300 + 1) * 0.05);
       if (Math.random() < delta / 120) this.sparks.emitParticleAt(b.c.root.x - 40 * u, b.c.root.y + Phaser.Math.Between(-10, 20) * u);
-      if (b.c.root.x > this.scale.width + 120 * u) {
+      if (b.c.root.x > this.scale.width + 200 * b.c.root.scaleX) {
         b.c.root.destroy();
         this.bomber = undefined;
       }
