@@ -1,7 +1,5 @@
 // Проверка словаря: каждый ключ есть на обоих языках, подстановки совпадают,
 // а ключи, которые код собирает на ходу (`br_${id}` и т. п.), действительно существуют.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DICTS } from './i18n';
 import { ACHIEVEMENTS } from './core/achievements';
@@ -14,13 +12,8 @@ import { KINDS } from './core/quests';
 const { ru, en } = DICTS;
 const holes = (s: string) => (s.match(/\{[a-z]+\}/g) ?? []).sort().join(',');
 
-function sources(dir: string): string[] {
-  return readdirSync(dir).flatMap((f) => {
-    const p = join(dir, f);
-    if (statSync(p).isDirectory()) return sources(p);
-    return /\.ts$/.test(f) && !/\.test\.ts$/.test(f) ? [p] : [];
-  });
-}
+// исходники игры как текст (Vite собирает их сам, без node:fs)
+const SOURCES = import.meta.glob(['./**/*.ts', '!./**/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 describe('словарь', () => {
   it('одинаковые ключи на русском и английском, без пустых строк', () => {
@@ -52,8 +45,8 @@ describe('словарь', () => {
 
   it('ключи из t(\'…\') в коде существуют', () => {
     const missing: string[] = [];
-    for (const file of sources(join(__dirname))) {
-      const code = readFileSync(file, 'utf8');
+    expect(Object.keys(SOURCES).length).toBeGreaterThan(20);
+    for (const [file, code] of Object.entries(SOURCES)) {
       for (const m of code.matchAll(/\bt\(\s*'([A-Za-z0-9_]+)'/g)) if (!(m[1] in ru)) missing.push(`${file}: ${m[1]}`);
     }
     expect(missing).toEqual([]);
