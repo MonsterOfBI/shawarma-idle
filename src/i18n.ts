@@ -766,6 +766,8 @@ const en: Record<Key, string> = {
 };
 
 const dicts: Record<Lang, Record<Key, string>> = { ru, en };
+// для теста словаря
+export const DICTS = dicts as Record<Lang, Record<string, string>>;
 let current: Lang = 'ru';
 
 export function setLang(lang: string) {

@@ -74,7 +74,7 @@ export function refreshEarnQuests(s: GameState, now: number): GameState {
   return { ...s, quests };
 }
 
-const KINDS: QuestKind[] = ['taps', 'buy', 'golden', 'box', 'earn', 'combo'];
+export const KINDS: QuestKind[] = ['taps', 'buy', 'golden', 'box', 'earn', 'combo'];
 
 // Сколько мест ждут новое задание и когда придёт ближайшее (null — никто не ждёт).
 export function nextQuestAt(s: GameState): number | null {
