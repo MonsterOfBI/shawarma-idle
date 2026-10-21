@@ -15,6 +15,9 @@ const CLOUD_EVERY_MS = 60_000;
 
 // Сервер игры на Vercel (см. api/). Игра на хостинге VK — другой адрес, поэтому полный URL.
 const SERVER = 'https://shawarma-idle.vercel.app';
+// Пока выпускаем VK без доната и без своего сервера: покупки и таблица игроков выключены.
+// Чтобы включить, поставить true и настроить сервер по docs/vk-publish.md, раздел 5а.
+const USE_SERVER = false;
 // Цены в голосах — те же числа, что в api/_vk.ts (сервер всё равно называет VK цену сам).
 const VOTES: Record<ProductId, number> = { starter_pack: 7, no_ads: 14, x2_forever: 21, cash_pack: 4, god_pet: 21 };
 
@@ -24,7 +27,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
   const launch = vkLaunch(location.search);
   if (!launch) return null;
   // покупки за голоса VK запрещает в приложении на iPhone и iPad
-  const ios = /^mobile_ip/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
+  const noShop = !USE_SERVER || /^mobile_ip/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
   try {
     await Promise.race([bridge.send('VKWebAppInit'), new Promise((_, reject) => setTimeout(reject, 5000))]);
   } catch {
@@ -116,6 +119,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
   };
 
   const sendScore = async (score: number) => {
+    if (!USE_SERVER) return;
     try {
       await fetch(`${SERVER}/api/vk-score`, {
         method: 'POST',
@@ -152,15 +156,15 @@ export async function createVkPlatform(): Promise<Platform | null> {
     async showInterstitial() {
       await showAd('interstitial');
     },
-    purchasesAvailable: !ios,
+    purchasesAvailable: !noShop,
     async getProducts() {
-      if (ios) return [];
+      if (noShop) return [];
       return (Object.keys(VOTES) as ProductId[]).map((id): Product => ({ id, price: votesText(VOTES[id], lang()) }));
     },
     // Окно оплаты VK. Заказ подтверждает наш сервер (api/vk-payments.ts), игра выдаёт товар,
     // когда VK ответил «success». Разовые покупки (no_ads, x2_forever) живут в сохранении, оно в облаке VK.
     async purchase(id) {
-      if (ios) return false;
+      if (noShop) return false;
       try {
         const r = await bridge.send('VKWebAppShowOrderBox', { type: 'item', item: id });
         return r.status === 'success';
@@ -190,13 +194,15 @@ export async function createVkPlatform(): Promise<Platform | null> {
     async getBoard() {
       return null;
     },
-    async showNativeBoard(score) {
+    showNativeBoard: USE_SERVER ? showBoard : undefined,
+  };
+
+  async function showBoard(score: number) {
       await sendScore(score);
       try {
         await bridge.send('VKWebAppShowLeaderBoardBox', { user_result: Math.min(score, 2_000_000_000) });
       } catch {
         // окно не открылось (старое приложение VK) — ничего страшного
       }
-    },
-  };
+  }
 }
