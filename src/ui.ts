@@ -529,9 +529,10 @@ export class Ui {
 
     const adReady = adBoxReady(s, now);
     const ab = $('#btn-adbox');
-    ab.classList.toggle('ready', adReady);
+    // новичок до первой покупки учится тапать: ящик не мигает и не зовёт значком
+    ab.classList.toggle('ready', adReady && !isNewbie(s));
     ab.classList.toggle('wait', !adReady);
-    (ab.querySelector('.badge') as HTMLElement).hidden = !adReady;
+    (ab.querySelector('.badge') as HTMLElement).hidden = !adReady || isNewbie(s);
     $('#adbox-label').textContent = adReady ? t('sideBox') : adBoxDone(s, now) ? t('boxTomorrow') : formatDuration((s.adBoxAt - now) / 1000, lang());
 
     // переезд готов: на улице появляется кнопка с грузовиком, вкладка «Переезд» качается
@@ -548,7 +549,7 @@ export class Ui {
     };
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
-    set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
+    set('pets', !isNewbie(s) && (canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s)) ? '!' : '');
     const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today(), now) ? 1 : 0) + (canClaimWeekly(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');
@@ -1189,4 +1190,9 @@ export class Ui {
       };
     });
   }
+}
+
+// Совсем новый игрок: ещё ничего не купил и не открыл ни одного ящика.
+function isNewbie(s: GameState) {
+  return s.location === 0 && s.stars === 0 && (s.boxesOpened ?? 0) === 0 && !Object.values(s.levels).some((v) => v > 0);
 }
