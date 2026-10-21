@@ -172,7 +172,8 @@ export async function createVkPlatform(): Promise<Platform | null> {
       if (noShop) return false;
       try {
         const r = await bridge.send('VKWebAppShowOrderBox', { type: 'item', item: id });
-        return r.status === 'success';
+        // Старый ответ VK — { status: 'success' }, нынешний — { success: true }: принимаем оба.
+        return r.status === 'success' || (r as { success?: boolean }).success === true;
       } catch {
         return false;
       }
