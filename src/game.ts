@@ -181,7 +181,7 @@ export class Game {
     for (let i = 0; i < restored.pendingCash; i++) this.state = addMoney(this.state, cashPackAmount(this.state, now));
     for (let i = 0; i < restored.pendingGods; i++) this.state = openBox(this.state, 'god', Math.random).state;
     for (let i = 0; i < restored.pendingStarters; i++) this.state = openBox(grantStarter(this.state, now).state, 'golden', Math.random).state;
-    this.ui.setProducts(await this.platform.getProducts(), this.platform.purchasesAvailable);
+    this.ui.setProducts(await this.platform.getProducts(), this.platform.purchasesAvailable, this.platform.shopNote);
 
     this.platform.onPause((p, reason) => this.hold(reason, p));
     // Страховка от «мёртвых» тапов: если игрок тапает по видимой игре, а пауза висит дольше пары секунд

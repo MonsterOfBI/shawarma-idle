@@ -32,7 +32,8 @@ export async function createVkPlatform(): Promise<Platform | null> {
   const launch = vkLaunch(location.search);
   if (!launch) return null;
   // покупки за голоса VK запрещает в приложении на iPhone и iPad
-  const noShop = !SHOP || !USE_SERVER || /^mobile_ip/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
+  const ios = /^mobile_ip/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
+  const noShop = !SHOP || !USE_SERVER || ios;
   try {
     await Promise.race([bridge.send('VKWebAppInit'), new Promise((_, reject) => setTimeout(reject, 5000))]);
   } catch {
@@ -196,6 +197,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
       await showAd('interstitial');
     },
     purchasesAvailable: !noShop,
+    shopNote: ios ? 'shopIos' : undefined,
     async getProducts() {
       if (noShop) return [];
       return (Object.keys(VOTES) as ProductId[]).map((id): Product => ({ id, price: votesText(VOTES[id], lang()) }));

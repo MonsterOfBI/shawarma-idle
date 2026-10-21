@@ -33,6 +33,8 @@ export interface Platform {
   showRewarded(): Promise<boolean>;
   showInterstitial(): Promise<void>;
   purchasesAvailable: boolean;
+  // ключ текста-заглушки в магазине, когда покупок нет (по умолчанию «магазин в разработке»)
+  shopNote?: string;
   getProducts(): Promise<Product[]>;
   // true, если покупка прошла
   purchase(id: ProductId): Promise<boolean>;

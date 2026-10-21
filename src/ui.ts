@@ -175,6 +175,7 @@ export class Ui {
   private previewSource?: (index: number) => Promise<string>;
   private products: Product[] = [];
   private purchasesAvailable = false;
+  private shopNote = 'shopUnavailable';
   private moveArmed = false;
   private tab: Tab = 'upgrades';
   private mode: BuyMode = 'x1';
@@ -393,9 +394,10 @@ export class Ui {
     (card as any)._t = setTimeout(() => (card.hidden = true), 2600);
   }
 
-  setProducts(products: Product[], available: boolean) {
+  setProducts(products: Product[], available: boolean, note = 'shopUnavailable') {
     this.products = products;
     this.purchasesAvailable = available;
+    this.shopNote = note;
   }
 
   setRush(secondsLeft: number) {
@@ -904,7 +906,7 @@ export class Ui {
     }
     const note = box.querySelector('.shop-note') as HTMLElement;
     note.hidden = this.purchasesAvailable;
-    note.textContent = t('shopUnavailable');
+    note.textContent = t(this.shopNote);
     for (const it of items) {
       const card = box.querySelector(`[data-id="${it.id}"]`) as HTMLElement;
       (card.querySelector('.shop-name') as HTMLElement).textContent = it.name;
