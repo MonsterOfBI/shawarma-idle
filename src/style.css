@@ -849,3 +849,18 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 .st-row input[type='range'] { flex: 1; max-width: 200px; accent-color: var(--amber); height: 28px; }
 .st-reset.armed { background: var(--tomato); color: var(--cream); box-shadow: 0 0 0 2.5px var(--plum-0), 0 4px 0 2.5px var(--plum-0); }
 .st-note { margin: -4px 0 0; font-size: 12px; font-weight: 700; color: var(--on-dark-soft); }
+
+/* ---------- стартовое меню (VK, п. 4.2.10): поверх живой улицы, под окнами настроек и правил ---------- */
+.menu {
+  position: fixed; inset: 0; z-index: 29; display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(circle at 50% 40%, rgba(79, 58, 107, 0.9), rgba(42, 27, 61, 0.96) 65%); animation: fadeIn 0.25s;
+}
+.menu-in { width: min(340px, 100%); display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.menu-title { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 8vw, 44px); line-height: 1.05; color: var(--gold); -webkit-text-stroke: 2px var(--plum-0); paint-order: stroke fill; text-shadow: 0 4px 0 var(--plum-0); transform: rotate(-3deg); text-wrap: balance; }
+.menu-sub { font-weight: 700; font-size: 14px; line-height: 1.35; color: var(--on-dark-soft); min-height: 1.35em; }
+.menu-btns { width: 100%; display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.menu-play { font-size: 20px; padding-block: 16px; }
+.howto { max-height: calc(var(--vh, 100dvh) - 32px); }
+.howto-body { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; text-align: left; font-weight: 600; font-size: 14px; line-height: 1.45; color: var(--cream); padding: 0 4px; }
+.howto-body p { margin: 0; }

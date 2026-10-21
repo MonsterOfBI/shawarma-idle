@@ -70,7 +70,7 @@ import { UPGRADES, UPGRADE_BY_ID } from './core/upgrades';
 import { lang, t } from './i18n';
 import type { Platform, ProductId } from './platform/platform';
 import { StallScene } from './scenes/StallScene';
-import { Ui } from './ui';
+import { Ui, placeName } from './ui';
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -213,7 +213,8 @@ export class Game {
     this.platform.ready();
     this.ui.render(this.state, now);
     document.getElementById('loading')?.remove();
-    await this.welcomeBack(now);
+    if (this.platform.startMenu) await this.showMenu();
+    await this.welcomeBack(Date.now());
     this.gameplayStart();
 
     setInterval(() => this.loop(), 100);
@@ -671,8 +672,34 @@ export class Game {
     this.ui.render(this.state, Date.now());
   }
 
-  private async openSettings() {
+  // Стартовое меню; пока оно открыто, улица живёт фоном, но игра стоит.
+  private menuOpen = false;
+  private async showMenu() {
+    if (this.menuOpen) return;
+    this.menuOpen = true;
+    const wasOpen = this.modalOpen;
+    this.modalOpen = true;
+    this.gameplayStop();
+    await this.ui.startMenu(
+      {
+        returning: this.state.lifetimeEarned > 0 || this.state.location > 0,
+        place: placeName(LOCATIONS[this.state.location].id, this.state.stars),
+        board: !!(this.platform.leaderboards || this.platform.showNativeBoard),
+      },
+      {
+        howto: () => void this.ui.howto(),
+        board: () => void this.openLeaderboard(),
+        settings: () => void this.openSettings(true),
+      },
+    );
+    this.menuOpen = false;
+    this.modalOpen = wasOpen;
+    if (!wasOpen) this.gameplayStart();
+  }
+
+  private async openSettings(fromMenu = false) {
     await this.ui.settings(this.state, {
+      menu: this.platform.startMenu && !fromMenu ? () => void this.showMenu() : undefined,
       music: (v) => {
         // ползунок в ноль выключает музыку совсем
         this.state = { ...this.state, musicVol: v > 0 ? v : this.state.musicVol, musicOff: v === 0 };

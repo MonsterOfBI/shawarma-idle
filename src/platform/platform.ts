@@ -35,6 +35,10 @@ export interface Platform {
   purchasesAvailable: boolean;
   // ключ текста-заглушки в магазине, когда покупок нет (по умолчанию «магазин в разработке»)
   shopNote?: string;
+  // стартовое меню перед игрой и кнопка «В главное меню» в настройках (требование каталога игр VK, п. 4.2.10)
+  startMenu?: boolean;
+  // ключ названия игры в i18n, если на площадке игра называется иначе
+  titleKey?: string;
   getProducts(): Promise<Product[]>;
   // true, если покупка прошла
   purchase(id: ProductId): Promise<boolean>;

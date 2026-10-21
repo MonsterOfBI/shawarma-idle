@@ -165,6 +165,8 @@ export async function createVkPlatform(): Promise<Platform | null> {
     },
     purchasesAvailable: !noShop,
     shopNote: ios ? 'shopIos' : undefined,
+    startMenu: true,
+    titleKey: 'titleVk',
     async getProducts() {
       if (noShop) return [];
       return (Object.keys(VOTES) as ProductId[]).map((id): Product => ({ id, price: votesText(VOTES[id], lang()) }));
