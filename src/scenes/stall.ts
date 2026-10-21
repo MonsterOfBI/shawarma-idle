@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import type { Look } from '../core/look';
+import { type Look, growth } from '../core/look';
 import { LOCATIONS } from '../core/locations';
 import { t } from '../i18n';
 import { drawBrainrot, type Critter } from './brainrots';
 import { bake } from './bake';
-import { AMBER, CREAM, DISPLAY_FONT, LEAF, MEAT, MEAT_DARK, OUTLINE, Pen, TOMATO, WHITE, WOOD, shade } from './draw';
+import { AMBER, CREAM, DISPLAY_FONT, LEAF, MEAT, MEAT_DARK, OUTLINE, Pen, TOMATO, WHITE, WOOD, fitText, shade } from './draw';
 
 // Ларёк собирается из слоёв. Стиль корпуса и крыши свой на каждой локации,
 // а каждое улучшение добавляет на точку предмет, который растёт со стадией (1–5).
@@ -29,8 +29,10 @@ export interface StallParts {
   left: number;
   right: number;
   top: number;
+  signR: number; // правый край вывески (с ним сверяется рекламный щит)
   hit: { x: number; y: number; w: number; h: number };
   baked: string[]; // ключи текстур запечённых слоёв: удалить при перестройке ларька
+  anchors: Record<string, { x: number; y: number }>; // где на ларьке видно каждое улучшение (для вспышки после покупки)
 }
 
 type Pt = [number, number];
@@ -50,11 +52,13 @@ function star(cx: number, cy: number, r1: number, r2: number, n = 5): Pt[] {
   return pts;
 }
 
-export function buildStall(scene: Phaser.Scene, location: number, look: Look, res = 2): StallParts {
+// measure: только узнать размеры (ларёк на максимуме для выбора масштаба), без запекания.
+export function buildStall(scene: Phaser.Scene, location: number, look: Look, res = 2, measure = false): StallParts {
   const loc = LOCATIONS[location];
   const style = loc.id;
   const S = look.stages;
-  const W = loc.width;
+  // ларёк растёт вместе с улучшениями: от 80 % ширины в начале до полной на максимуме
+  const W = Math.round(loc.width * (0.8 + 0.2 * growth(look)));
   const H = STALL_H;
   const body = loc.body;
   const roof = loc.roof;
@@ -64,7 +68,7 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
   const parts: StallParts = {
     root, glow, stripes: [], heaters: [], bulbs: [], pulses: [], beams: [], staff: [],
     winGlow: undefined as unknown as Phaser.GameObjects.Rectangle,
-    steam: [], baked: [], left: -W / 2 - 24, right: W / 2 + 24, top: -H - 80,
+    steam: [], baked: [], anchors: {}, left: -W / 2 - 24, right: W / 2 + 24, top: -H - 80, signR: 100,
     hit: { x: 0, y: -H / 2 - 30, w: W + 60, h: H + 110 },
   };
   const layers: Phaser.GameObjects.Graphics[] = [];
@@ -84,8 +88,15 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
   const winL = winX - winW / 2, winR = winX + winW / 2, winT = winY - winH / 2;
   const counterY = winY + winH / 2;
   const annex = S.window > 0;
-  const annexW = 54;
+  const annexW = 54 + (S.window >= 5 ? 14 : 0);
   if (annex) parts.right = W / 2 + annexW + 10;
+  // гриль-зал слева (второй вертел): с ростом стадии в нём 1, 2, 3 вертела
+  const grill = S.second_spit > 0;
+  const grillSpits = S.second_spit >= 5 ? 3 : S.second_spit >= 3 ? 2 : grill ? 1 : 0;
+  const grillW = grill ? 30 + grillSpits * 32 : 0;
+  const leftWall = -W / 2 - grillW; // левый край корпуса вместе с гриль-залом
+  parts.left = leftWall - 24;
+  const anchor = (id: string, x: number, y: number) => (parts.anchors[id] = { x, y });
 
   // ---------- задний план вокруг ларька ----------
   if (style === 'palace') {
@@ -100,7 +111,7 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
   }
   const back = layer();
   // тень
-  back.flat(0x000000, 0.2).fillEllipse(annex ? annexW / 2 : 0, 2, W + 70 + (annex ? annexW : 0), 20);
+  back.flat(0x000000, 0.2).fillEllipse((annex ? annexW / 2 : 0) - grillW / 2, 2, W + 70 + (annex ? annexW : 0) + grillW, 20);
 
   // ковёр перед ларьком (украшение 4)
   if (look.tier >= 4) {
@@ -111,13 +122,13 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
 
   // доска для сёрфа у пляжного киоска
   if (style === 'beach') {
-    back.poly(rot([[-9, -50], [9, -50], [11, 0], [0, 54], [-11, 0]], -0.18, -W / 2 - 10, -54), WHITE, 2.5);
-    back.poly(rot([[-3, -46], [3, -46], [3, 46], [-3, 46]], -0.18, -W / 2 - 10, -54), TOMATO, 0);
+    back.poly(rot([[-9, -50], [9, -50], [11, 0], [0, 54], [-11, 0]], -0.18, leftWall - 10, -54), WHITE, 2.5);
+    back.poly(rot([[-3, -46], [3, -46], [3, 46], [-3, 46]], -0.18, leftWall - 10, -54), TOMATO, 0);
   }
 
   // магазинная тележка у коробки
   if (style === 'dump') {
-    const tx = -W / 2 - 34;
+    const tx = leftWall - 34;
     back.poly([[tx - 26, -48], [tx + 22, -48], [tx + 16, -18], [tx - 20, -18]], 0xd8dde6, 2.5);
     for (let i = 1; i < 5; i++) back.line(tx - 26 + i * 10, -48, tx - 21 + i * 8, -18, 1.5, 0x9a9aa8);
     back.line(tx - 26, -34, tx + 19, -34, 1.5, 0x9a9aa8);
@@ -129,20 +140,30 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
     back.ellipse(tx - 6, -52, 30, 14, 0x3a3448, 2.5); // мешок с пожитками
   }
 
-  // самокат курьера у стены
+  // самокат курьера у стены: со стадией второй термокороб, потом второй самокат
   if (S.courier > 0) {
-    const sx = -W / 2 - (style === 'beach' ? 40 : 22), sy = -2;
-    back.circle(sx - 14, sy - 6, 7, OUTLINE, 0);
-    back.circle(sx + 16, sy - 6, 7, OUTLINE, 0);
-    back.circle(sx - 14, sy - 6, 3, 0x9a9aa8, 0);
-    back.circle(sx + 16, sy - 6, 3, 0x9a9aa8, 0);
-    back.line(sx - 16, sy - 10, sx + 16, sy - 10, 5);
-    back.line(sx - 16, sy - 10, sx + 16, sy - 10, 2.5, 0x3d6fb6);
-    back.line(sx + 14, sy - 10, sx + 18, sy - 44, 3);
-    back.line(sx + 12, sy - 44, sx + 24, sy - 44, 3);
-    back.rect(sx - 16, sy - 32, 22, 20, AMBER, 4);
-    back.flat(MEAT_DARK).fillRect(sx - 11, sy - 25, 12, 3);
-    if (S.courier >= 3) back.rect(sx - 14, sy - 40, 18, 9, TOMATO, 3, 2); // второй термокороб
+    const scooter = (sx: number, sy: number, k: number, boxes: number) => {
+      back.circle(sx - 14 * k, sy - 6 * k, 7 * k, OUTLINE, 0);
+      back.circle(sx + 16 * k, sy - 6 * k, 7 * k, OUTLINE, 0);
+      back.circle(sx - 14 * k, sy - 6 * k, 3 * k, 0x9a9aa8, 0);
+      back.circle(sx + 16 * k, sy - 6 * k, 3 * k, 0x9a9aa8, 0);
+      back.line(sx - 16 * k, sy - 10 * k, sx + 16 * k, sy - 10 * k, 5);
+      back.line(sx - 16 * k, sy - 10 * k, sx + 16 * k, sy - 10 * k, 2.5, 0x3d6fb6);
+      back.line(sx + 14 * k, sy - 10 * k, sx + 18 * k, sy - 44 * k, 3);
+      back.line(sx + 12 * k, sy - 44 * k, sx + 24 * k, sy - 44 * k, 3);
+      back.rect(sx - 17 * k, sy - 34 * k, 24 * k, 22 * k, AMBER, 4);
+      back.flat(MEAT_DARK).fillRect(sx - 12 * k, sy - 26 * k, 13 * k, 3 * k);
+      if (boxes >= 2) back.rect(sx - 15 * k, sy - 44 * k, 20 * k, 10 * k, TOMATO, 3, 2); // второй термокороб
+    };
+    const sx = leftWall - (style === 'beach' ? 40 : 24);
+    scooter(sx, -2, 1.12, S.courier >= 5 ? 2 : 1);
+    if (S.courier >= 3) {
+      // флажок доставки на самокате, с 6-й стадии золотой
+      back.line(sx - 16, -40, sx - 18, -70, 2);
+      back.poly([[sx - 18, -70], [sx - 2, -65], [sx - 17, -60]], S.courier >= 6 ? 0xffcf3f : TOMATO, 2);
+    }
+    anchor('courier', sx, -30);
+    parts.left = Math.min(parts.left, sx - 28);
   }
 
   // ---------- корпус: верх ----------
@@ -166,7 +187,37 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
       upper.flat(OUTLINE).fillRect(ax + annexW / 2 + 1, -H * 0.94, 4, 8);
     }
     if (S.window >= 4) upper.rect(ax + annexW - 8, -H * 0.3, 10, 12, 0x5e9c3a, 2, 2); // кассовый терминал
+    if (S.window >= 5) {
+      // вторая выдача: пакеты с заказами на полочке
+      for (let i = 0; i < 3; i++) upper.rect(ax + 12 + i * 15, -H * 0.32 - 18, 11, 14, i === 1 ? 0xf2e3b3 : 0xd8b07a, 2, 2);
+    }
+    if (S.window >= 6) upper.g.lineStyle(3, 0xffcf3f, 1).strokeRect(ax + 2, -H * 0.78 + 2, annexW + 2, H * 0.78 - 4);
     parts.steam.push({ x: ax + annexW / 2, y: -H * 0.62 });
+    anchor('window', ax + annexW / 2, -H * 0.5);
+  }
+  // гриль-зал: своя стенка, окно с вертелами, полосатый козырёк, со стадии 4 труба с дымом
+  const grillWin = { l: 0, r: 0, t: 0, h: 0 };
+  if (grill) {
+    const gx = leftWall, gw = grillW + 6;
+    const gTop = -H * 0.84;
+    upper.rect(gx, gTop, gw, -gTop, shade(body, -0.1), 4);
+    grillWin.l = gx + 12; grillWin.r = gx + gw - 14; grillWin.t = gTop + 22; grillWin.h = H * 0.42;
+    upper.rect(grillWin.l - 4, grillWin.t - 4, grillWin.r - grillWin.l + 8, grillWin.h + 8, shade(body, -0.35), 2, 3);
+    upper.rect(grillWin.l, grillWin.t, grillWin.r - grillWin.l, grillWin.h, 0x3b2a4f, 0, 0);
+    // козырёк в полоску
+    const n = Math.max(3, Math.round(gw / 14)), sw = (gw + 8) / n;
+    for (let i = 0; i < n; i++) upper.rect(gx - 4 + i * sw, gTop - 6, sw, 14, i % 2 ? CREAM : TOMATO, 0, 2);
+    upper.g.lineStyle(3, OUTLINE, 1).strokeRect(gx - 4, gTop - 6, gw + 8, 14);
+    if (S.second_spit >= 4) {
+      // труба над грилем
+      upper.rect(gx + 10, gTop - 34, 14, 28, 0x6a6280, 2, 2.5);
+      upper.rect(gx + 7, gTop - 38, 20, 6, 0x5a5270, 2, 2.5);
+      parts.steam.push({ x: gx + 17, y: gTop - 40 });
+    }
+    upper.flat(shade(body, -0.28)).fillRect(gx + 1.5, grillWin.t + grillWin.h + 8, gw - 3, -(grillWin.t + grillWin.h + 8) - 1.5);
+    // прилавок гриль-зала
+    upper.rect(gx - 6, grillWin.t + grillWin.h, gw + 10, 8, style === 'palace' ? 0xffcf3f : CREAM, 2, 2.5);
+    if (S.second_spit >= 6) upper.g.lineStyle(3, 0xffcf3f, 1).strokeRect(gx + 2, gTop + 10, gw - 4, -gTop - 12);
   }
 
   const drawBodyBlock = (p: Pen, y0: number, y1: number) => {
@@ -251,40 +302,49 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
   parts.winGlow = scene.add.rectangle(winX, winY, winW, winH, 0xffb347, 0).setBlendMode(Phaser.BlendModes.ADD);
   addGlow(parts.winGlow);
 
-  // гриль и вертела
-  const spits = [winL + winW * 0.22];
-  if (S.second_spit > 0) spits.push(winL + winW * 0.44);
-  const coneH = winH * 0.66;
-  const cone = layer();
-  for (const x of spits) {
-    const heater = scene.add.rectangle(x - 17, winY + 2, 7, winH * 0.7, 0xff6a2b, 0.9);
+  // гриль и вертела: в окне один или два, остальные в гриль-зале; мясо крупнее с ростом Тунг Тунга у гриля
+  const coneK = 1 + 0.05 * S.grill_helper;
+  const spits: { x: number; y: number; h: number; w: number; t: number; b: number }[] = [];
+  const mainSpitH = Math.min(winH * 0.86, winH * 0.62 * coneK);
+  spits.push({ x: winL + winW * 0.2, y: winY + 2, h: mainSpitH, w: 30 * coneK, t: winT, b: winT + winH });
+  if (S.second_spit >= 2) spits.push({ x: winL + winW * 0.2 + 34 * coneK, y: winY + 2, h: mainSpitH, w: 30 * coneK, t: winT, b: winT + winH });
+  for (let i = 0; i < grillSpits; i++) {
+    const gh = Math.min(grillWin.h * 0.86, grillWin.h * 0.62 * coneK);
+    spits.push({ x: grillWin.l + 20 + i * 32, y: grillWin.t + grillWin.h / 2 + 2, h: gh, w: Math.min(32, 28 * coneK), t: grillWin.t, b: grillWin.t + grillWin.h });
+  }
+  const gold = S.second_spit >= 6;
+  for (const sp of spits) {
+    const heater = scene.add.rectangle(sp.x - sp.w * 0.57, sp.y, 7, sp.h * 1.06, 0xff6a2b, 0.9);
     root.add(heater);
     parts.heaters.push(heater);
-    const light = scene.add.rectangle(x - 17, winY + 2, 16, winH * 0.8, 0xff6a2b, 0.25).setBlendMode(Phaser.BlendModes.ADD);
+    const light = scene.add.rectangle(sp.x - sp.w * 0.57, sp.y, 16, sp.h * 1.2, 0xff6a2b, 0.25).setBlendMode(Phaser.BlendModes.ADD);
     addGlow(light);
     parts.pulses.push(light);
   }
-  const coneLayer = cone;
-  for (const x of spits) {
-    coneLayer.line(x, winT + 2, x, winT + winH - 2, 3, 0x9a9aa8);
-    coneLayer.poly([[x - 15, winY + 2 - coneH / 2], [x + 15, winY + 2 - coneH / 2], [x + 8, winY + 2 + coneH / 2], [x - 8, winY + 2 + coneH / 2]], MEAT, 0);
-    coneLayer.flat(0xd98a45, 0.8).fillRect(x - 7, winY + 2 - coneH * 0.45, 4, coneH * 0.85);
+  const coneLayer = layer();
+  for (const sp of spits) {
+    const { x, y, h, w } = sp;
+    coneLayer.line(x, sp.t + 2, x, sp.b - 2, 3, gold ? 0xffcf3f : 0x9a9aa8);
+    coneLayer.poly([[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w * 0.27, y + h / 2], [x - w * 0.27, y + h / 2]], MEAT, 0);
+    coneLayer.flat(0xd98a45, 0.8).fillRect(x - w * 0.23, y - h * 0.45, w * 0.13, h * 0.85);
     for (let i = 0; i < 5; i++) {
-      const st = scene.add.rectangle(x, 0, 28, 2.5, MEAT_DARK);
-      st.setData({ top: winY + 2 - coneH / 2, h: coneH, i });
+      const st = scene.add.rectangle(x, 0, w - 2, 2.5, MEAT_DARK);
+      st.setData({ top: y - h / 2, h, i, w: w - 2 });
       root.add(st);
       parts.stripes.push(st);
     }
-    parts.steam.push({ x, y: winY - coneH / 2 });
+    parts.steam.push({ x, y: y - h / 2 });
   }
   const coneLine = layer();
-  for (const x of spits) {
+  for (const sp of spits) {
+    const { x, y, h, w } = sp;
     coneLine.g.lineStyle(2.5, OUTLINE, 1).strokePoints([
-      new Phaser.Math.Vector2(x - 15, winY + 2 - coneH / 2), new Phaser.Math.Vector2(x + 15, winY + 2 - coneH / 2),
-      new Phaser.Math.Vector2(x + 8, winY + 2 + coneH / 2), new Phaser.Math.Vector2(x - 8, winY + 2 + coneH / 2),
+      new Phaser.Math.Vector2(x - w / 2, y - h / 2), new Phaser.Math.Vector2(x + w / 2, y - h / 2),
+      new Phaser.Math.Vector2(x + w * 0.27, y + h / 2), new Phaser.Math.Vector2(x - w * 0.27, y + h / 2),
     ], true);
-    coneLine.rect(x - 8, winY - coneH / 2 - 4, 16, 6, 0x9a9aa8, 2, 2);
+    coneLine.rect(x - w * 0.27, y - h / 2 - 4, w * 0.54, 6, gold ? 0xffcf3f : 0x9a9aa8, 2, 2);
   }
+  if (grill) anchor('second_spit', (grillWin.l + grillWin.r) / 2, grillWin.t + grillWin.h / 2);
 
   // работники за прилавком: ноги прячутся за нижней панелью
   const addStaff = (id: string, x: number, hat: number) => {
@@ -303,13 +363,19 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
       p.circle(0, top - 10, 8, WHITE);
       p.flat(WHITE).fillRect(-9, top - 4, 18, 7);
       if (hat >= 4) p.circle(0, top + 4, 3, 0xffd86b, 1.5);
+      if (hat >= 6) p.poly([[-9, top - 14], [-5, top - 24], [0, top - 16], [5, top - 24], [9, top - 14]], 0xffcf3f, 2); // корона поверх колпака
       c.body.add(g);
-      bake(g, res, `hat:${id}:${hat >= 4 ? 2 : 1}`);
+      bake(g, res, `hat:${id}:${hat >= 6 ? 3 : hat >= 4 ? 2 : 1}`);
     }
     root.add(c.root);
     parts.staff.push(c);
   };
-  if (S.grill_helper > 0) addStaff('tungtung', winL + winW * 0.66, S.grill_helper);
+  const lastMain = spits[S.second_spit >= 2 ? 1 : 0].x;
+  const tungX = Math.min(winR - 44, Math.max(winL + winW * 0.62, lastMain + 26));
+  if (S.grill_helper > 0) {
+    addStaff('tungtung', tungX, S.grill_helper);
+    anchor('grill_helper', tungX, counterY - 40);
+  }
   if (S.cashier > 0) addStaff('ballerina', winR - 16, S.cashier);
 
   // ---------- корпус: низ, прилавок и всё, что перед работниками ----------
@@ -354,7 +420,7 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
     front.rect(tx + 34, -14, 12, 14, 0xc8c8d8, 1, 2);
     front.flat(0xffcf3f).fillCircle(tx + 40, -15, 3);
     parts.right = Math.max(parts.right, W / 2 + 84);
-    root.add(scene.add.text(W * 0.18, (lowerTop) / 2, t('neonDump'), { fontFamily: DISPLAY_FONT, fontSize: '13px', fontStyle: '900', color: '#3a2a4f' }).setOrigin(0.5).setAngle(-6).setAlpha(0.8));
+    root.add(fitText(scene.add.text(W * 0.18, (lowerTop) / 2, t('neonDump'), { fontFamily: DISPLAY_FONT, fontSize: '13px', fontStyle: '900', color: '#3a2a4f' }), W * 0.3).setOrigin(0.5).setAngle(-6).setAlpha(0.8));
   } else if (style === 'palace') {
     // золотые панели с камнями
     const n = 4, pw = (W - 24) / n;
@@ -394,48 +460,82 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
     parts.right = Math.max(parts.right, W / 2 + 52);
   }
 
-  // лаваш стопкой (растёт со стадией)
-  const lav = [0, 2, 3, 4, 5, 7][S.lavash];
-  for (let i = 0; i < lav; i++) front.ellipse(-W / 2 + 16, counterY - 5 - i * 3.6, 24, 7, i % 2 ? 0xf2e3b3 : 0xead39a, 2);
-  // доска и нож
+  // лаваш стопкой (растёт со стадией), с 4-й стадии в плетёной корзине
+  const lav = [0, 2, 3, 4, 5, 6, 8][S.lavash];
+  const lx0 = -W / 2 + 18;
+  if (S.lavash >= 4) {
+    front.rect(lx0 - 18, counterY - 14, 36, 12, 0xb07a4a, 4, 2.5);
+    for (let i = 0; i < 4; i++) front.line(lx0 - 14 + i * 9, counterY - 13, lx0 - 12 + i * 9, counterY - 3, 1.5, 0x8a5a33);
+  }
+  const lavBase = S.lavash >= 4 ? counterY - 14 : counterY - 5;
+  for (let i = 0; i < lav; i++) front.ellipse(lx0, lavBase - i * 4.2, 30, 9, i % 2 ? 0xf2e3b3 : 0xead39a, 2);
+  if (S.lavash > 0) anchor('lavash', lx0, lavBase - lav * 2);
+  // доска и нож: тесак, магнитная планка, нарезанное мясо, вторая доска, золотой нож
   if (S.knife > 0) {
-    const bx = -W / 2 + 46;
-    front.rect(bx - 15, counterY - 7, 30, 6, 0xc8915a, 2, 2);
-    front.rect(bx - 2, counterY - 12, 18, 4, 0xd8dde6, 1, 1.5);
-    front.rect(bx - 10, counterY - 12, 9, 4, OUTLINE, 1, 0);
+    const bx = -W / 2 + 52;
+    front.rect(bx - 18, counterY - 8, 36, 7, 0xc8915a, 2, 2);
+    front.rect(bx - 2, counterY - 14, 22, 5, S.knife >= 6 ? 0xffcf3f : 0xd8dde6, 1, 1.5);
+    front.rect(bx - 12, counterY - 14, 11, 5, OUTLINE, 1, 0);
     if (S.knife >= 2) {
-      front.rect(bx - 14, counterY - 17, 14, 3, 0xd8dde6, 1, 1.5);
-      front.rect(bx - 0, counterY - 17, 7, 3, TOMATO, 1, 1.5);
+      front.rect(bx - 17, counterY - 20, 16, 5, 0xd8dde6, 1, 1.5);
+      front.rect(bx - 1, counterY - 20, 8, 4, TOMATO, 1, 1.5);
     }
-    if (S.knife >= 4) front.ellipse(bx + 8, counterY - 9, 9, 4, 0xb5651d, 1.5); // нарезанное мясо
+    if (S.knife >= 4) {
+      front.ellipse(bx + 10, counterY - 11, 12, 5, 0xb5651d, 1.5); // нарезанное мясо
+      front.ellipse(bx + 4, counterY - 13, 10, 4, 0xc8753d, 1.5);
+    }
+    if (S.knife >= 5) front.rect(bx + 20, counterY - 7, 22, 6, 0xb8814a, 2, 2); // вторая доска
+    anchor('knife', bx, counterY - 16);
   }
-  // соусы
-  const bottles = S.sauce >= 3 ? 3 : S.sauce >= 2 ? 2 : S.sauce;
+  // соусы: бутылки крупнее, со стадией 4 подставка, с 5-й диспенсер с тремя помпами
+  const bottles = Math.min(3, S.sauce);
   const sauceCols = [TOMATO, 0xfff8ee, 0x5e9c3a];
-  for (let i = 0; i < bottles; i++) {
-    const bx = winL + winW * 0.08 + i * 10;
-    front.rect(bx - 3.5, counterY - 18, 7, 15, sauceCols[i], 2.5, 2);
-    front.rect(bx - 1.5, counterY - 22, 3, 5, i === 1 ? TOMATO : WHITE, 1, 1.5);
+  const sx0 = winL + winW * 0.06;
+  if (S.sauce >= 5) {
+    front.rect(sx0 - 10, counterY - 40, 44, 14, 0x9a9aa8, 3, 2.5);
+    for (let i = 0; i < 3; i++) {
+      front.rect(sx0 - 4 + i * 14, counterY - 50, 6, 10, sauceCols[i], 2, 1.5);
+      front.line(sx0 - 1 + i * 14, counterY - 26, sx0 - 1 + i * 14, counterY - 22, 2);
+    }
   }
-  if (S.sauce >= 4) front.rect(winL + winW * 0.08 - 6, counterY - 5, 32, 3, 0x9a9aa8, 1, 1.5);
-  // касса
+  for (let i = 0; i < bottles; i++) {
+    const bx = sx0 + i * 12;
+    front.rect(bx - 4.5, counterY - 21, 9, 18, S.sauce >= 6 ? 0xffcf3f : sauceCols[i], 3, 2);
+    front.rect(bx - 2, counterY - 26, 4, 6, i === 1 ? TOMATO : WHITE, 1, 1.5);
+  }
+  if (S.sauce >= 4) front.rect(sx0 - 8, counterY - 5, 40, 3, 0x9a9aa8, 1, 1.5);
+  if (S.sauce > 0) anchor('sauce', sx0 + 10, counterY - 20);
+  // касса: золотая со стадии 3, терминал и чек с 4-й, банка для чаевых с 5-й
   if (S.cashier > 0) {
     const rx = winR - 12;
     const col = S.cashier >= 3 ? 0xffcf3f : 0x5a5270;
-    front.rect(rx - 12, counterY - 16, 24, 13, col, 3, 2.5);
-    front.rect(rx - 8, counterY - 22, 16, 7, 0x7ff0d0, 2, 2);
-    front.flat(OUTLINE).fillRect(rx - 7, counterY - 11, 14, 2);
-  }
-  // сыр
-  if (S.cheese > 0) {
-    const cx = W / 2 - 18;
-    front.poly([[cx - 12, counterY - 3], [cx + 12, counterY - 3], [cx + 12, counterY - 13], [cx - 4, counterY - 17]], 0xffd23f, 2.5);
-    front.flat(0xe0a020).fillCircle(cx + 4, counterY - 9, 2);
-    front.flat(0xe0a020).fillCircle(cx - 3, counterY - 7, 1.5);
-    if (S.cheese >= 2) {
-      front.ellipse(cx - 2, counterY - 22, 22, 8, 0xffd23f, 2.5);
-      front.rect(cx - 13, counterY - 22, 22, 6, 0xffd23f, 0, 0);
+    front.rect(rx - 14, counterY - 18, 28, 15, col, 3, 2.5);
+    front.rect(rx - 9, counterY - 25, 18, 8, 0x7ff0d0, 2, 2);
+    front.flat(OUTLINE).fillRect(rx - 8, counterY - 12, 16, 2);
+    if (S.cashier >= 4) {
+      front.rect(rx - 26, counterY - 15, 10, 12, 0x3a3150, 2, 2);
+      front.flat(0x7ff0d0).fillRect(rx - 24, counterY - 13, 6, 4);
+      front.rect(rx + 6, counterY - 33, 8, 9, WHITE, 1, 1.5);
     }
+    if (S.cashier >= 5) {
+      front.rect(rx + 16, counterY - 15, 11, 12, 0xbfe3f2, 3, 2);
+      front.flat(0xffcf3f).fillCircle(rx + 21.5, counterY - 7, 3);
+    }
+    anchor('cashier', rx, counterY - 30);
+  }
+  // сыр: клин, головка, вторая головка, золотая головка
+  if (S.cheese > 0) {
+    const cx = W / 2 - 20;
+    front.poly([[cx - 14, counterY - 3], [cx + 14, counterY - 3], [cx + 14, counterY - 15], [cx - 5, counterY - 20]], 0xffd23f, 2.5);
+    front.flat(0xe0a020).fillCircle(cx + 5, counterY - 10, 2.4);
+    front.flat(0xe0a020).fillCircle(cx - 3, counterY - 8, 1.8);
+    if (S.cheese >= 2) {
+      const wheel = S.cheese >= 6 ? 0xffcf3f : 0xffd23f;
+      front.ellipse(cx - 2, counterY - 25, 26, 9, wheel, 2.5);
+      front.rect(cx - 15, counterY - 25, 26, 7, wheel, 0, 0);
+    }
+    if (S.cheese >= 4) front.ellipse(cx - 2, counterY - 33, 22, 8, 0xffe08a, 2.5);
+    anchor('cheese', cx, counterY - 22);
   }
 
   // меню-доска справа от окна
@@ -453,20 +553,22 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
     const px = mx + mw / 2 - 2, py = my - mh / 2 + 4;
     front.poly(star(px, py, 17, 12, 10), TOMATO, 2.5);
     root.add(scene.add.text(px, py, '−10%', { fontFamily: DISPLAY_FONT, fontSize: '9px', fontStyle: '900', color: '#fff4dc' }).setOrigin(0.5).setAngle(-12));
+    anchor('cashback', px, py);
   }
 
   // таблички на нижней панели
   if (S.reviews > 0) {
-    const px = -W * 0.36, py = -H * 0.16;
-    front.rect(px - 22, py - 10, 44, 20, WHITE, 4, 2.5);
-    for (let i = 0; i < 5; i++) front.poly(star(px - 15 + i * 7.5, py, 3.6, 1.6), AMBER, 1);
+    const px = -W * 0.34, py = -H * 0.17;
+    front.rect(px - 28, py - 12, 56, 24, WHITE, 5, 2.5);
+    for (let i = 0; i < 5; i++) front.poly(star(px - 20 + i * 10, py, 4.6, 2), AMBER, 1.2);
+    anchor('reviews', px, py);
   }
 
 
   // горшки с растениями (украшение 1)
   if (look.tier >= 1) {
     for (const sx of [-1, 1]) {
-      const px = sx * (W / 2 + 6) + (sx > 0 && annex ? annexW + 4 : 0);
+      const px = sx > 0 ? W / 2 + 6 + (annex ? annexW + 4 : 0) : leftWall - 6;
       front.poly([[px - 9, -16], [px + 9, -16], [px + 6, 0], [px - 6, 0]], 0xc8553d, 2.5);
       if (style === 'desert') {
         front.rect(px - 4, -38, 8, 24, 0x5e9c3a, 4, 2);
@@ -496,7 +598,9 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
         front.line(tx + 25, ty - 6, tx + 25, ty, 2);
       }
       front.rect(tx - 6, ty - 22, 12, 6, 0xf2e3b3, 2, 1.5); // шаурма на тарелке
+      if (S.double >= 5) for (let k = -1; k <= 1; k += 2) front.circle(tx + k * 22, ty - 46, 3, AMBER, 1.5); // фонарики на зонтике
     }
+    anchor('double', tables[0], -30);
   }
 
   // ---------- крыша ----------
@@ -664,10 +768,48 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
     top.line(sx + 12, eave, sx + 12, eave + 8, 1.5);
     top.rect(sx - 20, eave + 8, 40, 16, 0x2a1b3d, 4, 2.5);
     addGlow(scene.add.text(sx, eave + 16, '24/7', { fontFamily: DISPLAY_FONT, fontSize: '10px', fontStyle: '900', color: '#7ff0d0' }).setOrigin(0.5).setShadow(0, 0, '#7ff0d0', 6, false, true));
+    if (S.night_shift >= 3) {
+      // неоновая полоса под прилавком
+      const strip = scene.add.rectangle(0, counterY + 9, W - 8, 3, 0x7ff0d0, 0.9);
+      addGlow(strip);
+      parts.pulses.push(strip);
+    }
+    anchor('night_shift', lx, eave + 20);
+  }
+
+  // второй этаж (украшение 3, сумма уровней 50+): ларёк растёт вверх, вывеска поднимается на крышу надстройки.
+  // У коробки это вторая коробка сверху, у дворца и так купола.
+  if (look.tier >= 3 && style !== 'palace') {
+    const fw = Math.round(Math.min(W * 0.7, 210)), fh = 52 + (look.tier >= 5 ? 8 : 0), fy = roofTop + 6;
+    const fl = layer();
+    if (style === 'dump') {
+      fl.poly([[-fw / 2, fy], [fw / 2, fy], [fw / 2 - 4, fy - fh], [-fw / 2 + 3, fy - fh + 3]], body, 2.5);
+      fl.flat(0xe8d8a0, 0.9).fillRect(-fw / 2 + 2, fy - fh / 2 - 5, fw - 6, 10);
+    } else {
+      fl.rect(-fw / 2, fy - fh, fw, fh, shade(body, 0.05), 4);
+      fl.rect(-fw / 2 - 6, fy - fh - 6, fw + 12, 9, style === 'piazza' ? 0xe8d8b8 : shade(roof, -0.15), 2);
+    }
+    const n = fw > 150 ? 3 : 2, ww = 26, wh = 24, gap = (fw - n * ww) / (n + 1);
+    for (let i = 0; i < n; i++) {
+      const wx = -fw / 2 + gap + i * (ww + gap), wy = fy - fh + 12;
+      fl.rect(wx - 3, wy - 3, ww + 6, wh + 6, style === 'dump' ? shade(body, -0.3) : CREAM, 3, 2.5);
+      fl.rect(wx, wy, ww, wh, 0x3b2a4f, 2, 0);
+      fl.line(wx + ww / 2, wy, wx + ww / 2, wy + wh, 2, style === 'dump' ? shade(body, -0.3) : CREAM);
+      const light = scene.add.rectangle(wx + ww / 2, wy + wh / 2, ww, wh, 0xffb347, 0.35).setBlendMode(Phaser.BlendModes.ADD);
+      addGlow(light);
+      parts.pulses.push(light);
+      if (style !== 'dump') {
+        // ящик с цветами под окном
+        fl.rect(wx - 4, wy + wh + 3, ww + 8, 6, 0x8a5a33, 2, 2);
+        for (let k = 0; k < 3; k++) fl.circle(wx + 3 + k * 10, wy + wh + 2, 4, k === 1 ? [TOMATO, 0xf28cb1, AMBER][i % 3] : LEAF, 1.5);
+      }
+    }
+    roofTop = fy - fh - 6;
   }
 
   // вывеска
   const signW = Math.min(W * 0.8, 200), signH = 34;
+  parts.signR = signW / 2 + 6;
   const signY = style === 'palace' ? ay - 40 : roofTop - signH / 2 + 4;
   const sign = layer();
   if (look.tier >= 4) sign.rect(-signW / 2 - 5, signY - signH / 2 - 5, signW + 10, signH + 10, 0xffcf3f, 6, 2.5);
@@ -685,9 +827,11 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
       }
     }
   }
+  if (S.sign > 0) anchor('sign', 0, signY);
   const label = scene.add
     .text(0, signY + 1, style === 'dump' && S.sign === 0 ? t('neonDump') : t('neon'), { fontFamily: DISPLAY_FONT, fontSize: '18px', fontStyle: '900', color: S.sign > 0 ? '#ffd86b' : style === 'dump' ? '#2a1b3d' : '#d8c8a8' })
     .setOrigin(0.5);
+  fitText(label, signW - 22);
   if (style === 'dump') label.setAngle(-3);
   if (S.sign > 0) {
     label.setShadow(0, 0, '#ff9d2e', 10, false, true);
@@ -724,6 +868,8 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
     g.rect(cx - 3, cy - 16, 6, 7, 0xffcf3f, 1, 2);
     g.flat(0xffcf3f).fillRect(cx - 14, cy - 8, 28, 2);
     if (S.secret >= 3) g.poly(star(cx, cy - 30, 6, 2.6), 0xffe9a8, 1.5);
+    if (S.secret >= 5) for (const k of [-1, 1]) g.poly(star(cx + k * 14, cy - 24, 4, 1.8), 0xffe9a8, 1.2);
+    anchor('secret', cx, cy - 10);
   }
 
   // прожекторы (украшение 5)
@@ -742,9 +888,22 @@ export function buildStall(scene: Phaser.Scene, location: number, look: Look, re
   parts.top = Math.min(signY - signH / 2 - (look.tier >= 3 ? 30 : 6), roofTop - 30);
   parts.hit = { x: (parts.left + parts.right) / 2, y: parts.top / 2, w: parts.right - parts.left + 20, h: -parts.top + 20 };
   // неподвижные слои ларька запекаем в картинки (см. bake.ts)
-  for (const g of layers) {
-    const img = bake(g, res);
-    if (img instanceof Phaser.GameObjects.Image) parts.baked.push(img.texture.key);
+  if (!measure) {
+    for (const g of layers) {
+      const img = bake(g, res);
+      if (img instanceof Phaser.GameObjects.Image) parts.baked.push(img.texture.key);
+    }
+  }
+  // гриль-зал растёт влево, пристройка вправо: сдвигаем всё так, чтобы ларёк стоял по центру своего места
+  const cx = Math.round((parts.left + parts.right) / 2);
+  if (cx) {
+    for (const o of [...root.list, ...glow.list]) (o as unknown as { x: number }).x -= cx;
+    parts.left -= cx;
+    parts.right -= cx;
+    parts.signR -= cx;
+    parts.hit.x -= cx;
+    parts.steam.forEach((p) => (p.x -= cx));
+    Object.values(parts.anchors).forEach((p) => (p.x -= cx));
   }
   return parts;
 }

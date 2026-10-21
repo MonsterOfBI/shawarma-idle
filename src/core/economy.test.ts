@@ -337,10 +337,22 @@ describe('внешний вид ларька', () => {
   });
   it('стадии и украшения растут по порогам', async () => {
     const { stage, tier } = await import('./look');
-    expect([0, 1, 9, 10, 25, 50, 100, 400].map(stage)).toEqual([0, 1, 1, 2, 3, 4, 5, 5]);
+    expect([0, 1, 9, 10, 25, 50, 100, 199, 200, 400].map(stage)).toEqual([0, 1, 1, 2, 3, 4, 5, 5, 6, 6]);
     expect(tier({ knife: 9 })).toBe(0);
     expect(tier({ knife: 10 })).toBe(1);
     expect(tier({ knife: 150, grill_helper: 50 })).toBe(5);
+  });
+  it('ларёк дорастает: доля стадий растёт от 0 до 1, изменения видны по каждому улучшению', async () => {
+    const { lookOf, growth, maxLook, lookChanges } = await import('./look');
+    expect(growth(lookOf({}))).toBe(0);
+    expect(growth(maxLook())).toBe(1);
+    const a = growth(lookOf({ knife: 1, grill_helper: 1 })), b = growth(lookOf({ knife: 10, grill_helper: 1 }));
+    expect(b).toBeGreaterThan(a);
+    expect(lookChanges(lookOf({ knife: 9 }), lookOf({ knife: 10, sauce: 1 }))).toEqual([
+      { id: 'knife', fresh: false },
+      { id: 'sauce', fresh: true },
+    ]);
+    expect(lookChanges(lookOf({ knife: 10 }), lookOf({ knife: 11 }))).toEqual([]);
   });
 });
 
@@ -625,10 +637,28 @@ describe('версия 2.11', () => {
     }
   });
 
-  it('ящик стоит 3 минуты дохода и дорожает на 5 % за открытый', () => {
-    const s = { ...newGame(0), levels: { knife: 20, grill: 10 } };
-    expect(boxCost(s, 0)).toBe(minutesOfIncome(s, 0, 3));
-    expect(boxCost({ ...s, boxesOpened: 100 }, 0)).toBe(Math.round(minutesOfIncome(s, 0, 3) * 6));
+  it('цена ящика своя на точке и растёт только от покупок, не от дохода (2.19)', async () => {
+    const { BOX_BASE, BOX_STEP, BOX_STAR_MULT, relocate, payForBox } = await import('./economy');
+    const s = { ...newGame(0), location: 1, money: 1e15 };
+    const rich = { ...s, levels: { knife: 200, grill_helper: 200, cashier: 100 } };
+    // доход вырос — цена та же
+    expect(boxCost(rich, 0)).toBe(boxCost(s, 0));
+    expect(boxCost(s, 0)).toBe(BOX_BASE[1]);
+    const after = payForBox(s, 0);
+    expect(after.boxesHere).toBe(1);
+    expect(after.money).toBe(1e15 - BOX_BASE[1]);
+    expect(boxCost(after, 0)).toBe(Math.round(BOX_BASE[1] * BOX_STEP[1]));
+    // бесплатные ящики цену не двигают
+    expect(boxCost({ ...s, boxesOpened: 50 }, 0)).toBe(BOX_BASE[1]);
+    // переезд: счёт с нуля и цена новой точки
+    const moved = relocate({ ...after, runEarned: 1e30 }, 0);
+    expect(moved.boxesHere).toBe(0);
+    expect(boxCost(moved, 0)).toBe(BOX_BASE[2]);
+    // звёзды дворца
+    expect(boxCost({ ...s, location: 4, stars: 2 }, 0)).toBe(Math.round(BOX_BASE[4] * BOX_STAR_MULT ** 2));
+    // каждая следующая точка дороже предыдущей
+    for (let i = 1; i < BOX_BASE.length; i++) expect(BOX_BASE[i]).toBeGreaterThan(BOX_BASE[i - 1]);
+    expect(minutesOfIncome).toBeTypeOf('function');
   });
 
   it('золотой ящик за рекламу снова с откатом 4 минуты', () => {

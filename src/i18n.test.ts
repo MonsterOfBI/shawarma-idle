@@ -26,6 +26,11 @@ describe('словарь', () => {
     for (const k of Object.keys(ru)) expect(holes(en[k]), k).toBe(holes(ru[k]));
   });
 
+  it('число достижений не вписано в текст руками (их стало 30, а писали «из 15»)', () => {
+    expect(ru.achCount).toContain('{n}');
+    expect(en.achCount).toContain('{n}');
+  });
+
   it('ключи, собранные из id, существуют', () => {
     const need = [
       ...ACHIEVEMENTS.flatMap((a) => [`ach_${a.id}`, `achd_${a.id}`]),

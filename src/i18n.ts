@@ -108,7 +108,7 @@ const ru = {
   goldenHint: 'Лови Бомбардиро!',
   achUnlocked: 'Достижение: {v}',
   achBonus: 'Каждое достижение навсегда добавляет 3 % ко всему доходу. Сейчас +{v} %.',
-  achCount: '{v} из 15',
+  achCount: '{v} из {n}',
   neon: 'ШАУРМА',
   ach_taps_100: 'Сотая шаурма',
   achd_taps_100: 'Сделайте 100 тапов',
@@ -427,6 +427,8 @@ const ru = {
   moveKicker: 'Следующая точка',
   hRoute: 'Маршрут',
   hShop: 'Магазин',
+  lookNew: 'Новое: {v}!',
+  lookUp: '{v}: новый вид!',
   hotTag: 'Хит',
 };
 
@@ -533,12 +535,12 @@ const en: Record<Key, string> = {
   sideMove: 'Move!',
   comboRecord: 'New streak record: {v}!',
   rushTitle: 'Rush hour!',
-  rushText: 'Taps ×3 for {v} s',
+  rushText: 'Taps ×3, {v} s left',
   goldenToast: 'Bombardiro dropped {v} ₽',
   goldenHint: 'Catch Bombardiro!',
   achUnlocked: 'Achievement: {v}',
   achBonus: 'Each achievement adds 3% to all income forever. Now +{v}%.',
-  achCount: '{v} of 15',
+  achCount: '{v} of {n}',
   neon: 'SHAWARMA',
   ach_taps_100: 'Hundredth wrap',
   achd_taps_100: 'Tap 100 times',
@@ -854,6 +856,8 @@ const en: Record<Key, string> = {
   moveKicker: 'Next spot',
   hRoute: 'Route',
   hShop: 'Shop',
+  lookNew: 'New: {v}!',
+  lookUp: '{v}: new look!',
   hotTag: 'Hot',
 };
 

@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { pickCustomer } from '../core/brainrots';
 import { LOCATIONS } from '../core/locations';
-import { type Look, lookKey, lookOf } from '../core/look';
+import { type Look, lookChanges, lookKey, lookOf, maxLook } from '../core/look';
 import { sfx } from '../audio';
 import { lang, t } from '../i18n';
 import { BACKDROPS, type Ctx, type Mover, spawnCourier, spawnMover } from './backdrops';
 import { drawBrainrot, drawMascot, setBakeRes, type Critter } from './brainrots';
-import { DISPLAY_FONT, OUTLINE, Pen, rng } from './draw';
+import { DISPLAY_FONT, OUTLINE, Pen, fitText, rng } from './draw';
 import { type StallParts, buildStall } from './stall';
 import { Weather } from './weather';
 import { bake, dropTexture } from './bake';
@@ -302,6 +302,7 @@ export class StallScene extends Phaser.Scene {
 
   // Неподвижные предметы фона (props.ts): знак метро, фонарь, франшиза, билборд и фудтрак.
   private propsBaked: string[] = [];
+  private propAnchors: Record<string, { x: number; y: number }> = {};
   private buildProps() {
     this.props.removeAll(true);
     this.extras.removeAll(true);
@@ -325,6 +326,7 @@ export class StallScene extends Phaser.Scene {
     });
     this.flame = r.flame;
     this.propsBaked = r.baked;
+    this.propAnchors = r.anchors;
   }
 
   // ---------- ларёк ----------
@@ -333,6 +335,21 @@ export class StallScene extends Phaser.Scene {
   // подробность запекания под нынешний размер на экране (шаг 0,5, от 1 до 3)
   private resFor(scale: number) {
     return Math.min(3, Math.max(1, Math.ceil(scale * 2) / 2));
+  }
+
+  // Размер ларька на максимуме для каждой точки: по нему выбираем масштаб,
+  // поэтому маленький ларёк на экране маленький и растёт с улучшениями, а не сжимается.
+  private refExt = new Map<number, { half: number; top: number }>();
+  private refFor(location: number) {
+    let r = this.refExt.get(location);
+    if (!r) {
+      const st = buildStall(this, location, maxLook(), 1, true);
+      r = { half: Math.max(-st.left, st.right), top: st.top };
+      st.root.destroy();
+      st.glow.destroy();
+      this.refExt.set(location, r);
+    }
+    return r;
   }
 
   private rebuildStall() {
@@ -372,12 +389,28 @@ export class StallScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const st = this.stall;
     const room = this.groundY - this.hudBottom - 10;
-    const half = Math.max(-st.left, st.right);
+    // запас 12 %: пока ларёк маленький, он чуть крупнее «полного» масштаба, но всё равно заметно меньше готового
+    const ref = this.refFor(this.location);
+    const half = Math.max(Math.max(-st.left, st.right), ref.half / 1.12);
+    const topRef = Math.min(st.top, ref.top / 1.12);
     // нищая коробка нарочно мелкая, дворец — во весь экран
     const id = LOCATIONS[this.location].id;
     const k = id === 'dump' ? 0.8 : 1;
-    const frac = id === 'palace' ? 0.47 : 0.39;
-    this.stallScale = k * Math.min(this.unit, (width * frac) / half, Math.max(50, room) / -st.top);
+    const frac = id === 'palace' ? 0.48 : 0.45;
+    // над ларьком нужно место для рекламного щита, иначе щит налезает на вывеску
+    const fit = (r: number) => k * Math.min(this.unit, (width * frac) / half, Math.max(50, r) / -topRef);
+    let s0 = fit(room);
+    // (только если верх ларька доходит до щита по ширине)
+    if (this.look.stages.meme_ads > 0 && this.stallX + st.signR * s0 > this.rightSafe(width) - 62 * this.unit) s0 = fit(room - 56 * this.unit);
+    // правый край не заходит под боковые кнопки на той же высоте и не вылезает за экран
+    const right = Math.max(st.right, ref.half / 1.12);
+    // (кнопки, что висят выше основной части ларька, не мешают: на телефоне они над крышей)
+    const bodyY = this.groundY + topRef * s0 * 0.6;
+    let limit = width - 6 * this.unit;
+    this.sideAt = -1e9;
+    for (const r of this.sideRects()) if (r.l > width / 2 && r.b > bodyY) limit = Math.min(limit, r.l - 4 * this.unit);
+    if (this.stallX + right * s0 > limit) s0 = Math.max(0.2, (limit - this.stallX) / right);
+    this.stallScale = s0;
     setBakeRes(this.resFor(this.unit * 1.3));
     // ларёк заметно вырос или уменьшился — перезапекаем его в нужной чёткости
     if (this.resFor(this.stallScale) !== this.stallRes) {
@@ -499,13 +532,44 @@ export class StallScene extends Phaser.Scene {
     const key = lookKey(look);
     if (key === this.lookKeyNow) return false;
     const first = this.lookKeyNow === '';
+    const before = this.look;
     this.lookKeyNow = key;
     this.look = look;
     if (!this.sys.isActive() || this.moving) return !first;
     this.rebuildStall();
     this.layout();
-    if (!first) this.regrow();
+    if (!first) {
+      this.regrow();
+      if (before) this.showLookChanges(lookChanges(before, look));
+    }
     return !first;
+  }
+
+  // Что появилось или подросло на ларьке: вспышка на этом месте и подпись «Новое: …».
+  // Не чаще раза в 0,7 с, иначе при покупке пачкой всё мигает.
+  private lookFxAt = 0;
+  private showLookChanges(changes: { id: string; fresh: boolean }[]) {
+    const st = this.stall;
+    if (!st || !changes.length || this.time.now - this.lookFxAt < 700) return;
+    this.lookFxAt = this.time.now;
+    const pick = [...changes].sort((a, b) => Number(b.fresh) - Number(a.fresh)).slice(0, 2);
+    const s = this.stallScale, u = this.unit;
+    pick.forEach((c, i) => {
+      let p: { x: number; y: number } | undefined;
+      const a = st.anchors[c.id];
+      if (a) p = { x: this.stallX + a.x * s, y: this.groundY + a.y * s };
+      else if (this.propAnchors[c.id]) p = this.propAnchors[c.id];
+      else if (c.id === 'barker' && this.mascot) p = { x: this.mascot.root.x, y: this.mascot.root.y - 60 * u };
+      if (!p) p = { x: this.stallX, y: this.groundY + (st.top / 2) * s };
+      const { x, y } = p;
+      this.time.delayedCall(i * 260 + 120, () => {
+        const ring = this.add.circle(x, y, 14 * u, 0xfff0b0, 0.7).setBlendMode(Phaser.BlendModes.ADD).setDepth(9.5);
+        this.tweens.add({ targets: ring, scale: 4.2, alpha: 0, duration: 700, ease: 'Cubic.out', onComplete: () => ring.destroy() });
+        this.sparks.explode(c.fresh ? 22 : 12, x, y);
+        const name = t(`up_${c.id}`);
+        this.popText(t(c.fresh ? 'lookNew' : 'lookUp', name), x, y - 18 * u, '#ffd86b', 0.8);
+      });
+    });
   }
 
   // Лучшие брейнроты игрока танцуют перед ларьком. Мутация даёт золотое или алмазное сияние.
@@ -962,9 +1026,9 @@ export class StallScene extends Phaser.Scene {
     m.root.setDepth(8).setVisible(level > 0);
     const style = { fontFamily: DISPLAY_FONT, fontStyle: '900' };
     if (lv === 1) {
-      m.body.add(this.add.text(0, -34, t('neonDump'), { ...style, fontSize: '9px', color: '#2a1b3d' }).setOrigin(0.5).setAngle(-4));
+      m.body.add(fitText(this.add.text(0, -34, t('neonDump'), { ...style, fontSize: '9px', color: '#2a1b3d' }), 52).setOrigin(0.5).setAngle(-4));
     } else {
-      m.body.add(this.add.text(0, -30, t('neon'), { ...style, fontSize: '10px', color: lv >= 3 ? '#ffcf3f' : '#e4472b' }).setOrigin(0.5));
+      m.body.add(fitText(this.add.text(0, -30, t('neon'), { ...style, fontSize: '10px', color: lv >= 3 ? '#ffcf3f' : '#e4472b' }), 54).setOrigin(0.5));
       m.body.add(this.add.text(0, -19, '→ → →', { ...style, fontSize: '7px', color: lv >= 3 ? '#fff4dc' : '#2a1b3d' }).setOrigin(0.5));
     }
     this.mascot = m;
@@ -1070,7 +1134,8 @@ export class StallScene extends Phaser.Scene {
     st.stripes.forEach((s) => {
       const f = (s.getData('i') / 5 + k / 5) % 1;
       s.y = s.getData('top') + 3 + f * (s.getData('h') - 6);
-      s.setSize(28 - 14 * f, 2.5);
+      const w = s.getData('w') ?? 28;
+      s.setSize(w - w * 0.5 * f, 2.5);
     });
     const flick = 0.75 + 0.25 * Math.sin(this.clock / 90) * Math.sin(this.clock / 37);
     st.heaters.forEach((g) => g.setAlpha(flick));

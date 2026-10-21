@@ -84,7 +84,7 @@ function mergeAll(s: GameState) {
 // Начало симуляции — полдень, чтобы смена дня у казуала приходилась на паузу между сессиями.
 const START = new Date(2026, 0, 5, 12).getTime();
 
-export function simulate(p: Profile, palaceStars = 3, seed = 987654321): SimResult {
+export function simulate(p: Profile, palaceStars = 3, seed = 987654321, probe?: (s: GameState, now: number, playSec: number) => void): SimResult {
   let rs = seed;
   const rand = () => (rs = (Math.imul(rs, 1103515245) + 12345) >>> 0) / 4294967296;
   let s: GameState = { ...E.newGame(START), lastSeen: START };
@@ -162,6 +162,7 @@ export function simulate(p: Profile, palaceStars = 3, seed = 987654321): SimResu
       earn('golden', () => E.addMoney(s, extra));
     }
     s = unlockAchievements(s).state;
+    if (probe && play % 60 === 0) probe(s, now, play);
     s = ensureQuests(s, now, rand);
     for (let i = 0; i < s.quests.length; i++) {
       if (!questDone(s, s.quests[i])) continue;
@@ -181,8 +182,8 @@ export function simulate(p: Profile, palaceStars = 3, seed = 987654321): SimResu
       const boxPayback = c / Math.max((gain(s, p) * boxGain()) / PETS.petMult(s), 1e-9);
       if (boxPayback < up.payback) {
         if (s.money < c) break;
+        s = E.payForBox(s, now);
         open('common');
-        s = { ...s, money: s.money - c };
         continue;
       }
       if (up.id && E.canBuy(s, up.id)) {

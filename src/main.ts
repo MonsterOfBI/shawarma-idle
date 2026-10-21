@@ -43,7 +43,7 @@ async function start() {
   if (title) title.textContent = t('title');
   // шрифты лежат в сборке; ждём их, чтобы надписи в сцене сразу были нужным шрифтом
   await Promise.race([
-    Promise.all(['800 20px Unbounded', '900 20px Unbounded', '700 20px Unbounded', '600 16px "Golos Text"'].map((f) => document.fonts.load(f, 'ШАУРМА 123'))),
+    Promise.all(['800 20px Unbounded', '900 20px Unbounded', '700 20px Unbounded', '600 16px "Golos Text"'].map((f) => document.fonts.load(f, 'ШАУРМА SHAWARMA 123'))),
     new Promise((r) => setTimeout(r, 2500)),
   ]).catch(() => undefined);
   loadProgress(75);

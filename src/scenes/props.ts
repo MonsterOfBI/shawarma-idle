@@ -8,7 +8,7 @@ import type { Look } from '../core/look';
 import { t } from '../i18n';
 import { bake } from './bake';
 import { drawBrainrot } from './brainrots';
-import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, shade } from './draw';
+import { AMBER, CREAM, DISPLAY_FONT, OUTLINE, Pen, TOMATO, fitText, shade } from './draw';
 import type { StallParts } from './stall';
 
 export interface PropsInput {
@@ -30,9 +30,10 @@ export interface PropsInput {
 }
 
 // Возвращает огонь (он анимируется) и ключи запечённых текстур, чтобы потом их удалить.
-export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser.GameObjects.Graphics; baked: string[] } {
+export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser.GameObjects.Graphics; baked: string[]; anchors: Record<string, { x: number; y: number }> } {
   let flame: Phaser.GameObjects.Graphics | undefined;
   const baked: string[] = [];
+  const anchors: Record<string, { x: number; y: number }> = {}; // где видно улучшение (экранные координаты)
   const { u, w, hy, gy, location } = o;
   const id = LOCATIONS[location].id;
   if (id === 'metro') {
@@ -103,6 +104,7 @@ export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser
       fp.rect(fx + 64 * s, hy - 74 * s, 102 * s, 14 * s, loc.roof, 3);
     }
     o.props.add(fg);
+    anchors.franchise = { x: fx, y: hy - 60 * s };
   }
   if (S.meme_ads > 0) {
     // билборд с брейнротом: справа от ларька, но не за боковыми кнопками;
@@ -113,7 +115,8 @@ export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser
     let k = 1, bx = Math.min(w * 0.88, safe - 50 * u), by = hy - 60 * u;
     if (st && bx - 48 * u < right) {
       // справа тесно: щит поменьше и повыше, над правым краем крыши, но ниже шапки с деньгами
-      k = Phaser.Math.Clamp((safe - right) / (98 * u), 0.7, 1);
+      // щит может стоять сбоку от вывески, лишь бы не на ней
+      k = Phaser.Math.Clamp((safe - (o.stallX + st.signR * ss + 4 * u)) / (98 * u), 0.6, 1);
       bx = safe - 50 * u * k;
       by = Math.min(hy - 60 * u, gy + st.top * ss - 2 * u);
       by = Math.max(by, o.hudBottom + 66 * u * k);
@@ -125,18 +128,20 @@ export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser
     bp.rect(bx - 48 * v, by - 62 * v, 96 * v, 64 * v, CREAM, 6 * v, 3);
     bp.rect(bx - 44 * v, by - 58 * v, 40 * v, 56 * v, 0xffd86b, 4 * v, 0);
     o.props.add(bg);
+    anchors.meme_ads = { x: bx, y: by - 30 * v };
     const star = drawBrainrot(scene, 'tralalero');
     star.root.setPosition(bx - 24 * v, by - 4 * v).setScale((50 / star.height) * v);
     o.props.add(star.root);
     o.props.add(
-      scene.add
-        .text(bx + 22 * v, by - 30 * v, t('memeBoard'), { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(8 * v)}px`, fontStyle: '900', color: '#e4472b', align: 'center' })
-        .setOrigin(0.5),
+      fitText(
+        scene.add.text(bx + 22 * v, by - 30 * v, t('memeBoard'), { fontFamily: DISPLAY_FONT, fontSize: `${Math.round(8 * v)}px`, fontStyle: '900', color: '#e4472b', align: 'center' }),
+        44 * v,
+      ).setOrigin(0.5),
     );
   }
   if (S.food_truck > 0) {
-    // фудтрак у края
-    const tx = Math.max(4 * u, lx - 130 * u), ty = gy - 2 * u, s = u;
+    // фудтрак стоит на той стороне дороги: виден, но не лезет на ларёк и героев
+    const s = 0.62 * u, tx = Math.max(4 * u, Math.min(w * 0.06, left - 150 * s)), ty = hy + (gy - hy) * 0.28;
     const tg = scene.add.graphics();
     const tp = new Pen(tg, 2.5);
     tp.rect(tx, ty - 62 * s, 96 * s, 52 * s, AMBER, 8 * s);
@@ -148,7 +153,8 @@ export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser
     tp.circle(tx + 96 * s, ty - 8 * s, 10 * s, OUTLINE, 0);
     tp.circle(tx + 22 * s, ty - 8 * s, 4 * s, 0x9a9aa8, 0);
     tp.circle(tx + 96 * s, ty - 8 * s, 4 * s, 0x9a9aa8, 0);
-    o.extras.add(tg);
+    o.props.add(tg);
+    anchors.food_truck = { x: tx + 56 * s, y: ty - 36 * s };
   }
   // неподвижные предметы улицы тоже запекаем в картинки (огонь в бочке остаётся живым)
   const res = o.res;
@@ -158,5 +164,5 @@ export function buildProps(scene: Phaser.Scene, o: PropsInput): { flame?: Phaser
       if (img instanceof Phaser.GameObjects.Image) baked.push(img.texture.key);
     }
   }
-  return { flame, baked };
+  return { flame, baked, anchors };
 }
