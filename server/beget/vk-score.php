@@ -4,13 +4,16 @@ require __DIR__ . '/vk.php';
 vk_cors();
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
-$body = json_decode(file_get_contents('php://input'), true);
+$raw = file_get_contents('php://input', false, null, 0, 8192);
+$body = json_decode($raw, true);
 if (!is_array($body)) { vk_json(['ok' => false, 'error' => 'bad json'], 400); exit; }
 $cfg = vk_config();
 $user = vk_check_launch((string)(isset($body['launch']) ? $body['launch'] : ''), $cfg['app_secret']);
 $score = (isset($body['score']) && is_numeric($body['score'])) ? (int)floor($body['score']) : -1;
 if (!$user) { vk_json(['ok' => false, 'error' => 'bad sign'], 403); exit; }
 if ($score < 0) { vk_json(['ok' => false, 'error' => 'bad score'], 400); exit; }
+// Не чаще раза в 15 секунд от одного игрока (игра шлёт очки раз в минуту), лишнее отбрасываем.
+if (!vk_rate_ok($user, 15)) { vk_json(['ok' => false, 'error' => 'too often'], 429); exit; }
 if ($cfg['service_token'] === '') { vk_json(['ok' => false, 'error' => 'no token'], 500); exit; }
 
 $q = http_build_query([
