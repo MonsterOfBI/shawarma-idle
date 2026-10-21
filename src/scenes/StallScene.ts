@@ -567,7 +567,7 @@ export class StallScene extends Phaser.Scene {
         this.tweens.add({ targets: ring, scale: 4.2, alpha: 0, duration: 700, ease: 'Cubic.out', onComplete: () => ring.destroy() });
         this.sparks.explode(c.fresh ? 22 : 12, x, y);
         const name = t(`up_${c.id}`);
-        this.popText(t(c.fresh ? 'lookNew' : 'lookUp', name), x, y - 18 * u, '#ffd86b', 0.8);
+        this.popText(t(c.fresh ? 'lookNew' : 'lookUp', name), x, y - 18 * u, '#ffd86b', 0.62);
       });
     });
   }
@@ -753,16 +753,19 @@ export class StallScene extends Phaser.Scene {
       pop.setText(text).setColor(color);
     } else pop.setText(text);
     const tilt = Phaser.Math.Between(-8, 8);
+    // длинная надпись (подпись нового улучшения) ужимается до ширины экрана
+    const fit = Math.min(1, (this.scale.width - 16) / Math.max(1, pop.width));
+    const hw = (pop.width * fit) / 2 + 6;
     pop
       // не даём надписи уйти за край экрана (гость у самого края, крит на большом числе)
-      .setPosition(Phaser.Math.Clamp(x + Phaser.Math.Between(-14, 14) * this.unit, pop.width / 2 + 6, Math.max(pop.width / 2 + 6, this.scale.width - pop.width / 2 - 6)), y - 20 * this.unit)
+      .setPosition(Phaser.Math.Clamp(x + Phaser.Math.Between(-14, 14) * this.unit, hw, Math.max(hw, this.scale.width - hw)), y - 20 * this.unit)
       .setVisible(true)
       .setAlpha(1)
-      .setScale(size > 1 ? 0.3 : 0.55)
+      .setScale((size > 1 ? 0.3 : 0.55) * fit)
       .setAngle(tilt)
       .setDepth(size > 1 ? 12.5 : 12);
     const life = 820 + (size > 1 ? 380 : 0);
-    this.tweens.add({ targets: pop, scale: 1, angle: tilt * 0.3, duration: size > 1 ? 260 : 170, ease: 'Back.out' });
+    this.tweens.add({ targets: pop, scale: fit, angle: tilt * 0.3, duration: size > 1 ? 260 : 170, ease: 'Back.out' });
     this.tweens.add({ targets: pop, y: pop.y - 74 * u, duration: life, ease: 'Cubic.out' });
     this.tweens.add({ targets: pop, alpha: 0, delay: life * 0.55, duration: life * 0.45, onComplete: () => pop.setVisible(false) });
   }
