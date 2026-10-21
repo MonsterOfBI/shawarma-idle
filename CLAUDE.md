@@ -35,6 +35,7 @@ Idle-кликер про ларёк с шаурмой. Браузерная иг
 - `src/platform/vk.ts` — VK Bridge (облачное сохранение кусками `chunks.ts`, реклама, покупки за голоса через `VKWebAppShowOrderBox`, таблица игроков VK). `api/` — серверные функции Vercel только для VK: `vk-payments.ts` подтверждает заказы, `vk-score.ts` пишет очки (`secure.addAppEvent`), общая логика и подписи в `_vk.ts`; ключи `VK_APP_SECRET`, `VK_SERVICE_TOKEN` — в настройках Vercel, не в коде. Яндекс SDK грузится только на хостинге Яндекса (`looksLikeYandex`).
 - `promo/` — иконка, обложка и скриншоты для страницы игры. `art.html` — исходник иконки и обложки, фоном служат кадры игры `scene-*.png`.
 - `docs/yandex-publish.md` — как выложить игру на Яндекс Игры.
+- Сайт https://shawarma-idle.vercel.app собирается сам после каждого слияния в `first-version` (Branch Tracking в Vercel).
 
 ## Правила работы
 - Одна задача на один запрос. После каждого рабочего шага: `npm test`, `npm run build`, коммит.
