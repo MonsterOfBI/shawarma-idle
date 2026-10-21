@@ -127,3 +127,9 @@ export class Pen {
 export function pen(scene: Phaser.Scene, ol = 3) {
   return new Pen(scene.add.graphics(), ol);
 }
+
+// Сжать надпись, если она шире места (английские слова длиннее русских: SHAWARMA против ШАУРМА).
+export function fitText<T extends Phaser.GameObjects.Text>(text: T, maxW: number): T {
+  if (text.width > maxW) text.setScale((text.scaleX * maxW) / text.width);
+  return text;
+}

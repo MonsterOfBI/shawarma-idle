@@ -76,6 +76,7 @@ export interface GameState {
   met: string[]; // знакомые брейнроты для коллекции
   pets: Record<string, Pet>; // брейнроты из ящиков, не сгорают при переезде
   boxesOpened: number;
+  boxesHere: number; // сколько обычных ящиков куплено на этой точке (или звезде дворца): от этого цена ящика (версия 2.19)
   bought: number; // сколько уровней улучшений куплено за всё время (для заданий)
   frenzyUntil: number; // мс; лихорадка дохода от Бомбардиро
   tapFrenzyUntil: number; // мс; бешеные тапы от Бомбардиро
@@ -128,6 +129,7 @@ export function newGame(now: number): GameState {
     met: [],
     pets: {},
     boxesOpened: 0,
+    boxesHere: 0,
     bought: 0,
     frenzyUntil: 0,
     tapFrenzyUntil: 0,
@@ -189,6 +191,7 @@ export function normalize(raw: unknown, now: number): GameState {
     met: Array.isArray(r.met) ? r.met.filter((a: unknown) => typeof a === 'string') : [],
     pets: normalizePets(r.pets),
     boxesOpened: Math.floor(num(r.boxesOpened, 0)),
+    boxesHere: Math.floor(num(r.boxesHere, 0)),
     bought: Math.floor(num(r.bought, 0)),
     frenzyUntil: num(r.frenzyUntil, 0),
     tapFrenzyUntil: num(r.tapFrenzyUntil, 0),
@@ -489,12 +492,18 @@ export function minutesOfIncome(state: GameState, now: number, minutes: number):
 
 // ---------- ящики с брейнротами ----------
 
-// Обычный ящик стоит примерно 3 минуты дохода (с тапами 3 раза в секунду)
-// и дорожает на 5 % с каждым открытым ящиком (версия 2.16; в 2.12 было +3 %, в 2.11 — 2 минуты и +2 %).
-export const BOX_MINUTES = 3;
-export const BOX_GROWTH = 0.05;
-export function boxCost(state: GameState, now: number): number {
-  return Math.round(minutesOfIncome(state, now, BOX_MINUTES) * (1 + state.boxesOpened * BOX_GROWTH));
+// Цена обычного ящика (версия 2.19): своя на каждой точке и растёт только от покупок.
+// Раньше она была «3 минуты дохода» и дорожала сама, пока игрок просто играл.
+// Теперь: стартовая цена точки × рост за каждый купленный здесь ящик. После переезда счёт начинается заново,
+// но с цены новой точки. На помойке доход растёт в миллионы раз за 15 минут, поэтому там ящик дорожает вдвое,
+// дальше — на 6 % за покупку. Звёзды дворца: цена ×3,5 за звезду (доход там растёт ×3).
+export const BOX_BASE = [2e4, 5e12, 2e14, 5e15, 8e16];
+export const BOX_STEP = [40, 1.12, 1.12, 1.12, 1.12];
+export const BOX_STAR_MULT = 3.2;
+export function boxCost(state: GameState, _now?: number): number {
+  const i = Math.min(state.location, BOX_BASE.length - 1);
+  const base = BOX_BASE[i] * BOX_STAR_MULT ** state.stars;
+  return Math.round(base * BOX_STEP[i] ** state.boxesHere);
 }
 
 export function canBuyBox(state: GameState, now: number): boolean {
@@ -503,7 +512,12 @@ export function canBuyBox(state: GameState, now: number): boolean {
 
 export function buyBox(state: GameState, now: number, rand: () => number) {
   if (!canBuyBox(state, now)) return null;
-  return openBox({ ...state, money: state.money - boxCost(state, now) }, 'common', rand);
+  return openBox(payForBox(state, now), 'common', rand);
+}
+
+// Заплатить за обычный ящик: деньги списаны, следующий ящик на этой точке дороже.
+export function payForBox(state: GameState, now: number): GameState {
+  return { ...state, money: state.money - boxCost(state, now), boxesHere: state.boxesHere + 1 };
 }
 
 // День по часам игрока, как у подарка дня: ГГГГ-ММ-ДД.
@@ -624,6 +638,7 @@ export function relocate(state: GameState, now: number): GameState {
     money: 0,
     runEarned: 0,
     levels: {},
+    boxesHere: 0,
     location: atEnd ? state.location : state.location + 1,
     stars: atEnd ? state.stars + 1 : state.stars,
     lastSeen: now,

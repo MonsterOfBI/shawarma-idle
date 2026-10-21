@@ -800,7 +800,7 @@ export class Ui {
     });
 
     const got = new Set(s.achievements);
-    $('#ach-count').textContent = t('achCount', got.size);
+    $('#ach-count').textContent = t('achCount', got.size).replace('{n}', String(ACHIEVEMENTS.length));
     $('#awards-note').textContent = t('achBonus', Math.round(got.size * ACHIEVEMENT_BONUS * 100));
     for (const a of ACHIEVEMENTS) {
       const m = this.medals.get(a.id)!;
