@@ -99,4 +99,4 @@ Vercel в России открывается не у всех, поэтому �
 4. Пришлите ИИ-помощнику адрес сайта: он впишет его в `SERVER` в `src/platform/vk.ts`. Потом залейте игру заново `npm run deploy:vk`.
 5. В настройках приложения VK включите таблицу рейтинга «по очкам».
 
-Донат включается позже: в разделе «Платежи» VK адрес `https://ВАШ-САЙТ/vk-payments.php` и `SHOP = true` в `src/platform/vk.ts`.
+Донат включён (`SHOP = true`, сервер `https://shaurma-brainrot.ru`). В разделе «Платежи» VK впишите адрес `https://shaurma-brainrot.ru/vk-payments.php` и добавьте себя тестировщиком.
