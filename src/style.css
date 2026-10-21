@@ -149,6 +149,7 @@ button:disabled { cursor: default; }
   color: var(--cream); background: var(--tomato); box-shadow: 0 0 0 2px var(--plum); animation: badge 1.2s ease-in-out infinite;
 }
 @keyframes badge { 50% { transform: scale(1.15); } }
+.side-right .badge { right: -3px; } /* у края экрана значок с пульсацией не вылезает за экран */
 
 .rush {
   position: absolute; z-index: 3; left: 50%; bottom: 12px; transform: translateX(-50%) rotate(-2deg);
