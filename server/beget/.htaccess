@@ -1,4 +1,7 @@
-# config.php с ключами не отдаём наружу
+# config.php с ключами и журнал платежей не отдаём наружу
 <Files "config.php">
+  Require all denied
+</Files>
+<Files "vk-payments.log">
   Require all denied
 </Files>
