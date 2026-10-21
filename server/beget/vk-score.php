@@ -16,7 +16,7 @@ if ($cfg['service_token'] === '') { vk_json(['ok' => false, 'error' => 'no token
 $q = http_build_query([
   'user_id' => $user,
   'activity_id' => 2, // 2 — очки (таблица «по очкам» в настройках приложения)
-  'value' => min($score, 2000000000),
+  'value' => min($score, 10000000), // VK принимает очки до 10 млн
   'access_token' => $cfg['service_token'],
   'client_secret' => $cfg['app_secret'],
   'v' => '5.199',
