@@ -1,0 +1,4 @@
+# config.php с ключами не отдаём наружу
+<Files "config.php">
+  Require all denied
+</Files>

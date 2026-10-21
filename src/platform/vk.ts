@@ -13,11 +13,12 @@ const chunkKey = (i: number) => `save_${i}`;
 // хранилище VK разрешает 1000 запросов в час на игрока, поэтому в облако пишем не чаще раза в минуту
 const CLOUD_EVERY_MS = 60_000;
 
-// Сервер игры на Vercel (см. api/). Игра на хостинге VK — другой адрес, поэтому полный URL.
-const SERVER = 'https://shawarma-idle.vercel.app';
-// Пока выпускаем VK без доната и без своего сервера: покупки и таблица игроков выключены.
-// Чтобы включить, поставить true и настроить сервер по docs/vk-publish.md, раздел 5а.
-const USE_SERVER = false;
+// Сервер игры для VK на хостинге Beget (папка server/beget/, PHP), он в России и открывается без VPN.
+// Пустая строка — сервера нет: таблица игроков выключена. Адрес без «/» в конце.
+const SERVER = '';
+// Донат за голоса пока выключен: магазин пишет, что в разработке. Включается после настройки платежей.
+const SHOP = false;
+const USE_SERVER = SERVER !== '';
 // Цены в голосах — те же числа, что в api/_vk.ts (сервер всё равно называет VK цену сам).
 const VOTES: Record<ProductId, number> = { starter_pack: 7, no_ads: 14, x2_forever: 21, cash_pack: 4, god_pet: 21 };
 
@@ -27,7 +28,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
   const launch = vkLaunch(location.search);
   if (!launch) return null;
   // покупки за голоса VK запрещает в приложении на iPhone и iPad
-  const noShop = !USE_SERVER || /^mobile_ip/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
+  const noShop = !SHOP || !USE_SERVER || /^mobile_ip/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
   try {
     await Promise.race([bridge.send('VKWebAppInit'), new Promise((_, reject) => setTimeout(reject, 5000))]);
   } catch {
@@ -121,7 +122,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
   const sendScore = async (score: number) => {
     if (!USE_SERVER) return;
     try {
-      await fetch(`${SERVER}/api/vk-score`, {
+      await fetch(`${SERVER}/vk-score.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ launch: location.search, score }),
