@@ -22,18 +22,6 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('dragstart', (e) => e.preventDefault());
 document.addEventListener('selectstart', (e) => e.preventDefault());
 
-// Высота страницы — по видимой части экрана. В Safari на iPhone 100 % считается с учётом спрятанной
-// панели браузера, и нижнее меню уезжало под неё (VK в мобильном Safari).
-function fitHeight() {
-  const h = window.visualViewport?.height ?? window.innerHeight;
-  document.documentElement.style.setProperty('--vh', `${Math.round(h)}px`);
-  window.scrollTo(0, 0);
-}
-fitHeight();
-window.addEventListener('resize', fitHeight);
-window.visualViewport?.addEventListener('resize', fitHeight);
-window.addEventListener('orientationchange', () => setTimeout(fitHeight, 300));
-
 // Полоска загрузки: двигаем по шагам запуска, чтобы игрок видел, что игра не зависла.
 export function loadProgress(p: number) {
   document.querySelector<HTMLElement>('.loading-bar i')?.style.setProperty('--p', `${p}%`);
