@@ -15,10 +15,13 @@ const CLOUD_EVERY_MS = 60_000;
 
 // Сервер игры для VK на хостинге Beget (папка server/beget/, PHP), он в России и открывается без VPN.
 // Пустая строка — сервера нет: таблица игроков выключена. Адрес без «/» в конце.
-const SERVER = '';
+const SERVER: string = 'https://shaurma-brainrot.ru';
 // Донат за голоса пока выключен: магазин пишет, что в разработке. Включается после настройки платежей.
 const SHOP = false;
 const USE_SERVER = SERVER !== '';
+// VK запрещает рекламу сразу после запуска: первая полноэкранная — не раньше чем через 3 минуты.
+const NO_AD_AFTER_START_MS = 3 * 60_000;
+const startedAt = Date.now();
 // Цены в голосах — те же числа, что в api/_vk.ts (сервер всё равно называет VK цену сам).
 const VOTES: Record<ProductId, number> = { starter_pack: 7, no_ads: 14, x2_forever: 21, cash_pack: 4, god_pet: 21 };
 
@@ -155,6 +158,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
     },
     showRewarded: () => showAd('reward'),
     async showInterstitial() {
+      if (Date.now() - startedAt < NO_AD_AFTER_START_MS) return;
       await showAd('interstitial');
     },
     purchasesAvailable: !noShop,
@@ -201,7 +205,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
   async function showBoard(score: number) {
       await sendScore(score);
       try {
-        await bridge.send('VKWebAppShowLeaderBoardBox', { user_result: Math.min(score, 2_000_000_000) });
+        await bridge.send('VKWebAppShowLeaderBoardBox', { user_result: Math.min(score, 10_000_000) });
       } catch {
         // окно не открылось (старое приложение VK) — ничего страшного
       }
