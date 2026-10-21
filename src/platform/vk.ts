@@ -170,7 +170,8 @@ export async function createVkPlatform(): Promise<Platform | null> {
 
   return {
     name: 'vk',
-    lang: launch.lang,
+    // VK требует: язык из настроек VK, а если перевода нет — русский (у нас есть только русский и английский)
+    lang: launch.lang === 'en' ? 'en' : 'ru',
     ready() {},
     gameplayStart() {},
     gameplayStop() {},

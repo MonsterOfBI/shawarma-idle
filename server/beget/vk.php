@@ -70,3 +70,14 @@ function vk_check_launch($search, $secret) {
   $want = rtrim(strtr(base64_encode(hash_hmac('sha256', $line, $secret, true)), '+/', '-_'), '=');
   return hash_equals($want, (string)$sign) ? (string)$user : null;
 }
+
+// Ограничение частоты: метка времени последнего запроса игрока в папке временных файлов (вне public_html).
+function vk_rate_ok($user, $seconds) {
+  $dir = sys_get_temp_dir() . '/shawarma-rate';
+  if (!is_dir($dir)) @mkdir($dir, 0700, true);
+  $file = $dir . '/' . preg_replace('/[^0-9]/', '', (string)$user);
+  $last = @filemtime($file);
+  if ($last && time() - $last < $seconds) return false;
+  @touch($file);
+  return true;
+}
