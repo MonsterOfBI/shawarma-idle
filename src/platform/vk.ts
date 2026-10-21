@@ -95,14 +95,35 @@ export async function createVkPlatform(): Promise<Platform | null> {
   const emitPause = (p: boolean) => pauseListeners.forEach((cb) => cb(p, 'platform'));
   // m.vk.ru в мобильном браузере: VK растягивает кадр с игрой под нижнюю панель Safari, и меню уходит под неё.
   // VK присылает высоту видимой части своей страницы (viewport_height); выше кадра у VK шапка ~36 px.
+  // Если прокрутить страницу VK до конца, шапка VK уходит вверх и игра встаёт ровно над панелью Safari,
+  // поэтому на старте прокручиваем её сами (VKWebAppScroll) и тогда шапку из высоты не вычитаем.
   const mobileWeb = /^mobile_web/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
-  const applyConfig = (data: unknown) => {
-    const h = (data as { viewport_height?: number } | null)?.viewport_height;
-    if (!mobileWeb || !h || h < 200) return;
-    (window as { vkMaxHeight?: number }).vkMaxHeight = h - VK_MOBILE_HEADER;
+  let viewH = 0;
+  let scrolled = false;
+  const fit = () => {
+    if (!mobileWeb || viewH < 200) return;
+    (window as { vkMaxHeight?: number }).vkMaxHeight = scrolled ? viewH : viewH - VK_MOBILE_HEADER;
     window.dispatchEvent(new Event('resize'));
   };
+  const applyConfig = (data: unknown) => {
+    const h = (data as { viewport_height?: number } | null)?.viewport_height;
+    if (!h) return;
+    viewH = h;
+    fit();
+  };
+  const scrollVk = () => {
+    if (!mobileWeb) return;
+    bridge
+      .send('VKWebAppScroll', { top: 10_000, speed: 0 })
+      .then((r) => {
+        scrolled = (r as { top?: number }).top! > 0;
+        fit();
+      })
+      .catch(() => {});
+  };
   void bridge.send('VKWebAppGetConfig').then(applyConfig).catch(() => {});
+  setTimeout(scrollVk, 300);
+  window.addEventListener('orientationchange', () => setTimeout(scrollVk, 500));
   bridge.subscribe((e) => {
     if (e.detail.type === 'VKWebAppUpdateConfig') applyConfig(e.detail.data);
     if (e.detail.type === 'VKWebAppViewHide') {
