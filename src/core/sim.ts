@@ -115,9 +115,10 @@ export function simulate(p: Profile, palaceStars = 3, seed = 987654321): SimResu
     const now0 = START + t * 1000;
     const d = dayKey(new Date(now0));
     if (d !== today) {
-      today = d;
+      // новичку подарок дня приходит через 5 минут игры, поэтому пробуем, пока не выдадут
       const r = claimDaily(s, now0, d);
       if (r) {
+        today = d;
         src.daily += r.money;
         s = r.state;
         r.boxes.forEach((k) => open(k));

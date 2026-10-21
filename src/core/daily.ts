@@ -25,8 +25,8 @@ export function dayKey(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-export function canClaimDaily(s: GameState, today: string): boolean {
-  return s.daily.last !== today;
+export function canClaimDaily(s: GameState, today: string, now: number): boolean {
+  return s.daily.last !== today && now >= s.dailyFrom;
 }
 
 // Сколько дней между двумя датами ГГГГ-ММ-ДД (по календарю, без часовых поясов).
@@ -50,7 +50,7 @@ export function nextDailyIndex(s: GameState, today: string): number {
 
 // Забрать награду дня. Ящики возвращаются списком, открывает их контроллер с анимацией.
 export function claimDaily(s: GameState, now: number, today: string): { state: GameState; reward: DailyReward; boxes: BoxKind[]; money: number } | null {
-  if (!canClaimDaily(s, today)) return null;
+  if (!canClaimDaily(s, today, now)) return null;
   const i = nextDailyIndex(s, today);
   const reward = DAILY[i];
   let state: GameState = { ...s, daily: { streak: i + 1, last: today } };

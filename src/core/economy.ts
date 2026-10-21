@@ -8,6 +8,8 @@ import { type BoxKind, type Pet, MAX_STARS, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
 export const SAVE_VERSION = 8;
+// Новичку подарок дня приходит не сразу: первые минуты игры — про тапы и первые покупки.
+export const FIRST_DAILY_DELAY_MS = 5 * 60_000;
 
 // Офлайн-доход начисляется не больше чем за 4 часа отсутствия
 // (игроки Яндекс Игр заходят 2–3 раза в день, за 2 часа они теряли бо́льшую часть дохода).
@@ -81,6 +83,7 @@ export interface GameState {
   adBoxes: { day: string; n: number }; // сколько ящиков за рекламу взято в этот день (ГГГГ-ММ-ДД)
   pity: { mythic: number; legend: number }; // ящиков подряд без мифика и без легендарного (гарант)
   daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
+  dailyFrom: number; // мс; раньше этого подарок дня не выдаётся (новичок сначала 5 минут тапает, версия 2.19)
   quests: Quest[];
   questWait: number[]; // мс; когда появятся новые задания на места выполненных (версия 2.15)
   questsDone: number;
@@ -132,6 +135,7 @@ export function newGame(now: number): GameState {
     adBoxes: { day: '', n: 0 },
     pity: { mythic: 0, legend: 0 },
     daily: { streak: 0, last: '' },
+    dailyFrom: now + FIRST_DAILY_DELAY_MS,
     quests: [],
     questWait: [],
     questsDone: 0,
@@ -206,6 +210,7 @@ export function normalize(raw: unknown, now: number): GameState {
       sold: Math.floor(num(r.week?.sold, 0)),
     },
     runStart: fresh ? now : num(r.runStart, now),
+    dailyFrom: num(r.dailyFrom, 0), // у старых сохранений подарок доступен сразу
     moveBest:
       r.moveBest && typeof r.moveBest === 'object'
         ? Object.fromEntries(Object.entries(r.moveBest).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0)) as Record<string, number>
