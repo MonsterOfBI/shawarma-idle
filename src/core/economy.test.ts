@@ -416,7 +416,7 @@ describe('версия 2.0', () => {
 
   it('ежедневная награда: серия растёт, пропуск сбрасывает, дважды в день нельзя', async () => {
     const { claimDaily } = await import('./daily');
-    let s = newGame(0);
+    let s = { ...newGame(0), dailyFrom: 0 };
     const d1 = claimDaily(s, 0, '2026-10-17')!;
     expect(d1.state.daily).toEqual({ streak: 1, last: '2026-10-17' });
     expect(d1.money).toBeGreaterThan(0);
@@ -430,11 +430,25 @@ describe('версия 2.0', () => {
     expect(late.state.daily.streak).toBe(1);
   });
 
+  it('новичку подарок дня приходит через 5 минут, старым сохранениям — сразу', async () => {
+    const { claimDaily, canClaimDaily } = await import('./daily');
+    const { FIRST_DAILY_DELAY_MS } = await import('./economy');
+    const s = newGame(1000);
+    expect(canClaimDaily(s, '2026-10-21', 1000)).toBe(false);
+    expect(claimDaily(s, 1000 + 60_000, '2026-10-21')).toBeNull();
+    expect(canClaimDaily(s, '2026-10-21', 1000 + FIRST_DAILY_DELAY_MS)).toBe(true);
+    // новичок закрыл игру и вернулся на следующий день — подарок ждёт
+    expect(canClaimDaily(normalize(JSON.parse(JSON.stringify(s)), 1000 + 86_400_000), '2026-10-22', 1000 + 86_400_000)).toBe(true);
+    // старое сохранение без поля: подарок доступен сразу
+    const { dailyFrom: _, ...old } = { ...s, lifetimeEarned: 500 };
+    expect(normalize(old, 2000).dailyFrom).toBe(0);
+  });
+
   it('пропуск дня откатывает серию на шаг за каждый пропущенный день', async () => {
     const { claimDaily, nextDailyIndex, daysBetween } = await import('./daily');
     expect(daysBetween('2026-10-31', '2026-11-01')).toBe(1);
     expect(daysBetween('2026-12-31', '2027-01-02')).toBe(2);
-    const s = { ...newGame(0), daily: { streak: 5, last: '2026-10-20' } };
+    const s = { ...newGame(0), dailyFrom: 0, daily: { streak: 5, last: '2026-10-20' } };
     expect(nextDailyIndex(s, '2026-10-21')).toBe(5); // без пропуска: шестой день
     expect(nextDailyIndex(s, '2026-10-22')).toBe(4); // пропустил один: снова пятый
     expect(nextDailyIndex(s, '2026-10-24')).toBe(2); // пропустил три

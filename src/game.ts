@@ -98,6 +98,7 @@ export class Game {
   // Игра стоит, пока есть хоть одна причина. Раньше был один флаг на всех, и события перекрывали друг друга.
   private pauses = new Map<string, number>();
   private modalOpen = false;
+  private dailyWait = false; // ждём, когда новичку станет доступен первый подарок дня
   private lastSave = 0;
   private combo = 0;
   private recordInStreak = false; // в этой серии рекорд уже побит
@@ -219,7 +220,9 @@ export class Game {
     // начало сюжета: только у совсем нового игрока
     if (this.state.lifetimeEarned === 0 && this.state.location === 0) setTimeout(() => this.ui.toast(t('storyStart'), 'medal'), 1200);
     // подарок дня встречает игрока сразу после чека за офлайн
-    if (canClaimDaily(this.state, dayKey(new Date()))) void this.openDaily();
+    if (canClaimDaily(this.state, dayKey(new Date()), Date.now())) void this.openDaily();
+    // новичку подарок откроется сам, когда пройдут первые 5 минут игры
+    else if (this.state.dailyFrom > Date.now()) this.dailyWait = true;
   }
 
   private loop() {
@@ -231,6 +234,10 @@ export class Game {
     }
     this.state = markPlayed(ensureQuests(tick(this.state, now), now, Math.random), dayKey(new Date(now)));
     this.events(now);
+    if (this.dailyWait && canClaimDaily(this.state, dayKey(new Date(now)), now)) {
+      this.dailyWait = false;
+      void this.openDaily();
+    }
     this.scene.setIncome(incomePerSecond(this.state, now), serveIntervalMs(this.state, now));
     this.scene.setLook(this.state.levels);
     this.scene.setHints(this.hints(now), canRelocate(this.state) ? Math.round(nextMove(this.state).mult / locationMult(this.state)) : 0);
@@ -301,7 +308,7 @@ export class Game {
     const out: string[] = [];
     if (canRelocate(s)) out.push('barkMove');
     if (adBoxReady(s, now) || canBuyBox(s, now)) out.push('barkBox');
-    if (canClaimDaily(s, dayKey(new Date()))) out.push('barkDaily');
+    if (canClaimDaily(s, dayKey(new Date()), now)) out.push('barkDaily');
     // новичку подсказываем про улучшения, опытному не надоедаем
     if (s.bought < 10 && UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1))) out.push('barkUp');
     return out;

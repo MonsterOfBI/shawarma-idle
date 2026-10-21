@@ -512,7 +512,7 @@ export class Ui {
   }
 
   private renderSide(s: GameState, now: number) {
-    const daily = canClaimDaily(s, today());
+    const daily = canClaimDaily(s, today(), now);
     const dailyBtn = $('#btn-daily');
     dailyBtn.classList.toggle('ready', daily);
     (dailyBtn.querySelector('.badge') as HTMLElement).hidden = !daily;
@@ -549,7 +549,7 @@ export class Ui {
     const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
     set('upgrades', canUp ? '!' : '');
     set('pets', canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s) ? '!' : '');
-    const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today()) ? 1 : 0) + (canClaimWeekly(s, today()) ? 1 : 0);
+    const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today(), now) ? 1 : 0) + (canClaimWeekly(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');
     set('shop', '');
@@ -693,7 +693,7 @@ export class Ui {
 
   // Полоска из 7 дней. Используется и во вкладке, и в окне подарка.
   private fillDaily(box: HTMLElement, s: GameState, now: number) {
-    const can = canClaimDaily(s, today());
+    const can = canClaimDaily(s, today(), now);
     const next = can ? nextDailyIndex(s, today()) : -1;
     const done = can ? next : s.daily.streak;
     box.replaceChildren(
