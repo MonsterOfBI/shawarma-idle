@@ -12,7 +12,6 @@ const COUNT_KEY = 'save_n';
 const chunkKey = (i: number) => `save_${i}`;
 // хранилище VK разрешает 1000 запросов в час на игрока, поэтому в облако пишем не чаще раза в минуту
 const CLOUD_EVERY_MS = 60_000;
-const VK_MOBILE_HEADER = 36;
 
 // Сервер игры для VK на хостинге Beget (папка server/beget/, PHP), он в России и открывается без VPN.
 // Пустая строка — сервера нет: таблица игроков выключена. Адрес без «/» в конце.
@@ -94,39 +93,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
 
   const pauseListeners: ((paused: boolean, reason: PauseReason) => void)[] = [];
   const emitPause = (p: boolean) => pauseListeners.forEach((cb) => cb(p, 'platform'));
-  // m.vk.ru в мобильном браузере: VK растягивает кадр с игрой под нижнюю панель Safari, и меню уходит под неё.
-  // VK присылает высоту видимой части своей страницы (viewport_height); выше кадра у VK шапка ~36 px.
-  // Если прокрутить страницу VK до конца, шапка VK уходит вверх и игра встаёт ровно над панелью Safari,
-  // поэтому на старте прокручиваем её сами (VKWebAppScroll) и тогда шапку из высоты не вычитаем.
-  const mobileWeb = /^mobile_web/.test(new URLSearchParams(location.search).get('vk_platform') ?? '');
-  let viewH = 0;
-  let scrolled = false;
-  const fit = () => {
-    if (!mobileWeb || viewH < 200) return;
-    (window as { vkMaxHeight?: number }).vkMaxHeight = scrolled ? viewH : viewH - VK_MOBILE_HEADER;
-    window.dispatchEvent(new Event('resize'));
-  };
-  const applyConfig = (data: unknown) => {
-    const h = (data as { viewport_height?: number } | null)?.viewport_height;
-    if (!h) return;
-    viewH = h;
-    fit();
-  };
-  const scrollVk = () => {
-    if (!mobileWeb) return;
-    bridge
-      .send('VKWebAppScroll', { top: 10_000, speed: 0 })
-      .then((r) => {
-        scrolled = (r as { top?: number }).top! > 0;
-        fit();
-      })
-      .catch(() => {});
-  };
-  void bridge.send('VKWebAppGetConfig').then(applyConfig).catch(() => {});
-  setTimeout(scrollVk, 300);
-  window.addEventListener('orientationchange', () => setTimeout(scrollVk, 500));
   bridge.subscribe((e) => {
-    if (e.detail.type === 'VKWebAppUpdateConfig') applyConfig(e.detail.data);
     if (e.detail.type === 'VKWebAppViewHide') {
       emitPause(true);
       void flush(true);
@@ -198,6 +165,8 @@ export async function createVkPlatform(): Promise<Platform | null> {
     },
     purchasesAvailable: !noShop,
     shopNote: ios ? 'shopIos' : undefined,
+    startMenu: true,
+    titleKey: 'titleVk',
     async getProducts() {
       if (noShop) return [];
       return (Object.keys(VOTES) as ProductId[]).map((id): Product => ({ id, price: votesText(VOTES[id], lang()) }));

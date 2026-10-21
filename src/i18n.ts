@@ -307,6 +307,24 @@ const ru = {
   stResetSure: 'Точно? Нажмите ещё раз',
   stResetNote: 'Пропадёт весь прогресс, брейнроты и достижения. Покупки за деньги останутся.',
   stClose: 'Готово',
+  titleVk: 'Брейнрот шаурма',
+  menuPlay: 'Играть',
+  menuContinue: 'Продолжить',
+  menuHowto: 'Как играть',
+  menuBoard: 'Рейтинг',
+  menuSettings: 'Настройки',
+  menuNew: 'Из коробки у помойки во Дворец шаурмы',
+  stMenu: 'В главное меню',
+  howtoTitle: 'Как играть',
+  howtoClose: 'Понятно',
+  howto1: 'Ты держишь ларёк с шаурмой и растёшь от коробки у помойки до Дворца шаурмы. На пути пять точек: помойка, метро, пустыня, площадь и дворец.',
+  howto2: 'Тапай по улице: каждый тап жарит шаурму и приносит деньги. Быстрая серия тапов разгоняет комбо до ×2, а иногда выпадает крит.',
+  howto3: 'Покупай улучшения. Нож и соусы делают тап дороже, а помощники вроде Тунг Тунга жарят сами, даже когда ты не тапаешь. Каждые 10 уровней улучшение удваивается, а ларёк заметно растёт.',
+  howto4: 'К ларьку приходят брейнроты, у каждого свой чек: богатые гости заходят реже. Когда пролетает Бомбардиро Крокодило с мешком денег, тапни по нему.',
+  howto5: 'Открывай ящики: в них брейнроты-питомцы шести редкостей, каждый навсегда добавляет доход. Три одинаковых сливаются в звезду и становятся сильнее.',
+  howto6: 'Накопи на переезд во вкладке «Переезд». На новой точке всё дороже, но и доход выше, а за каждый переезд дарят мифический ящик.',
+  howto7: 'Задания, подарок дня и достижения дают награды. Пока тебя нет, ларёк работает сам и копит доход до 4 часов.',
+  howto8: 'Реклама только по желанию: кнопки со значком ▶ дают бонус за просмотр ролика.',
   moveCard: 'Новая точка!',
   moveCardMult: 'Весь доход ×{v}',
   goldenFirst: 'Летит Бомбардиро! Тапни его, и он сбросит мешок денег',
@@ -738,6 +756,24 @@ const en: Record<Key, string> = {
   stResetSure: 'Sure? Tap again',
   stResetNote: 'All progress, brainrots and achievements will be lost. Real-money purchases stay.',
   stClose: 'Done',
+  titleVk: 'Brainrot Shawarma',
+  menuPlay: 'Play',
+  menuContinue: 'Continue',
+  menuHowto: 'How to play',
+  menuBoard: 'Leaderboard',
+  menuSettings: 'Settings',
+  menuNew: 'From a box by the dumpster to the Shawarma Palace',
+  stMenu: 'Main menu',
+  howtoTitle: 'How to play',
+  howtoClose: 'Got it',
+  howto1: 'You run a shawarma stall and grow it from a box by the dumpster into the Shawarma Palace. There are five spots on the way: the dumpster, the metro, the desert, the piazza and the palace.',
+  howto2: 'Tap the street: every tap grills a shawarma and earns money. A fast series of taps builds a combo up to ×2, and sometimes you land a crit.',
+  howto3: 'Buy upgrades. The knife and sauces make each tap worth more, and helpers like Tung Tung grill on their own even when you are not tapping. Every 10 levels an upgrade doubles, and the stall visibly grows.',
+  howto4: 'Brainrots come to the stall, each with their own check: rich guests come less often. When Bombardiro Crocodilo flies by with a bag of money, tap him.',
+  howto5: 'Open crates: they hold brainrot pets of six rarities, and each one adds income forever. Three of the same merge into a star and get stronger.',
+  howto6: 'Save up for a move on the Move tab. Everything costs more at the new spot, but income is higher too, and every move gives a mythic crate.',
+  howto7: 'Quests, the daily gift and achievements give rewards. While you are away, the stall keeps working and earns up to 4 hours of income.',
+  howto8: 'Ads are always optional: buttons with the ▶ mark give a bonus for watching a video.',
   moveCard: 'New spot!',
   moveCardMult: 'All income ×{v}',
   goldenFirst: 'Bombardiro incoming! Tap him to drop a money bag',
@@ -876,7 +912,14 @@ export function lang(): Lang {
   return current;
 }
 
+let brand = 'title';
+// название игры на площадке (во ВКонтакте — «Брейнрот шаурма»)
+export function setBrand(key: string) {
+  brand = key;
+}
+
 export function t(key: Key | string, v?: string | number): string {
+  if (key === 'title') key = brand;
   const s = (dicts[current] as Record<string, string>)[key] ?? key;
   return v === undefined ? s : s.replace('{v}', String(v));
 }

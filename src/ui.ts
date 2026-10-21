@@ -76,7 +76,7 @@ export interface LeaderboardSource {
 const starText = (n: number) => '★'.repeat(n);
 
 // Название точки; дворец со звёздами пишется как «Дворец шаурмы ★2».
-function placeName(id: string, star: number): string {
+export function placeName(id: string, star: number): string {
   return star > 0 ? t('loc_star', star) : t(`loc_${id}`);
 }
 
@@ -934,7 +934,7 @@ export class Ui {
 
   // Открыто ли окно офлайн-дохода (страховка от зависшего флага в контроллере).
   anyModalOpen(): boolean {
-    return !$('#offline').hidden;
+    return !$('#offline').hidden || !$('#menu').hidden || !$('#howto').hidden;
   }
 
   // Окно «Пока вас не было» в виде чека. Возвращает выбор игрока.
@@ -1059,8 +1059,60 @@ export class Ui {
     });
   }
 
+  // Стартовое меню: «Играть», правила, рейтинг, настройки. Обещание выполняется по «Играть».
+  startMenu(info: { returning: boolean; place: string; board: boolean }, on: { howto(): void; board(): void; settings(): void }): Promise<void> {
+    $('#menu-title').textContent = t('title');
+    $('#menu-sub').textContent = info.returning ? info.place : t('menuNew');
+    const play = $<HTMLButtonElement>('#menu-play');
+    play.textContent = t(info.returning ? 'menuContinue' : 'menuPlay');
+    $('#menu-howto').textContent = t('menuHowto');
+    $('#menu-settings').textContent = t('menuSettings');
+    const board = $<HTMLButtonElement>('#menu-board');
+    board.textContent = t('menuBoard');
+    board.hidden = !info.board;
+    $('#menu-howto').onclick = () => on.howto();
+    board.onclick = () => on.board();
+    $('#menu-settings').onclick = () => on.settings();
+    const menu = $('#menu');
+    menu.hidden = false;
+    play.focus();
+    return new Promise((resolve) => {
+      play.onclick = () => {
+        menu.hidden = true;
+        resolve();
+      };
+    });
+  }
+
+  // Правила игры по абзацам.
+  howto(): Promise<void> {
+    $('#howto-title').textContent = t('howtoTitle');
+    const body = $('#howto-body');
+    body.replaceChildren(
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
+        const p = document.createElement('p');
+        p.textContent = t(`howto${i}`);
+        return p;
+      }),
+    );
+    $('#howto-close').textContent = t('howtoClose');
+    const modal = $('#howto');
+    modal.hidden = false;
+    body.scrollTop = 0;
+    return new Promise((resolve) => {
+      const close = () => {
+        modal.hidden = true;
+        resolve();
+      };
+      $('#howto-close').onclick = close;
+      modal.onclick = (e) => {
+        if (e.target === modal) close();
+      };
+    });
+  }
+
   // Окно настроек: громкость, язык и начало заново (в два нажатия).
-  async settings(s: GameState, on: { music(v: number): void; sfx(v: number): void; lang(l: 'ru' | 'en'): void; reset(): void }) {
+  async settings(s: GameState, on: { music(v: number): void; sfx(v: number): void; lang(l: 'ru' | 'en'): void; reset(): void; menu?: () => void }) {
     const modal = $('#settings');
     $('#st-title').textContent = t('settings');
     $('#st-music').textContent = t('stMusic');
@@ -1105,6 +1157,13 @@ export class Ui {
         resolve();
       };
       $('#st-close').onclick = close;
+      const toMenu = $<HTMLButtonElement>('#st-menu');
+      toMenu.hidden = !on.menu;
+      toMenu.textContent = t('stMenu');
+      toMenu.onclick = () => {
+        close();
+        on.menu?.();
+      };
       modal.onclick = (e) => {
         if (e.target === modal) close();
       };

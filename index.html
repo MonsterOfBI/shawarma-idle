@@ -196,9 +196,31 @@
               <button type="button" role="radio" data-lang="en">English</button>
             </div>
           </div>
+          <button id="st-menu" class="btn btn-ghost wide" type="button" hidden></button>
           <button id="st-reset" class="btn btn-ghost wide st-reset" type="button"></button>
           <p id="st-reset-note" class="st-note" hidden></p>
           <button id="st-close" class="btn btn-amber wide" type="button"></button>
+        </div>
+      </div>
+
+      <div id="menu" class="menu" hidden>
+        <div class="menu-in">
+          <span id="menu-title" class="menu-title"></span>
+          <span id="menu-sub" class="menu-sub"></span>
+          <div class="menu-btns">
+            <button id="menu-play" class="btn btn-amber wide menu-play" type="button"></button>
+            <button id="menu-howto" class="btn btn-ghost wide" type="button"></button>
+            <button id="menu-board" class="btn btn-ghost wide" type="button"></button>
+            <button id="menu-settings" class="btn btn-ghost wide" type="button"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="howto" class="modal" hidden>
+        <div class="sheet howto">
+          <h2 id="howto-title"></h2>
+          <div id="howto-body" class="howto-body"></div>
+          <button id="howto-close" class="btn btn-amber wide" type="button"></button>
         </div>
       </div>
 

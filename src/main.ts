@@ -12,7 +12,8 @@ import '@fontsource/golos-text/latin-600.css';
 import '@fontsource/golos-text/latin-700.css';
 import './style.css';
 import { Game } from './game';
-import { setLang, t } from './i18n';
+import { setBrand, setLang, t } from './i18n';
+import { vkLaunch } from './platform/chunks';
 import { createLocalPlatform } from './platform/platform';
 import { createVkPlatform } from './platform/vk';
 import { createYandexPlatform } from './platform/yandex';
@@ -22,24 +23,15 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('dragstart', (e) => e.preventDefault());
 document.addEventListener('selectstart', (e) => e.preventDefault());
 
-// Высота страницы — по видимой части экрана. В Safari на iPhone 100 % считается с учётом спрятанной
-// панели браузера, и нижнее меню уезжало под неё (VK в мобильном Safari).
-function fitHeight() {
-  let h = window.visualViewport?.height ?? window.innerHeight;
-  // VK в мобильном браузере сообщает, сколько экрана на самом деле видно (см. platform/vk.ts).
-  const vk = (window as { vkMaxHeight?: number }).vkMaxHeight;
-  if (vk && vk < h) h = vk;
-  document.documentElement.style.setProperty('--vh', `${Math.round(h)}px`);
-  window.scrollTo(0, 0);
-}
-fitHeight();
-window.addEventListener('resize', fitHeight);
-window.visualViewport?.addEventListener('resize', fitHeight);
-window.addEventListener('orientationchange', () => setTimeout(fitHeight, 300));
-
 // Полоска загрузки: двигаем по шагам запуска, чтобы игрок видел, что игра не зависла.
 export function loadProgress(p: number) {
   document.querySelector<HTMLElement>('.loading-bar i')?.style.setProperty('--p', `${p}%`);
+}
+
+// во ВКонтакте игра называется «Брейнрот шаурма»: подменяем название на экране загрузки сразу
+if (vkLaunch(location.search)) {
+  const el = document.querySelector('.loading-title');
+  if (el) el.textContent = 'Брейнрот шаурма';
 }
 
 async function start() {
@@ -51,6 +43,7 @@ async function start() {
   // язык, выбранный в настройках, важнее языка площадки
   const pref = (save as { langPref?: string } | null)?.langPref;
   setLang(pref === 'ru' || pref === 'en' ? pref : platform.lang);
+  if (platform.titleKey) setBrand(platform.titleKey);
   loadProgress(55);
   const tip = document.querySelector('.loading-tip');
   if (tip) tip.textContent = t(`loadTip${1 + Math.floor(Math.random() * 5)}`);
