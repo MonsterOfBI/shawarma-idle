@@ -33,7 +33,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; background: var(--plum); color: var(--cream); font-family: var(--body); overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+html, body { margin: 0; height: 100%; height: var(--vh, 100dvh); background: var(--plum); color: var(--cream); font-family: var(--body); overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
 button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; padding: 0; }
 button:disabled { cursor: default; }
 :focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
