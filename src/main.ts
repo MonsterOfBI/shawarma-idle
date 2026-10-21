@@ -25,10 +25,7 @@ document.addEventListener('selectstart', (e) => e.preventDefault());
 // Высота страницы — по видимой части экрана. В Safari на iPhone 100 % считается с учётом спрятанной
 // панели браузера, и нижнее меню уезжало под неё (VK в мобильном Safari).
 function fitHeight() {
-  let h = window.visualViewport?.height ?? window.innerHeight;
-  // VK в мобильном браузере сообщает, сколько экрана на самом деле видно (см. platform/vk.ts).
-  const vk = (window as { vkMaxHeight?: number }).vkMaxHeight;
-  if (vk && vk < h) h = vk;
+  const h = window.visualViewport?.height ?? window.innerHeight;
   document.documentElement.style.setProperty('--vh', `${Math.round(h)}px`);
   window.scrollTo(0, 0);
 }
