@@ -2,13 +2,260 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-    <link rel="icon" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Шаурма-лавка</title>
-    <style>html,body{margin:0;height:100%;background:#f4ede4}#game{width:100%;height:100%}</style>
   </head>
   <body>
-    <div id="game"></div>
+    <div id="app">
+      <main id="stage">
+        <header id="hud">
+          <div class="hud-row">
+            <span id="place" class="ribbon"></span>
+            <span class="hud-btns">
+              <button id="lb-btn" class="round-btn trophy" type="button"></button>
+              <button id="settings-btn" class="round-btn" type="button"></button>
+              <button id="sound" class="round-btn" type="button"></button>
+            </span>
+          </div>
+          <div id="money-pill" class="money-pill"><i id="money-coin" class="ico"></i><b id="money">0 ₽</b></div>
+          <div class="rate">
+            <span class="chip"><i id="ico-sec" class="ico"></i><span id="rate-sec"></span></span>
+            <span class="chip"><i id="ico-tap" class="ico"></i><span id="rate-tap"></span></span>
+          </div>
+          <div id="buffs" class="buffs"></div>
+        </header>
+
+        <nav class="side side-left">
+          <button id="btn-daily" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden>!</b></button>
+          <button id="btn-quests" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+          <button id="btn-move" class="side-btn move-call" type="button" hidden><i class="ico"></i><span></span><b class="badge">!</b></button>
+        </nav>
+        <nav class="side side-right">
+          <button id="boost" class="side-btn ad" type="button"><i class="ico"></i><span id="boost-label"></span></button>
+          <button id="btn-adbox" class="side-btn ad gold" type="button"><i class="ico"></i><span id="adbox-label"></span><b class="badge" hidden>!</b></button>
+        </nav>
+        <div id="rush" class="rush" hidden><b id="rush-title"></b><span id="rush-text"></span></div>
+        <div id="hint" class="hint"></div>
+        <div id="toast" class="toast" hidden></div>
+        <div id="iris" class="iris" hidden></div>
+      </main>
+
+      <section id="panel">
+        <div id="panel-upgrades" class="panel-body">
+          <div class="panel-head">
+            <h2 id="h-upgrades"></h2>
+            <div id="buy-mode" class="seg" role="radiogroup">
+              <button type="button" data-mode="x1"></button><button type="button" data-mode="x10"></button><button type="button" data-mode="max"></button>
+            </div>
+          </div>
+          <div id="upgrades" class="list"></div>
+        </div>
+
+        <div id="panel-pets" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-pets"></h2><span id="pets-count" class="pill"></span></div>
+          <div class="boxes">
+            <div class="card box-card">
+              <div class="crate"></div>
+              <b id="box-name"></b>
+              <span id="box-odds" class="small"></span>
+              <button id="box-buy" class="btn btn-red" type="button"></button>
+            </div>
+            <div class="card box-card gold">
+              <div class="crate gold"></div>
+              <b id="gbox-name"></b>
+              <span id="gbox-odds" class="small"></span>
+              <button id="gbox-buy" class="btn btn-amber" type="button"></button>
+              <span id="gbox-left" class="box-left"></span>
+            </div>
+          </div>
+          <div id="pet-bonus" class="banner"></div>
+          <p id="pity-note" class="note pity-note"></p>
+          <p id="merge-note" class="note merge-note"></p>
+          <div id="pets" class="pets"></div>
+        </div>
+
+        <div id="panel-quests" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-daily"></h2><span id="daily-streak" class="pill"></span></div>
+          <div id="daily-strip" class="daily"></div>
+          <button id="daily-claim" class="btn btn-red wide" type="button"></button>
+          <div class="panel-head"><h2 id="h-weekly"></h2><span id="weekly-count" class="pill"></span></div>
+          <div class="card weekly">
+            <div id="weekly-days" class="wk-days"></div>
+            <p id="weekly-note" class="wk-note"></p>
+            <button id="weekly-claim" class="btn btn-amber wide" type="button"></button>
+          </div>
+          <div class="panel-head"><h2 id="h-quests"></h2></div>
+          <div id="quests" class="list"></div>
+          <div class="panel-head"><h2 id="ach-title"></h2><span id="ach-count" class="pill"></span></div>
+          <p id="awards-note" class="note"></p>
+          <div id="awards" class="awards"></div>
+        </div>
+
+        <div id="panel-move" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-move"></h2><span id="move-mult" class="pill"></span></div>
+          <p id="move-now" class="note"></p>
+          <div id="move-next" class="ticket">
+            <span id="move-kicker" class="kicker"></span>
+            <b id="move-next-name" class="ticket-title"></b>
+            <span id="move-next-desc" class="small"></span>
+            <div class="bar"><div id="move-bar"></div></div>
+            <span id="move-progress" class="small num"></span>
+            <p id="move-warn"></p>
+            <button id="move-btn" class="btn btn-red wide" type="button"></button>
+            <div id="move-gifts" class="move-gifts"></div>
+            <p id="move-speed" class="move-speed"></p>
+            <img id="move-preview" class="move-preview" alt="" hidden />
+            <div id="move-crew" class="move-crew"></div>
+          </div>
+          <p id="move-done" class="ticket" hidden></p>
+          <div id="route" class="route"></div>
+        </div>
+
+        <div id="panel-shop" class="panel-body" hidden>
+          <div class="panel-head"><h2 id="h-shop"></h2></div>
+          <div id="shop" class="list"></div>
+        </div>
+
+      </section>
+      <nav class="tabs" role="tablist">
+        <button id="tab-upgrades" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+        <button id="tab-pets" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+        <button id="tab-quests" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+        <button id="tab-move" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+        <button id="tab-shop" role="tab" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
+      </nav>
+
+      <div id="offline" class="modal" hidden>
+        <div class="receipt">
+          <h2 id="offline-title"></h2>
+          <div class="receipt-lines">
+            <div><span id="offline-time-label"></span><span id="offline-time"></span></div>
+            <div><span id="offline-rate-label"></span><span id="offline-rate"></span></div>
+          </div>
+          <div class="receipt-total"><span id="offline-total-label"></span><b id="offline-text"></b></div>
+          <div class="modal-btns">
+            <button id="offline-double" class="btn btn-amber wide" type="button"></button>
+            <button id="offline-take" class="btn btn-ghost wide" type="button"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="daily-modal" class="modal" hidden>
+        <div class="sheet">
+          <span class="kicker" id="dm-kicker"></span>
+          <h2 id="dm-title"></h2>
+          <div id="dm-strip" class="daily"></div>
+          <button id="dm-claim" class="btn btn-red wide" type="button"></button>
+          <button id="dm-close" class="btn btn-ghost wide" type="button"></button>
+        </div>
+      </div>
+
+      <div id="reveal" class="reveal" hidden>
+        <div class="rays"></div>
+        <b id="rv-title" class="reveal-title" hidden></b>
+        <div class="reveal-crate crate"></div>
+        <div class="reveal-card">
+          <span id="rv-rarity" class="rarity-tag"></span>
+          <img id="rv-img" alt="" />
+          <b id="rv-name"></b>
+          <span id="rv-info"></span>
+          <span id="rv-bonus" class="pill"></span>
+          <div class="modal-btns row">
+            <button id="rv-again" class="btn btn-red" type="button"></button>
+            <button id="rv-ok" class="btn btn-amber" type="button"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="merge" class="reveal merge" hidden>
+        <div class="rays"></div>
+        <div class="merge-trio" aria-hidden="true"><img alt="" /><img alt="" /><img alt="" /></div>
+        <div class="merge-flash" aria-hidden="true"></div>
+        <div class="reveal-card">
+          <span id="mg-kicker" class="rarity-tag"></span>
+          <img id="mg-img" alt="" />
+          <b id="mg-name"></b>
+          <span id="mg-stars" class="stars-big"></span>
+          <span id="mg-bonus" class="pill"></span>
+          <div class="modal-btns row">
+            <button id="mg-ok" class="btn btn-amber" type="button"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings" class="modal" hidden>
+        <div class="sheet settings">
+          <h2 id="st-title"></h2>
+          <label class="st-row"><span id="st-music"></span><input id="st-music-vol" type="range" min="0" max="100" step="5"></label>
+          <label class="st-row"><span id="st-sfx"></span><input id="st-sfx-vol" type="range" min="0" max="100" step="5"></label>
+          <div class="st-row"><span id="st-lang"></span>
+            <div id="st-lang-seg" class="seg" role="radiogroup">
+              <button type="button" role="radio" data-lang="ru">Русский</button>
+              <button type="button" role="radio" data-lang="en">English</button>
+            </div>
+          </div>
+          <button id="st-menu" class="btn btn-ghost wide" type="button" hidden></button>
+          <button id="st-reset" class="btn btn-ghost wide st-reset" type="button"></button>
+          <p id="st-reset-note" class="st-note" hidden></p>
+          <button id="st-close" class="btn btn-amber wide" type="button"></button>
+        </div>
+      </div>
+
+      <div id="menu" class="menu" hidden>
+        <div class="menu-in">
+          <span id="menu-title" class="menu-title"></span>
+          <span id="menu-sub" class="menu-sub"></span>
+          <div class="menu-btns">
+            <button id="menu-play" class="btn btn-amber wide menu-play" type="button"></button>
+            <button id="menu-howto" class="btn btn-ghost wide" type="button"></button>
+            <button id="menu-board" class="btn btn-ghost wide" type="button"></button>
+            <button id="menu-settings" class="btn btn-ghost wide" type="button"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="howto" class="modal" hidden>
+        <div class="sheet howto">
+          <h2 id="howto-title"></h2>
+          <div id="howto-body" class="howto-body"></div>
+          <button id="howto-close" class="btn btn-amber wide" type="button"></button>
+        </div>
+      </div>
+
+      <div id="lb-modal" class="modal" hidden>
+        <div class="sheet lb">
+          <i class="lb-cup ico" aria-hidden="true"></i>
+          <h2 id="lb-title"></h2>
+          <div id="lb-seg" class="seg lb-seg" role="radiogroup">
+            <button type="button" role="radio" data-board="week"></button>
+            <button type="button" role="radio" data-board="total"></button>
+          </div>
+          <div id="lb-mine" class="lb-mine"></div>
+          <span id="lb-reset" class="lb-reset"></span>
+          <ol id="lb-list" class="lb-list"></ol>
+          <p id="lb-note" class="lb-note"></p>
+          <button id="lb-login" class="btn btn-amber wide" type="button" hidden></button>
+          <button id="lb-close" class="btn btn-ghost wide" type="button"></button>
+        </div>
+      </div>
+
+      <div id="move-card" class="move-card" hidden>
+        <div class="move-card-in">
+          <span id="move-card-kicker" class="kicker"></span>
+          <b id="move-card-name"></b>
+          <span id="move-card-desc"></span>
+          <span id="move-card-mult" class="pill"></span>
+        </div>
+      </div>
+      <div id="loading" class="loading">
+        <div class="loading-spit" aria-hidden="true"><i></i></div>
+        <span class="loading-title">Шаурма-лавка</span>
+        <div class="loading-bar"><i></i></div>
+        <p class="loading-tip"></p>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

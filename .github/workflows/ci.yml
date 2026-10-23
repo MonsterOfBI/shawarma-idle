@@ -1,0 +1,26 @@
+# Тесты и сборка на каждый пул-реквест и пуш: сломанная игра не попадёт в архив для Яндекса.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, first-version]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
