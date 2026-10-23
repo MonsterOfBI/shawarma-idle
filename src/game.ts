@@ -347,7 +347,7 @@ export class Game {
       this.state = { ...this.state, lastSeen: Date.now() };
       // возвращение после окна «Пока вас не было» — логичная пауза; если игрок только что
       // смотрел рекламу за ×2, вторую подряд не показываем
-      if (choice !== 'double') await this.interstitial();
+      if (choice !== 'double' && !this.platform.adOnlyOnMove) await this.interstitial();
     } finally {
       this.modalOpen = false;
       this.gameplayStart();

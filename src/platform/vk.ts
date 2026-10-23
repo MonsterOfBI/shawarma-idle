@@ -166,6 +166,7 @@ export async function createVkPlatform(): Promise<Platform | null> {
     purchasesAvailable: !noShop,
     shopNote: ios ? 'shopIos' : undefined,
     startMenu: true,
+    adOnlyOnMove: true,
     titleKey: 'titleVk',
     async getProducts() {
       if (noShop) return [];
