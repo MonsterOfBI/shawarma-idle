@@ -212,7 +212,7 @@ export function normalize(raw: unknown, now: number): GameState {
     // версия 2.21: функции открываются по одной. У старых сохранений, где уже играли, открыто всё сразу.
     unlocked: Array.isArray(r.unlocked)
       ? r.unlocked.filter((f: unknown): f is string => typeof f === 'string' && (FEATURES as readonly string[]).includes(f))
-      : num(r.lifetimeEarned, 0) > 0
+      : num(r.lifetimeEarned, 0) > 0 || num(r.bought, 0) > 0 || num(r.location, 0) > 0
         ? [...FEATURES]
         : [],
     quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],

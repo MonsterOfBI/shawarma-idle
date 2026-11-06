@@ -46,6 +46,7 @@ describe('обучение по шагам (2.21)', () => {
   it('старое сохранение, где уже играли, получает всё сразу, а новое — ничего', () => {
     expect(normalize({ version: 8, lifetimeEarned: 500 }, T).unlocked).toEqual([...FEATURES]);
     expect(normalize({ version: 8, lifetimeEarned: 0 }, T).unlocked).toEqual([]);
+    expect(normalize({ version: 8, bought: 3 }, T).unlocked).toEqual([...FEATURES]);
     expect(normalize({ version: 8, unlocked: ['pets', 'nope', 3] }, T).unlocked).toEqual(['pets']);
   });
 });
