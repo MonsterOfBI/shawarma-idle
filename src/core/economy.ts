@@ -47,6 +47,17 @@ export const GOLDEN_SPREAD_MS = 100_000;
 export const GOLDEN_BAG_SECONDS = 45;
 export const GOLDEN_BAG_TAPS = 20;
 export const FRENZY_MULT = 4;
+// «Жаркая смена» (2.21): тапы греют гриль. HEAT_TAPS тапов — шкала полна, и HOT_SECONDS секунд весь доход ×HOT_MULT.
+// Без тапов гриль остывает: через HEAT_COOL_DELAY_MS теряет HEAT_COOL_PER_SEC шкалы в секунду.
+export const HEAT_TAPS = 80;
+export const HOT_SECONDS = 15;
+export const HOT_MULT = 3;
+export const HEAT_COOL_DELAY_MS = 1500;
+export const HEAT_COOL_PER_SEC = 0.05;
+// Активный игрок проводит в «Жаркой смене» заметную часть времени, и денег у него больше.
+// Чтобы темп сюжета (первый переезд ~15 мин, дворец ~11 ч) не ускорился, цены улучшений, ящиков
+// и пороги переезда умножены на HOT_SCALE: игрок покупает то же самое в то же время, только числа крупнее.
+export const HOT_SCALE = 1.6;
 export const FRENZY_SECONDS = 30;
 export const TAP_FRENZY_MULT = 10;
 export const TAP_FRENZY_SECONDS = 15;
@@ -89,6 +100,9 @@ export interface GameState {
   adBoxes: { day: string; n: number }; // сколько ящиков за рекламу взято в этот день (ГГГГ-ММ-ДД)
   pity: { mythic: number; legend: number }; // ящиков подряд без мифика и без легендарного (гарант)
   daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
+  heat: number; // шкала «Жаркой смены» 0..1
+  heatAt: number; // мс, последний тап, нагревший гриль
+  hotUntil: number; // мс; до этого момента идёт «Жаркая смена», доход ×HOT_MULT
   unlocked: string[]; // открытые по ходу игры части интерфейса (FEATURES), версия 2.21
   dailyFrom: number; // мс; раньше этого подарок дня не выдаётся (новичок сначала 5 минут тапает, версия 2.19)
   quests: Quest[];
@@ -143,6 +157,9 @@ export function newGame(now: number): GameState {
     adBoxes: { day: '', n: 0 },
     pity: { mythic: 0, legend: 0 },
     daily: { streak: 0, last: '' },
+    heat: 0,
+    heatAt: 0,
+    hotUntil: 0,
     unlocked: [],
     dailyFrom: now + FIRST_DAILY_DELAY_MS,
     quests: [],
@@ -209,6 +226,9 @@ export function normalize(raw: unknown, now: number): GameState {
       streak: Math.min(7, Math.floor(num(r.daily?.streak, 0))),
       last: typeof r.daily?.last === 'string' ? r.daily.last : '',
     },
+    heat: Math.min(1, num(r.heat, 0)),
+    heatAt: num(r.heatAt, 0),
+    hotUntil: num(r.hotUntil, 0),
     // версия 2.21: функции открываются по одной. У старых сохранений, где уже играли, открыто всё сразу.
     unlocked: Array.isArray(r.unlocked)
       ? r.unlocked.filter((f: unknown): f is string => typeof f === 'string' && (FEATURES as readonly string[]).includes(f))
@@ -268,6 +288,24 @@ export function level(state: GameState, id: string): number {
   return state.levels[id] ?? 0;
 }
 
+export function hotActive(state: GameState, now: number): boolean {
+  return state.hotUntil > now;
+}
+
+// Тап греет гриль. Полная шкала запускает «Жаркую смену»; во время смены шкала не растёт.
+export function heatUp(state: GameState, now: number): GameState {
+  if (hotActive(state, now)) return { ...state, heatAt: now };
+  const heat = state.heat + 1 / HEAT_TAPS;
+  if (heat >= 1 - 1e-9) return { ...state, heat: 0, heatAt: now, hotUntil: now + HOT_SECONDS * 1000 };
+  return { ...state, heat, heatAt: now };
+}
+
+// Гриль остывает, если не тапать (вызывается из tick).
+export function coolDown(state: GameState, now: number, dtSec: number): GameState {
+  if (state.heat <= 0 || now - state.heatAt < HEAT_COOL_DELAY_MS) return state;
+  return { ...state, heat: Math.max(0, state.heat - HEAT_COOL_PER_SEC * dtSec) };
+}
+
 export function boostActive(state: GameState, now: number): boolean {
   return state.boostUntil > now;
 }
@@ -277,6 +315,7 @@ function multFor(state: GameState, now: number, includeBoost: boolean, target: '
   if (state.owned.x2Forever) m *= 2;
   if (state.starterUntil > now) m *= 2; // стартовый набор: ×2 на сутки
   if (includeBoost && boostActive(state, now)) m *= 2;
+  if (includeBoost && hotActive(state, now)) m *= HOT_MULT;
   for (const u of UPGRADES) {
     if (u.kind !== 'mult' || level(state, u.id) === 0) continue;
     if (u.target === 'all' || u.target === target) m *= Math.pow(u.amount, level(state, u.id));
@@ -320,7 +359,7 @@ export function incomePerSecond(state: GameState, now: number, includeBoost = tr
 // но тап по-прежнему стоит целый 1 ₽. На помойке наценка меньше, чтобы новичок быстрее переехал.
 export const PRICE_MULT = [1.5, 2, 2, 2, 2];
 export function priceAt(state: GameState, def: UpgradeDef, lvl: number): number {
-  return Math.ceil(upgradeCost(def, lvl) * (PRICE_MULT[state.location] ?? 2));
+  return Math.ceil(upgradeCost(def, lvl) * (PRICE_MULT[state.location] ?? 2) * HOT_SCALE);
 }
 
 export function costOf(state: GameState, def: UpgradeDef): number {
@@ -403,7 +442,7 @@ function earn(state: GameState, amount: number): GameState {
 
 // extra — множитель комбо и часа пика, считается в контроллере
 export function tap(state: GameState, now: number, extra = 1): GameState {
-  return sell({ ...earn(state, tapValue(state, now) * extra), taps: state.taps + 1 }, now);
+  return heatUp(sell({ ...earn(state, tapValue(state, now) * extra), taps: state.taps + 1 }, now), now);
 }
 
 // ---------- продажи для лидерборда ----------
@@ -516,7 +555,7 @@ export const BOX_STAR_MULT = 3.2;
 export function boxCost(state: GameState, _now?: number): number {
   const i = Math.min(state.location, BOX_BASE.length - 1);
   const base = BOX_BASE[i] * BOX_STAR_MULT ** state.stars;
-  return Math.round(base * BOX_STEP[i] ** state.boxesHere);
+  return Math.round(base * BOX_STEP[i] ** state.boxesHere * HOT_SCALE);
 }
 
 export function canBuyBox(state: GameState, now: number): boolean {
@@ -576,7 +615,7 @@ export function buy(state: GameState, id: string): GameState {
 // Доход за прошедшее время в игре (каждый кадр).
 export function tick(state: GameState, now: number): GameState {
   const seconds = Math.max(0, (now - state.lastSeen) / 1000);
-  return { ...earn(state, incomePerSecond(state, now) * seconds), lastSeen: now };
+  return coolDown({ ...earn(state, incomePerSecond(state, now) * seconds), lastSeen: now }, now, seconds);
 }
 
 // Сколько игрок заработал, пока игра была закрыта: половина дохода, без буста, не больше 4 часов.
@@ -608,10 +647,10 @@ export interface NextMove {
 
 export function nextMove(state: GameState): NextMove {
   const next = nextLocation(state);
-  if (next) return { id: next.id, star: 0, threshold: next.threshold, mult: next.mult };
+  if (next) return { id: next.id, star: 0, threshold: next.threshold * HOT_SCALE, mult: next.mult };
   const last = LOCATIONS[LOCATIONS.length - 1];
   const star = state.stars + 1;
-  return { id: last.id, star, threshold: last.threshold * Math.pow(STAR_THRESHOLD_GROWTH, star), mult: last.mult * Math.pow(STAR_MULT, star) };
+  return { id: last.id, star, threshold: last.threshold * HOT_SCALE * Math.pow(STAR_THRESHOLD_GROWTH, star), mult: last.mult * Math.pow(STAR_MULT, star) };
 }
 
 export function canRelocate(state: GameState): boolean {

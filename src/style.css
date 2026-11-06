@@ -927,3 +927,18 @@ button * { pointer-events: none; }
 .howto-card p { margin: 0; }
 /* подсказка-шаг не закрывает ларёк: стоит внизу улицы, на тротуаре */
 .hint.plain { bottom: 10px; font-size: 13px; padding: 6px 12px; max-width: min(340px, calc(100% - 24px)); }
+
+/* ================= v2.21: «Жаркая смена» ================= */
+.heat { display: flex; align-items: center; gap: 5px; padding: 2px 9px 2px 3px; border-radius: 999px; background: var(--cream); color: var(--plum); box-shadow: 0 0 0 2px var(--plum), 0 3px 0 2px var(--plum-0); }
+.heat .ico { width: 18px; height: 18px; }
+.heat-bar { width: clamp(70px, 22vw, 120px); height: 9px; border-radius: 999px; background: rgba(42, 27, 61, 0.15); box-shadow: inset 0 0 0 1.5px rgba(42, 27, 61, 0.3); overflow: hidden; }
+.heat-bar i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; border-radius: inherit; background: linear-gradient(90deg, var(--amber), var(--tomato)); transition: transform 0.15s linear; }
+.heat b { font-family: var(--display); font-weight: 800; font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.heat.on { background: var(--tomato); color: var(--cream); animation: heatOn 0.5s ease-in-out infinite alternate; }
+.heat.on .heat-bar { background: rgba(255, 244, 220, 0.25); }
+.heat.on .heat-bar i { background: linear-gradient(90deg, var(--gold), #fff4dc); }
+@keyframes heatOn { to { transform: scale(1.06); } }
+#stage.hot::after { opacity: 1; box-shadow: inset 0 0 70px 14px rgba(255, 110, 40, 0.65); animation: vignette 0.5s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .heat.on { animation: none; } }
+/* тосты не ловят тапы: раньше тап по улице под тостом пропадал */
+.toast { pointer-events: none; }

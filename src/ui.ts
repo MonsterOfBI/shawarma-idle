@@ -14,6 +14,8 @@ import {
   adBoxesLeft,
   AD_BOXES_PER_DAY,
   boostActive,
+  hotActive,
+  HOT_SECONDS,
   boxCost,
   bulkAmount,
   bulkCost,
@@ -233,6 +235,7 @@ export class Ui {
     $('#money-coin').innerHTML = ui('coin');
     $('#ico-sec').innerHTML = ui('bolt');
     $('#ico-tap').innerHTML = ui('finger');
+    $('#heat .ico').innerHTML = ui('frenzy');
     $('#rush-title').textContent = t('rushTitle');
     $('.loading span')?.replaceChildren(t('title'));
     $('#sound').setAttribute('aria-label', t('sound'));
@@ -487,6 +490,7 @@ export class Ui {
     $('#stage').style.setProperty('--side-top', `${hud.offsetTop + hud.offsetHeight + 34}px`);
 
     this.renderBuffs(s, now);
+    this.renderHeat(s, now);
     this.renderSide(s, now);
     this.renderBadges(s, now);
 
@@ -596,6 +600,21 @@ export class Ui {
     f.classList.toggle('down', down);
     f.style.left = `${Math.round(x)}px`;
     f.style.top = `${Math.round(y)}px`;
+  }
+
+  // Шкала «Жаркой смены» под доходом: видна, как только игрок начал тапать.
+  private renderHeat(s: GameState, now: number) {
+    const box = $('#heat');
+    const hot = hotActive(s, now);
+    box.hidden = !hot && s.heat <= 0 && s.taps < 10;
+    if (box.hidden) return;
+    box.classList.toggle('on', hot);
+    $('#stage').classList.toggle('hot', hot);
+    const left = (s.hotUntil - now) / (HOT_SECONDS * 1000);
+    (box.querySelector('.heat-bar i') as HTMLElement).style.transform = `scaleX(${hot ? Math.max(0, left) : s.heat})`;
+    const label = hot ? t('heatOn', formatDuration(Math.ceil((s.hotUntil - now) / 1000), lang())) : t('heatLabel');
+    const b = box.querySelector('b') as HTMLElement;
+    if (b.textContent !== label) b.textContent = label;
   }
 
   private renderBuffs(s: GameState, now: number) {

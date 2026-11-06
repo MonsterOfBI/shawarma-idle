@@ -1,7 +1,7 @@
 // Контроллер игры: держит состояние, крутит время, сохраняет, связывает сцену, интерфейс и площадку.
 
 import Phaser from 'phaser';
-import { setAudioPaused, setInstrument, setMuted, setMusic, setVolumes, sfx, unlockAudio } from './audio';
+import { setAudioPaused, setInstrument, setMuted, setMusic, setTempo, setVolumes, sfx, unlockAudio } from './audio';
 import { BRAINROT_BY_ID, meet, payOf } from './core/brainrots';
 import { canClaimDaily, claimDaily, dayKey } from './core/daily';
 import { claimWeekly, markPlayed } from './core/weekly';
@@ -13,6 +13,7 @@ import {
   RUSH_MULT,
   RUSH_SECONDS,
   addBoost,
+  hotActive,
   addMoney,
   grantStarter,
   buyN,
@@ -243,6 +244,13 @@ export class Game {
       sfx.unlock();
     }
     this.events(now);
+    // «Жаркая смена» кончилась — музыка в обычном темпе; пока идёт — над ларьком летят искры
+    const hot = hotActive(this.state, now);
+    if (hot !== this.hotFx) {
+      this.hotFx = hot;
+      setTempo(hot ? 1.3 : 1);
+    }
+    if (hot) this.scene.hotSparks();
     if (this.dailyWait && canClaimDaily(this.state, dayKey(new Date(now)), now)) {
       this.dailyWait = false;
       void this.openDaily();
@@ -402,6 +410,8 @@ export class Game {
     }, 2200);
   }
 
+  private hotFx = false;
+
   private onTap(x: number, y: number) {
     if (this.paused || this.modalOpen) return;
     const now = Date.now();
@@ -416,7 +426,16 @@ export class Game {
     const crit = isCrit(Math.random());
     const extra = comboMult(this.combo) * (rush ? RUSH_MULT : 1) * (crit ? CRIT_MULT : 1);
     const value = tapValue(this.state, now) * extra;
+    const wasHot = hotActive(this.state, now);
     this.state = recordCombo(tap(this.state, now, extra), this.combo);
+    // полная шкала «Жаркой смены»: доход ×3 на 15 секунд, музыка быстрее
+    if (!wasHot && hotActive(this.state, now)) {
+      this.scene.bigText(t('hotBig'), '#ff8a3d');
+      this.scene.streakSalute(50);
+      sfx.hot();
+      setTempo(1.3);
+      if (!this.state.muted) navigator.vibrate?.([30, 50, 30, 50, 60]);
+    }
     this.scene.hurry();
     const text = `+${formatNumber(value, lang())} ₽`;
     if (crit) {

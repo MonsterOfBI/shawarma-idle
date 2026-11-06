@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type GameState,
+  HOT_SCALE,
   OFFLINE_CAP_SECONDS,
   addBoost,
   buy,
@@ -89,7 +90,7 @@ describe('экономика', () => {
   });
 
   it('переезд сбрасывает улучшения и даёт множитель', () => {
-    const s = { ...newGame(0), money: 5, runEarned: LOCATIONS[1].threshold, levels: { cashier: 1 } };
+    const s = { ...newGame(0), money: 5, runEarned: LOCATIONS[1].threshold * HOT_SCALE, levels: { cashier: 1 } };
     expect(canRelocate(s)).toBe(true);
     const r = relocate(s, 0);
     expect(r.location).toBe(1);
@@ -256,14 +257,14 @@ describe('баланс', () => {
     const ten = buyN({ ...newGame(0), money: 1e6 }, 'knife', 10);
     expect(ten.levels.knife).toBe(10);
     expect(ten.money).toBeCloseTo(one.money);
-    expect(bulkCost(newGame(0), def, 1)).toBe(15); // 10 ₽ × наценка помойки 1,5
+    expect(bulkCost(newGame(0), def, 1)).toBe(24); // 10 ₽ × наценка помойки 1,5 × HOT_SCALE 1,6
   });
 
   it('пачку нельзя купить без денег, а максимум считает доступное', () => {
     const def = UPGRADE_BY_ID.knife;
-    const s: GameState = { ...newGame(0), money: 35 };
+    const s: GameState = { ...newGame(0), money: 55 };
     expect(canBuyN(s, 'knife', 10)).toBe(false);
-    expect(maxAffordable(s, def)).toBe(2); // 15 + 18 = 33
+    expect(maxAffordable(s, def)).toBe(2); // 24 + 28 = 52
     expect(bulkAmount(s, def, 'max')).toBe(2);
     expect(bulkAmount(newGame(0), def, 'max')).toBe(1);
   });
@@ -612,8 +613,8 @@ describe('версия 2.11', () => {
   it('улучшения на помойке дороже в 1,5 раза, дальше вдвое', () => {
     const def = UPGRADE_BY_ID.knife;
     expect(PRICE_MULT[0]).toBe(1.5);
-    expect(bulkCost(newGame(0), def, 1)).toBe(Math.ceil(upgradeCost(def, 0) * 1.5));
-    expect(bulkCost({ ...newGame(0), location: 2 }, def, 1)).toBe(Math.ceil(upgradeCost(def, 0) * 2));
+    expect(bulkCost(newGame(0), def, 1)).toBe(Math.ceil(upgradeCost(def, 0) * 1.5 * HOT_SCALE));
+    expect(bulkCost({ ...newGame(0), location: 2 }, def, 1)).toBe(Math.ceil(upgradeCost(def, 0) * 2 * HOT_SCALE));
   });
 
   it('шансы ящиков складываются в 100 %, редкие чаще прежнего', () => {
@@ -643,19 +644,19 @@ describe('версия 2.11', () => {
     const rich = { ...s, levels: { knife: 200, grill_helper: 200, cashier: 100 } };
     // доход вырос — цена та же
     expect(boxCost(rich, 0)).toBe(boxCost(s, 0));
-    expect(boxCost(s, 0)).toBe(BOX_BASE[1]);
+    expect(boxCost(s, 0)).toBe(BOX_BASE[1] * HOT_SCALE);
     const after = payForBox(s, 0);
     expect(after.boxesHere).toBe(1);
-    expect(after.money).toBe(1e15 - BOX_BASE[1]);
-    expect(boxCost(after, 0)).toBe(Math.round(BOX_BASE[1] * BOX_STEP[1]));
+    expect(after.money).toBe(1e15 - BOX_BASE[1] * HOT_SCALE);
+    expect(boxCost(after, 0)).toBe(Math.round(BOX_BASE[1] * BOX_STEP[1] * HOT_SCALE));
     // бесплатные ящики цену не двигают
-    expect(boxCost({ ...s, boxesOpened: 50 }, 0)).toBe(BOX_BASE[1]);
+    expect(boxCost({ ...s, boxesOpened: 50 }, 0)).toBe(BOX_BASE[1] * HOT_SCALE);
     // переезд: счёт с нуля и цена новой точки
     const moved = relocate({ ...after, runEarned: 1e30 }, 0);
     expect(moved.boxesHere).toBe(0);
-    expect(boxCost(moved, 0)).toBe(BOX_BASE[2]);
+    expect(boxCost(moved, 0)).toBe(BOX_BASE[2] * HOT_SCALE);
     // звёзды дворца
-    expect(boxCost({ ...s, location: 4, stars: 2 }, 0)).toBe(Math.round(BOX_BASE[4] * BOX_STAR_MULT ** 2));
+    expect(boxCost({ ...s, location: 4, stars: 2 }, 0)).toBe(Math.round(BOX_BASE[4] * BOX_STAR_MULT ** 2 * HOT_SCALE));
     // каждая следующая точка дороже предыдущей
     for (let i = 1; i < BOX_BASE.length; i++) expect(BOX_BASE[i]).toBeGreaterThan(BOX_BASE[i - 1]);
     expect(minutesOfIncome).toBeTypeOf('function');
@@ -707,7 +708,7 @@ describe('рекорд серии тапов', () => {
 import { MOVE_BOX, fastMove, moveKey, runTime } from './economy';
 
 describe('мотивация переезда', () => {
-  const ready = (now: number, extra: Partial<GameState> = {}): GameState => ({ ...newGame(now), runEarned: LOCATIONS[1].threshold, ...extra });
+  const ready = (now: number, extra: Partial<GameState> = {}): GameState => ({ ...newGame(now), runEarned: LOCATIONS[1].threshold * HOT_SCALE, ...extra });
 
   it('ящик за переезд даёт только мифических и выше', () => {
     expect(MOVE_BOX).toBe('legend');
@@ -889,5 +890,43 @@ describe('стартовый набор', () => {
     expect(state.owned.starter).toBe(true);
     expect(incomePerSecond(state, 1000)).toBeCloseTo(per * 2, 6);
     expect(incomePerSecond(state, 24 * 3600_000 + 1)).toBeCloseTo(per, 6);
+  });
+});
+
+describe('«Жаркая смена» (2.21)', () => {
+  it('80 тапов разогревают гриль: 15 секунд весь доход ×3', async () => {
+    const { HEAT_TAPS, HOT_SECONDS, HOT_MULT, tap, hotActive, incomePerSecond } = await import('./economy');
+    let s: GameState = { ...newGame(0), levels: { cashier: 1 } };
+    const base = incomePerSecond(s, 0);
+    for (let i = 0; i < HEAT_TAPS - 1; i++) s = tap(s, 0);
+    expect(hotActive(s, 1)).toBe(false);
+    expect(s.heat).toBeCloseTo((HEAT_TAPS - 1) / HEAT_TAPS);
+    const t1 = tapValue(s, 1);
+    s = tap(s, 1);
+    expect(hotActive(s, 2)).toBe(true);
+    expect(s.heat).toBe(0);
+    expect(s.hotUntil).toBe(1 + HOT_SECONDS * 1000);
+    expect(incomePerSecond(s, 2)).toBeCloseTo(base * HOT_MULT);
+    expect(tapValue(s, 2)).toBeCloseTo(t1 * HOT_MULT);
+    // во время смены шкала не растёт, после — доход обычный
+    expect(tap(s, 3).heat).toBe(0);
+    expect(hotActive(s, s.hotUntil)).toBe(false);
+    // офлайн смену не учитывает
+    expect(offlineEarnings({ ...s, lastSeen: 2 }, 1002)).toBeCloseTo(incomePerSecond(s, 1e9) * 0.5);
+  });
+
+  it('без тапов гриль остывает, но не сразу', async () => {
+    const { tick, HEAT_COOL_DELAY_MS, HEAT_COOL_PER_SEC } = await import('./economy');
+    const s: GameState = { ...newGame(0), heat: 0.5, heatAt: 0, lastSeen: 0 };
+    expect(tick(s, HEAT_COOL_DELAY_MS - 100).heat).toBe(0.5);
+    const later = tick({ ...s, lastSeen: 2000 }, 4000);
+    expect(later.heat).toBeCloseTo(0.5 - HEAT_COOL_PER_SEC * 2);
+    expect(tick({ ...s, lastSeen: 2000 }, 1e6).heat).toBe(0);
+  });
+
+  it('старое сохранение без шкалы начинает с холодного гриля', () => {
+    const s = normalize({ version: 8, money: 5 }, 0);
+    expect(s.heat).toBe(0);
+    expect(s.hotUntil).toBe(0);
   });
 });
