@@ -64,6 +64,7 @@ import {
   weeklyScore,
 } from './core/economy';
 import { unlockAchievements } from './core/achievements';
+import { checkUnlocks } from './core/unlocks';
 import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { UPGRADES, UPGRADE_BY_ID } from './core/upgrades';
@@ -234,6 +235,13 @@ export class Game {
       return;
     }
     this.state = markPlayed(ensureQuests(tick(this.state, now), now, Math.random), dayKey(new Date(now)));
+    // обучение по шагам: новые вкладки и кнопки открываются по ходу игры
+    const opened = checkUnlocks(this.state, now);
+    if (opened.fresh.length) {
+      this.state = opened.state;
+      this.ui.unlocked(opened.fresh);
+      sfx.unlock();
+    }
     this.events(now);
     if (this.dailyWait && canClaimDaily(this.state, dayKey(new Date(now)), now)) {
       this.dailyWait = false;
