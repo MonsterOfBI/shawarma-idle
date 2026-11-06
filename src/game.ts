@@ -427,6 +427,14 @@ export class Game {
     this.scene.burst(x, y, 1 + Math.min(4, Math.floor(this.combo / 10)) + (rush ? 2 : 0) + (crit ? 6 : 0));
     this.scene.flyCoins(x, y, crit ? 3 : 1);
     this.scene.setCombo(this.combo, comboMult(this.combo));
+    // сочный тап (2.21): шаурма летит гостю, лёгкая вибрация, каждые 25 тапов серии — салют
+    this.scene.throwWrap();
+    if (!this.state.muted) navigator.vibrate?.(crit ? 25 : 6);
+    if (this.combo % 25 === 0) {
+      this.scene.streakSalute(this.combo);
+      sfx.salute();
+      if (!this.state.muted) navigator.vibrate?.([20, 40, 20]);
+    }
     if (record) {
       this.scene.setRecord(this.combo, !this.recordInStreak);
       if (!this.recordInStreak) sfx.reward();
