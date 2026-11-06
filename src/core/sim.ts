@@ -51,7 +51,7 @@ function checks(s: GameState, now: number) {
 }
 const tapX = (p: Profile) => p.comboAvg * (1 + E.CRIT_CHANCE * (E.CRIT_MULT - 1));
 function gain(s: GameState, p: Profile) {
-  const calm = { ...s, frenzyUntil: 0, boostUntil: 0, tapFrenzyUntil: 0 };
+  const calm = { ...s, frenzyUntil: 0, boostUntil: 0, tapFrenzyUntil: 0, hotUntil: 0 };
   return E.incomePerSecond(calm, 0) + E.tapValue(calm, 0) * p.tps * tapX(p) + checks(calm, 0);
 }
 function bestUpgrade(s: GameState, p: Profile) {

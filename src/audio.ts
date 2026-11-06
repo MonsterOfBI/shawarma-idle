@@ -65,6 +65,11 @@ export const sfx = {
     beep(660, 0.08, 'square', 0.05);
     beep(990, 0.12, 'square', 0.05, 0.07);
   },
+  // началась «Жаркая смена»: восходящий рёв и удар
+  hot() {
+    for (let i = 0; i < 8; i++) beep(220 * Math.pow(1.19, i), 0.09, 'sawtooth', 0.03, i * 0.04);
+    [523, 784, 1046].forEach((f) => beep(f, 0.35, 'square', 0.035, 0.34));
+  },
   // салют за каждые 25 тапов серии: быстрое арпеджио и «хлопок»
   salute() {
     [659, 784, 988, 1319].forEach((f, i) => beep(f, 0.1, 'square', 0.035, i * 0.05));
@@ -388,12 +393,18 @@ function scheduleMusic() {
   if (nextAt < a.currentTime) nextAt = a.currentTime + 0.1;
   while (nextAt < a.currentTime + 0.3) {
     if (motif.length === 0) { motif = makeMotif(); answer = makeMotif(); }
-    const swing = step % 2 ? SWING * EIGHTH : 0;
+    const swing = step % 2 ? (SWING * EIGHTH) / tempo : 0;
     playStep(nextAt + swing);
-    nextAt += EIGHTH;
+    nextAt += EIGHTH / tempo;
   }
 }
 
+
+// Темп музыки: в «Жаркую смену» музыка играет быстрее (1 — обычный темп).
+let tempo = 1;
+export function setTempo(x: number) {
+  tempo = x;
+}
 
 // Включить или выключить музыку. Контекст звука создаётся только после действия игрока.
 export function setMusic(on: boolean) {

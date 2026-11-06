@@ -777,6 +777,14 @@ export class StallScene extends Phaser.Scene {
     });
   }
 
+  // «Жаркая смена»: над грилем летят искры (зовётся 10 раз в секунду).
+  hotSparks() {
+    if (!this.stall) return;
+    const sp = this.stall.steam[Math.floor(Math.random() * this.stall.steam.length)];
+    const x = this.stallX + (sp?.x ?? 0) * this.stallScale, y = this.groundY + (sp?.y ?? this.stall.top * 0.5) * this.stallScale;
+    this.sparks.explode(2, x, y);
+  }
+
   // Каждые 25 тапов в серии — маленький салют над ларьком.
   streakSalute(combo: number) {
     if (!this.stall) return;
