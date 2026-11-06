@@ -122,6 +122,7 @@ export class StallScene extends Phaser.Scene {
   // надписи «+N ₽» и летящие в кошелёк монеты берутся из запаса, а не создаются на каждый тап
   private pops: Phaser.GameObjects.Text[] = [];
   private flying: Phaser.GameObjects.Image[] = [];
+  private wraps: Phaser.GameObjects.Image[] = [];
   private walletXY = { x: 0, y: 0 };
   private walletAt = -1e9;
   private growT = 1; // ларёк «дорастает» после покупки, которая его изменила: от 0 до 1
@@ -723,6 +724,66 @@ export class StallScene extends Phaser.Scene {
     bake(g, 3, 'wrap').setAngle(-15); // одна общая картинка шаурмы на всех гостей
     first.c.root.setDepth(7);
     this.cb.onServed(first.id, first.c.root.x, first.c.root.y - first.c.height * first.c.root.scaleY * 0.8);
+  }
+
+  // Сочный тап (2.21): из окна ларька вылетает шаурма и дугой летит в руки первому гостю в очереди,
+  // гость подпрыгивает, над грилем пыхает пар. Картинки шаурмы берутся из запаса из 8 штук.
+  throwWrap() {
+    if (!this.stall) return;
+    const u = this.unit;
+    const sp = this.stall.steam[0];
+    if (sp) this.steam.emitParticleAt(this.stallX + sp.x * this.stallScale, this.groundY + sp.y * this.stallScale, 2);
+    const first = this.customers.find((c) => c.state === 'queue');
+    if (!first) return;
+    if (!this.textures.exists('wrap@3')) {
+      // та же картинка шаурмы, что у обслуженного гостя в руке (serve), запекается один раз
+      const g = this.add.graphics();
+      const p = new Pen(g, 2);
+      p.rect(-5, -11, 10, 22, 0xf2e3b3, 4);
+      p.rect(-5, -11, 10, 7, 0xb5651d, 3, 0);
+      p.flat(0x5e9c3a).fillRect(-4, -12, 3, 3);
+      bake(g, 3, 'wrap').destroy();
+      if (!this.textures.exists('wrap@3')) return;
+    }
+    let img = this.wraps.find((w) => !w.visible);
+    if (!img) {
+      if (this.wraps.length >= 8) return;
+      img = this.add.image(0, 0, 'wrap@3').setDepth(11);
+      this.wraps.push(img);
+    }
+    const w = img;
+    const sx = this.stallX + (this.stall.left * 0.4) * this.stallScale;
+    const sy = this.groundY + (this.stall.top * 0.45) * this.stallScale;
+    const tx = first.c.root.x + 10 * u;
+    const ty = first.c.root.y - first.c.height * first.c.root.scaleY * 0.5;
+    const peak = Math.min(sy, ty) - (70 + Math.random() * 40) * u;
+    // текстура запечена в 3 раза крупнее: шаурма чуть больше той, что у гостя в руке
+    const s0 = (Math.min(1.4, u) * 1.3) / 3;
+    w.setPosition(sx, sy).setScale(s0).setAngle(0).setVisible(true).setAlpha(1);
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 360,
+      ease: 'Sine.inOut',
+      onUpdate: (tw) => {
+        const t = tw.getValue() ?? 0, r = 1 - t;
+        w.setPosition(r * sx + t * tx, r * r * sy + 2 * r * t * peak + t * t * ty);
+        w.setAngle(-360 * t);
+      },
+      onComplete: () => {
+        w.setVisible(false);
+        if (first.state === 'queue' && first.jump <= 0.3) first.jump = 0.6;
+      },
+    });
+  }
+
+  // Каждые 25 тапов в серии — маленький салют над ларьком.
+  streakSalute(combo: number) {
+    if (!this.stall) return;
+    const x = this.stallX, y = this.groundY + this.stall.top * this.stallScale * 0.8;
+    this.confetti.explode(combo >= 50 ? 40 : 24, x, y);
+    this.sparks.explode(14, x, y);
+    this.squash(1.2);
   }
 
   burst(x: number, y: number, count = 6) {
