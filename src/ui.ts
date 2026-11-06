@@ -2,6 +2,7 @@
 // (улучшения, брейнроты, задания, переезд, магазин), окна подарка, офлайн-дохода и открытия ящика.
 // Обычный HTML и CSS: так проще делать прокрутку и раскладку под телефон и компьютер.
 
+import { isUnlocked, type Feature } from './core/unlocks';
 import { ACHIEVEMENTS, ACHIEVEMENT_BONUS } from './core/achievements';
 import { DAILY, canClaimDaily, dayKey, nextDailyIndex } from './core/daily';
 import { WEEKLY_DAYS, canClaimWeekly, weekStart, weekday } from './core/weekly';
@@ -177,6 +178,17 @@ interface Row {
   seen: boolean; // кнопку уже показывали (блик только при смене «нельзя» на «можно»)
 }
 
+// Что прячется до открытия функции (обучение по шагам, 2.21)
+const FEATURE_EL: Record<Feature, string[]> = {
+  pets: ['#tab-pets'],
+  quests: ['#tab-quests', '#btn-quests'],
+  adbox: ['#btn-adbox'],
+  daily: ['#btn-daily'],
+  boost: ['#boost'],
+  move: ['#tab-move'],
+  shop: ['#tab-shop'],
+};
+
 interface PetCard {
   root: HTMLElement;
   img: HTMLImageElement;
@@ -237,7 +249,10 @@ export class Ui {
       const b = $(id);
       b.querySelector('.ico')!.innerHTML = ui(ico);
       b.querySelector('span')!.textContent = label;
-      b.addEventListener('click', fn);
+      b.addEventListener('click', () => {
+        this.seen(b);
+        fn();
+      });
     };
     side('#btn-daily', 'gift', t('sideDaily'), () => actions.openDaily());
     side('#btn-quests', 'list', t('sideQuests'), () => this.showTab('quests'));
@@ -380,6 +395,7 @@ export class Ui {
   /** Переключить вкладку меню. Меню всегда на экране. */
   showTab(id: Tab) {
     this.tab = id;
+    this.seen($(`#tab-${id}`));
     for (const x of TABS) {
       $(`#tab-${x}`).setAttribute('aria-selected', String(x === id));
       $(`#panel-${x}`).hidden = x !== id;
@@ -459,6 +475,7 @@ export class Ui {
     $('#rate-sec').textContent = t('perSec', fmt(incomePerSecond(s, now)));
     $('#rate-tap').textContent = t('perTap', fmt(tapValue(s, now)));
     $('#place').textContent = placeName(LOCATIONS[s.location].id, s.stars);
+    this.renderUnlocks(s);
     this.renderCoach(s, now);
     if (this.soundIcon !== s.muted) {
       this.soundIcon = s.muted;
@@ -499,6 +516,17 @@ export class Ui {
       step = 'coachBox';
       target = this.tab === 'pets' ? $('#box-buy') : $('#tab-pets');
     }
+    if (!step) {
+      // только что открытая функция: палец показывает, где она, пока игрок её не откроет
+      const f = [...this.fresh].find((x) => isUnlocked(s, x));
+      if (f) {
+        step = `coachNew_${f}`;
+        target = $(FEATURE_EL[f][0]);
+      }
+    }
+    // у карточки улучшения палец жмёт прямо на кнопку цены
+    const tip = target?.classList.contains('up') ? (target.querySelector<HTMLElement>('.btn') ?? target) : target;
+    this.placeFinger(step ? (tip ?? $('#hint')) : null, !target);
     const key = `${step}:${target?.id || target?.dataset.id || ''}:${this.tab}`;
     if (key === this.coachKey) return;
     this.coachKey = key;
@@ -508,6 +536,66 @@ export class Ui {
     hint.hidden = !step;
     hint.classList.toggle('plain', step !== 'coachTap');
     if (step) hint.textContent = t(step);
+  }
+
+  // Скрыть ещё не открытые вкладки и боковые кнопки (обучение по шагам).
+  private unlockKey = '-';
+  private fresh = new Set<Feature>();
+  private renderUnlocks(s: GameState) {
+    const key = s.unlocked.join();
+    if (key === this.unlockKey) return;
+    this.unlockKey = key;
+    for (const [f, sels] of Object.entries(FEATURE_EL) as [Feature, string[]][]) {
+      for (const sel of sels) $(sel).classList.toggle('locked-feature', !isUnlocked(s, f));
+    }
+  }
+
+  // Функции только что открылись: кнопки выпрыгивают со значком «Новое», палец ведёт к первой.
+  unlocked(list: Feature[]) {
+    for (const f of list) {
+      this.fresh.add(f);
+      for (const sel of FEATURE_EL[f]) {
+        const b = $(sel);
+        b.classList.remove('locked-feature');
+        b.classList.add('fresh-feature');
+        b.dataset.new = t('newBadge');
+        b.animate(
+          [{ transform: 'scale(0.2) rotate(-12deg)', opacity: 0 }, { transform: 'scale(1.25) rotate(4deg)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }],
+          { duration: 650, easing: 'cubic-bezier(.2, 1.4, .4, 1)' },
+        );
+      }
+    }
+    this.coachKey = '';
+  }
+
+  // Игрок нажал на новую кнопку — она больше не «новая».
+  private seen(el: HTMLElement) {
+    if (!el.classList.contains('fresh-feature')) return;
+    for (const f of [...this.fresh]) {
+      const sels = FEATURE_EL[f];
+      if (!sels.some((sel) => $(sel) === el)) continue;
+      this.fresh.delete(f);
+      for (const sel of sels) $(sel).classList.remove('fresh-feature');
+    }
+    this.coachKey = '';
+  }
+
+  // Палец-подсказка: кончик пальца стоит на цели и «нажимает» её. Цель внизу экрана — палец сверху.
+  private placeFinger(target: HTMLElement | null, onHint: boolean) {
+    const f = $('#finger');
+    if (!target || target.hidden || target.offsetParent === null) {
+      f.hidden = true;
+      return;
+    }
+    const r = target.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    // обычно палец снизу и смотрит вверх; сверху — только когда снизу нет места (вкладки у нижнего края)
+    const down = !onHint && r.bottom + 62 > window.innerHeight;
+    const y = onHint ? r.bottom + 14 : down ? r.top + Math.min(14, r.height / 3) : r.bottom - Math.min(14, r.height / 3);
+    f.hidden = false;
+    f.classList.toggle('down', down);
+    f.style.left = `${Math.round(x)}px`;
+    f.style.top = `${Math.round(y)}px`;
   }
 
   private renderBuffs(s: GameState, now: number) {
@@ -1122,11 +1210,16 @@ export class Ui {
   howto(): Promise<void> {
     $('#howto-title').textContent = t('howtoTitle');
     const body = $('#howto-body');
+    // четыре коротких карточки со значками вместо восьми абзацев (отзыв модерации VK)
+    const cards: [string, string][] = [['finger', 'howto1'], ['up', 'howto2'], ['crate', 'howto3'], ['truck', 'howto4']];
     body.replaceChildren(
-      ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
-        const p = document.createElement('p');
-        p.textContent = t(`howto${i}`);
-        return p;
+      ...cards.map(([ico, key]) => {
+        const card = el('div', 'howto-card');
+        const i = el('i', 'ico');
+        i.innerHTML = ui(ico);
+        const p = el('p', '', t(key));
+        card.append(i, p);
+        return card;
       }),
     );
     $('#howto-close').textContent = t('howtoClose');

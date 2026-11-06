@@ -8,6 +8,11 @@ import { type BoxKind, type Pet, MAX_STARS, openBox, petMult } from './pets';
 import { UPGRADES, UPGRADE_BY_ID, type UpgradeDef, upgradeCost } from './upgrades';
 
 export const SAVE_VERSION = 8;
+
+// Части интерфейса, которые новичок открывает по одной (версия 2.21, правила открытия в unlocks.ts):
+// вкладки «Брейнроты», «Задания», «Переезд», «Магазин», боковые «Подарок», «×2» и «Ящик за рекламу».
+export const FEATURES = ['pets', 'quests', 'adbox', 'daily', 'boost', 'move', 'shop'] as const;
+export type Feature = (typeof FEATURES)[number];
 // Новичку подарок дня приходит не сразу: первые минуты игры — про тапы и первые покупки.
 export const FIRST_DAILY_DELAY_MS = 5 * 60_000;
 
@@ -84,6 +89,7 @@ export interface GameState {
   adBoxes: { day: string; n: number }; // сколько ящиков за рекламу взято в этот день (ГГГГ-ММ-ДД)
   pity: { mythic: number; legend: number }; // ящиков подряд без мифика и без легендарного (гарант)
   daily: { streak: number; last: string }; // календарь наград: день серии и дата последней
+  unlocked: string[]; // открытые по ходу игры части интерфейса (FEATURES), версия 2.21
   dailyFrom: number; // мс; раньше этого подарок дня не выдаётся (новичок сначала 5 минут тапает, версия 2.19)
   quests: Quest[];
   questWait: number[]; // мс; когда появятся новые задания на места выполненных (версия 2.15)
@@ -137,6 +143,7 @@ export function newGame(now: number): GameState {
     adBoxes: { day: '', n: 0 },
     pity: { mythic: 0, legend: 0 },
     daily: { streak: 0, last: '' },
+    unlocked: [],
     dailyFrom: now + FIRST_DAILY_DELAY_MS,
     quests: [],
     questWait: [],
@@ -202,6 +209,12 @@ export function normalize(raw: unknown, now: number): GameState {
       streak: Math.min(7, Math.floor(num(r.daily?.streak, 0))),
       last: typeof r.daily?.last === 'string' ? r.daily.last : '',
     },
+    // версия 2.21: функции открываются по одной. У старых сохранений, где уже играли, открыто всё сразу.
+    unlocked: Array.isArray(r.unlocked)
+      ? r.unlocked.filter((f: unknown): f is string => typeof f === 'string' && (FEATURES as readonly string[]).includes(f))
+      : num(r.lifetimeEarned, 0) > 0 || num(r.bought, 0) > 0 || num(r.location, 0) > 0
+        ? [...FEATURES]
+        : [],
     quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],
     questWait: Array.isArray(r.questWait) ? r.questWait.filter((x: unknown) => typeof x === 'number' && Number.isFinite(x)).slice(0, 3) : [],
     questsDone: Math.floor(num(r.questsDone, 0)),
