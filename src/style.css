@@ -864,3 +864,36 @@ p.ticket { font-family: var(--display); font-weight: 800; text-align: center; }
 .howto { max-height: calc(var(--vh, 100dvh) - 32px); }
 .howto-body { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; text-align: left; font-weight: 600; font-size: 14px; line-height: 1.45; color: var(--cream); padding: 0 4px; }
 .howto-body p { margin: 0; }
+
+/* ================= v2.20: правки после модерации VK =================
+   1) Окна и стартовое меню не обрезаются на низком экране (телефон боком): их можно прокрутить,
+      а меню на низком экране раскладывается в две колонки — название слева, кнопки справа.
+   2) Меню улучшений не уезжает вбок: заголовок переносится, горизонтальной прокрутки нет.
+   3) Кнопки рейтинга, настроек и звука не накрываются плашкой с деньгами.
+   4) Надписи внутри кнопок не перехватывают нажатие (кнопка цены перерисовывается 10 раз в секунду). */
+.menu, .modal { overflow-y: auto; overscroll-behavior: contain; }
+.menu { align-items: flex-start; }
+.menu-in, .modal > .sheet { margin: auto; flex: none; }
+@media (max-height: 520px) and (min-aspect-ratio: 1/1) {
+  .menu { padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+  .menu-in {
+    width: min(620px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: 'title btns' 'sub btns'; align-items: center; column-gap: 28px; row-gap: 6px;
+  }
+  .menu-title { grid-area: title; align-self: end; font-size: clamp(26px, 9vh, 40px); }
+  .menu-sub { grid-area: sub; align-self: start; }
+  .menu-btns { grid-area: btns; margin-top: 0; gap: 9px; }
+  .menu-btns .btn { min-height: 40px; padding-block: 8px; }
+  .menu-play { font-size: 17px; padding-block: 11px; }
+}
+
+.panel-body { overflow-x: hidden; touch-action: pan-y; }
+.panel-head h2 { min-width: 0; white-space: normal; line-height: 1.1; text-wrap: balance; }
+.panel-head > :not(h2) { flex: none; }
+
+.money-pill { margin-top: 4px; }
+@media not all and (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  .money-pill { margin-top: 3px; }
+}
+
+button * { pointer-events: none; }

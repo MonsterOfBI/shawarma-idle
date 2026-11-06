@@ -107,9 +107,14 @@ function today(offsetDays = 0): string {
 
 // Кнопка с удержанием: обычное нажатие срабатывает один раз, а если держать палец,
 // через 0,4 с начинает повторяться всё быстрее (покупка подряд, пока хватает денег).
+// Покупка срабатывает по отпусканию кнопки (pointerup), а не по click: браузер не присылает click,
+// если между нажатием и отпусканием кнопка «уехала» из-под курсора (анимация нажатия сдвигает
+// её на 3 px) — из-за этого на macOS кнопки жались не с первого раза (жалоба модерации VK).
 function holdRepeat(btn: HTMLButtonElement, fire: () => void) {
   let timer = 0;
+  let pressed = false;
   let repeated = false;
+  let skipClickUntil = 0;
   const stop = () => {
     clearTimeout(timer);
     timer = 0;
@@ -124,17 +129,35 @@ function holdRepeat(btn: HTMLButtonElement, fire: () => void) {
   };
   btn.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
+    pressed = true;
     repeated = false;
+    try {
+      btn.setPointerCapture(e.pointerId);
+    } catch {
+      // старый браузер без захвата указателя — сработает обычный click
+    }
     stop();
     step(400);
   });
-  for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) btn.addEventListener(ev, stop);
+  btn.addEventListener('pointerup', (e) => {
+    stop();
+    if (!pressed) return;
+    pressed = false;
+    skipClickUntil = performance.now() + 600;
+    if (repeated || btn.disabled) return;
+    // отпустили на кнопке или совсем рядом (запас 12 px на сдвиг и дрожание пальца)
+    const r = btn.getBoundingClientRect();
+    const pad = 12;
+    if (e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad) fire();
+  });
+  const cancel = () => {
+    stop();
+    pressed = false;
+  };
+  for (const ev of ['pointercancel', 'lostpointercapture', 'blur']) btn.addEventListener(ev, cancel);
   btn.addEventListener('click', () => {
-    // после серии повторов отпускание пальца не должно купить ещё раз
-    if (repeated) {
-      repeated = false;
-      return;
-    }
+    // нажатие мышью или пальцем уже обработано в pointerup; здесь — клавиатура (Enter, пробел)
+    if (performance.now() < skipClickUntil) return;
     fire();
   });
 }
@@ -149,6 +172,7 @@ interface Row {
   msBar: HTMLElement;
   msText: HTMLElement;
   btn: HTMLButtonElement;
+  btnLabel: string; // последняя подпись кнопки цены
   lastLevel: number;
   seen: boolean; // кнопку уже показывали (блик только при смене «нельзя» на «можно»)
 }
@@ -258,7 +282,7 @@ export class Ui {
       holdRepeat(btn, buyNow);
       root.append(ic, info, btn);
       list.append(root);
-      this.rows.set(u.id, { root, icon: ic, lv, name, desc, ms, msBar, msText, btn, lastLevel: -1, seen: false });
+      this.rows.set(u.id, { root, icon: ic, lv, name, desc, ms, msBar, msText, btn, btnLabel: '', lastLevel: -1, seen: false });
     }
 
     // брейнроты
@@ -581,6 +605,7 @@ export class Ui {
         row.name.textContent = '???';
         row.desc.textContent = t('locked');
         row.btn.textContent = `${fmt(u.baseCost)} ₽`;
+        row.btnLabel = '';
         row.btn.disabled = true;
         row.btn.classList.remove('done', 'pulse');
         continue;
@@ -623,9 +648,18 @@ export class Ui {
       const maxed = isMaxed(s, u);
       const n = bulkAmount(s, u, this.mode);
       row.btn.classList.toggle('done', maxed);
-      if (maxed) row.btn.textContent = t('bought');
-      else if (n === 1 && this.mode === 'x1') row.btn.textContent = `${fmt(costOf(s, u))} ₽`;
-      else row.btn.innerHTML = `<small>×${n}</small>${fmt(bulkCost(s, u, n))} ₽`;
+      // Подпись меняем, только когда она правда изменилась: панель перерисовывается 10 раз в секунду,
+      // и если каждый раз пересоздавать <small>, нажатие на кнопку теряется (жалоба модерации VK, macOS)
+      const label = maxed
+        ? t('bought')
+        : n === 1 && this.mode === 'x1'
+          ? `${fmt(costOf(s, u))} ₽`
+          : `<small>×${n}</small>${fmt(bulkCost(s, u, n))} ₽`;
+      if (row.btnLabel !== label) {
+        row.btnLabel = label;
+        if (label.startsWith('<')) row.btn.innerHTML = label;
+        else row.btn.textContent = label;
+      }
       const off = maxed || !canBuyN(s, u.id, n);
       // цена только что стала по карману — по кнопке пробегает блик
       if (row.btn.disabled && !off && row.seen) {
