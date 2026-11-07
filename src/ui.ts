@@ -281,6 +281,7 @@ export class Ui {
     const list = $('#upgrades');
     for (const u of UPGRADES) {
       const root = el('div', `card up kind-${u.kind}`);
+      root.dataset.id = u.id;
       const ic = el('div', 'up-icon');
       const lv = el('span', 'up-lv');
       ic.append(lv);

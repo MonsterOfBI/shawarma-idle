@@ -27,8 +27,10 @@ describe('«Следующая цель» (2.21)', () => {
   });
 
   it('первый ящик — цель, как только вкладка с брейнротами открыта', () => {
-    expect(pickGoal(played({ unlocked: ['pets'] }), T).kind).toBe('box');
-    expect(pickGoal(played({ unlocked: ['pets'], boxesOpened: 1 }), T).kind).not.toBe('box');
+    expect(pickGoal(played({ unlocked: ['pets'], money: 1e7 }), T).kind).toBe('box');
+    expect(pickGoal(played({ unlocked: ['pets'], money: 1e7, boxesOpened: 1 }), T).kind).not.toBe('box');
+    // пока на ящик копить долго, цель — что-то ближе
+    expect(pickGoal(played({ unlocked: ['pets'], money: 100 }), T).kind).not.toBe('box');
   });
 
   it('выполнил — чаевые и сразу новая цель, каждая пятая с ящиком', () => {

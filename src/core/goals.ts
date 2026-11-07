@@ -5,6 +5,7 @@
 import {
   type GameState,
   type Goal,
+  boxCost,
   bulkCost,
   canRelocate,
   incomePerSecond,
@@ -45,7 +46,9 @@ export function niceAmount(x: number): number {
 export function pickGoal(s: GameState, now: number): Goal {
   const at = where(s);
   if (canRelocate(s)) return { kind: 'move', target: 1, start: 0, at };
-  if (s.unlocked.includes('pets') && s.boxesOpened === 0) return { kind: 'box', target: 1, start: 0, at };
+  const reach = s.money + rate(s, now) * GOAL_REACH_SEC;
+  // первый ящик — цель, только когда на него скоро хватит (на помойке он стоит десятки тысяч)
+  if (s.unlocked.includes('pets') && s.boxesOpened === 0 && boxCost(s, now) <= reach) return { kind: 'box', target: 1, start: 0, at };
   if (s.hotUntil === 0 && s.taps >= 20) return { kind: 'hot', target: 1, start: 0, at };
   let best: Goal | null = null;
   let bestCost = Infinity;
@@ -59,7 +62,7 @@ export function pickGoal(s: GameState, now: number): Goal {
       best = { kind: lv === 0 ? 'buy' : 'level', id: u.id, target, start: lv, at };
     }
   }
-  if (best && bestCost <= s.money + rate(s, now) * GOAL_REACH_SEC) return best;
+  if (best && bestCost <= reach) return best;
   const amount = niceAmount(rate(s, now) * GOAL_EARN_SEC);
   return { kind: 'earn', target: s.runEarned + amount, start: s.runEarned, at };
 }
