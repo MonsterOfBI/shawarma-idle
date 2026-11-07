@@ -960,3 +960,136 @@ button * { pointer-events: none; }
 .goal.done { animation: goalDone 0.6s cubic-bezier(.2, 1.4, .4, 1); }
 @keyframes goalDone { 0% { transform: translateX(-50%) scale(1); } 35% { transform: translateX(-50%) scale(1.12); } 100% { transform: translateX(-50%) scale(1); } }
 @media (min-width: 900px) and (min-height: 600px) { .goal { zoom: 1.25; } }
+
+/* ================= v2.22: интерфейс в стиле ларька =================
+   После отзыва модерации VK «интерфейс как из нейросети»: меню — меловая доска в деревянной раме
+   над прилавком, цены — бумажные ценники, вкладки — деревянная полка, боковые кнопки одной колонкой,
+   вместо красных «!» маленькие точки. Брейнротов не трогаем. */
+:root {
+  --board: #22362e;
+  --board-2: #1a2a23;
+  --chalk: #f4efe2;
+  --chalk-soft: rgba(244, 239, 226, 0.66);
+  --chalk-line: rgba(244, 239, 226, 0.22);
+  --wood: #7a4b24;
+  --wood-2: #5c3519;
+  --wood-dk: #3b210e;
+  --tag: #ffd86b;
+  --tag-off: #bfae8c;
+}
+
+/* доска: тёмно-зелёная, с меловыми разводами, в деревянной раме */
+#panel {
+  background:
+    radial-gradient(ellipse 60% 40% at 25% 18%, rgba(255, 255, 255, 0.07), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 78% 72%, rgba(255, 255, 255, 0.05), transparent 70%),
+    radial-gradient(ellipse 30% 20% at 60% 35%, rgba(255, 255, 255, 0.035), transparent 70%),
+    linear-gradient(180deg, var(--board), var(--board-2));
+  box-shadow: inset 0 0 0 7px var(--wood), inset 0 0 0 9px var(--wood-dk), inset 0 0 28px 12px rgba(0, 0, 0, 0.35);
+  padding: 9px max(9px, env(safe-area-inset-right, 0px)) 7px max(9px, env(safe-area-inset-left, 0px));
+}
+#panel::after { background: var(--wood-dk); }
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  #panel { padding-top: calc(env(safe-area-inset-top, 0px) + 22px); }
+  #panel, .tabs { border-left-color: var(--wood-dk); }
+}
+.panel-body { scrollbar-color: var(--chalk-line) transparent; }
+/* заголовки мелом: светлые, чуть неровные, с подчёркиванием */
+.panel-head h2 {
+  color: var(--chalk); text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 0 6px rgba(255, 255, 255, 0.12);
+  padding-bottom: 2px; background: linear-gradient(90deg, var(--chalk-line), var(--chalk-line) 70%, transparent) 0 100% / 100% 2px no-repeat;
+  transform: rotate(-1deg);
+}
+.note { color: var(--chalk-soft); }
+.seg { background: rgba(0, 0, 0, 0.32); box-shadow: inset 0 0 0 1.5px var(--chalk-line); }
+.seg button { color: var(--chalk-soft); }
+.seg button[aria-checked='true'] { background: var(--chalk); color: var(--board); box-shadow: none; }
+.pill { box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+
+/* улучшения — строки меню на доске, а не карточки-стикеры */
+#upgrades.list { gap: 0; }
+#upgrades .up.card {
+  background: transparent; color: var(--chalk); border-radius: 0; box-shadow: none;
+  border-bottom: 2px dashed var(--chalk-line);
+}
+#upgrades .up.card:last-child { border-bottom: 0; }
+#upgrades .up-icon { border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3), inset 0 -3px 0 rgba(0, 0, 0, 0.12); }
+#upgrades .up-name { color: var(--chalk); }
+#upgrades .up-desc { color: var(--chalk-soft); }
+#upgrades .up-ms .bar { background: rgba(244, 239, 226, 0.14); box-shadow: none; }
+#upgrades .up-ms span { color: var(--tag); }
+#upgrades .up-lv { color: var(--board); background: var(--chalk); box-shadow: 0 0 0 2px var(--board); }
+#upgrades .up.locked .up-icon { background: transparent; box-shadow: inset 0 0 0 2px var(--chalk-line); }
+#upgrades .up.locked .up-name, #upgrades .up.locked .up-desc { color: rgba(244, 239, 226, 0.4); }
+#upgrades .up.flash { animation: chalkFlash 0.5s ease-out; }
+@keyframes chalkFlash { 0% { background: rgba(255, 216, 107, 0.22); } 100% { background: transparent; } }
+#upgrades .up.coach { outline-offset: -2px; border-radius: 10px; }
+
+/* цена — бумажный ценник с дырочкой, чуть наискосок */
+#upgrades .up .btn {
+  border-radius: 3px 9px 9px 3px; color: var(--plum); background: var(--tag);
+  clip-path: polygon(13px 0, 100% 0, 100% 100%, 13px 100%, 0 50%);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.16); padding-left: 19px;
+  transform: rotate(-2.5deg);
+}
+#upgrades .up:nth-child(even) .btn { transform: rotate(1.5deg); }
+#upgrades .up .btn::before {
+  content: ''; position: absolute; left: 8px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%;
+  background: var(--board-2); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+#upgrades .up .btn:active:not(:disabled) { transform: translateY(2px) rotate(-1deg); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.16); }
+#upgrades .up .btn:disabled { color: rgba(42, 27, 61, 0.55); background: var(--tag-off); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.12); }
+#upgrades .up .btn.done { color: var(--chalk); background: var(--pickle); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2); }
+
+/* остальные вкладки: бумажки на доске — без жирной обводки стикера */
+#panel .card { border-radius: 8px; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 10px 18px -8px rgba(0, 0, 0, 0.6); }
+#panel .card.can-merge, #panel .pet.can-merge { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(255, 216, 107, 0.7); }
+
+/* вкладки — деревянная полка под доской */
+.tabs {
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, var(--wood), var(--wood-2) 70%, var(--wood-dk));
+  box-shadow: 0 -3px 0 var(--wood-dk);
+}
+.tabs button { color: rgba(255, 244, 220, 0.78); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); }
+.tabs .ico { filter: grayscale(0.25) brightness(0.95); }
+.tabs button[aria-selected='true'] {
+  color: var(--plum); background: var(--cream); text-shadow: none; border-radius: 6px;
+  transform: translateY(-3px) rotate(-1.5deg); box-shadow: 0 3px 0 var(--wood-dk), 0 6px 10px -4px rgba(0, 0, 0, 0.5);
+}
+
+/* вместо красного «!» — тихая точка; цифры остаются, но без пульсации */
+.badge { animation: none; }
+.badge.dot { min-width: 12px; width: 12px; height: 12px; padding: 0; top: -3px; right: -3px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--plum); }
+.tabs .badge.dot { top: 0; right: 18%; }
+
+/* боковые кнопки: одна аккуратная колонка справа, меньше и спокойнее */
+.side { gap: 9px; }
+.side-btn { width: 54px; padding: 5px 2px 4px; border-radius: 12px; box-shadow: 0 0 0 2px var(--plum), 0 3px 0 2px var(--plum-0); }
+.side-btn .ico { width: 28px; height: 28px; }
+.side-btn:active { box-shadow: 0 0 0 2px var(--plum), 0 1px 0 2px var(--plum-0); }
+.side-btn.ad::before { width: 17px; height: 17px; top: -6px; left: -6px; font-size: 7px; }
+@media not all and (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  .side-btn { width: 50px; }
+  .side-btn .ico { width: 26px; height: 26px; }
+  .side-btn span { font-size: 8.5px; }
+}
+/* мало места по высоте (телефон боком): лишние кнопки уходят во второй столбик левее */
+.side { flex-wrap: wrap-reverse; align-content: flex-start; max-height: calc(100% - var(--side-top, 132px) - 64px); }
+
+/* полоса цели на телефоне — слева, чтобы не лезть под колонку кнопок; час пик — над ней */
+@media not all and (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  .goal { left: 10px; right: 70px; transform: none; width: auto; max-width: none; }
+  .goal.done { animation: goalDoneL 0.6s cubic-bezier(.2, 1.4, .4, 1); }
+  .goal .goal-bar { width: 100%; }
+  .goal-in { flex: 1; }
+}
+@keyframes goalDoneL { 35% { transform: scale(1.06); } }
+.rush { bottom: 62px; }
+/* незнакомые брейнроты — силуэты, обведённые мелом */
+#panel .pet.unknown { background: transparent; box-shadow: inset 0 0 0 2px var(--chalk-line); border-radius: 10px; }
+#panel .pet.unknown img { opacity: 0.38; }
+/* подсказки на доске — листок, приколотый кнопкой */
+#panel .banner { position: relative; border-radius: 6px; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 10px 18px -8px rgba(0, 0, 0, 0.6); transform: rotate(-0.6deg); }
+#panel .banner::before { content: ''; position: absolute; top: -5px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--tomato); box-shadow: 0 2px 0 var(--tomato-dk); }
