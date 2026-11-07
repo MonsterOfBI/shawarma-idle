@@ -3,6 +3,7 @@
 // Обычный HTML и CSS: так проще делать прокрутку и раскладку под телефон и компьютер.
 
 import { isUnlocked, type Feature } from './core/unlocks';
+import { GOAL_BOX_EVERY, goalProgress, goalsOn } from './core/goals';
 import { ACHIEVEMENTS, ACHIEVEMENT_BONUS } from './core/achievements';
 import { DAILY, canClaimDaily, dayKey, nextDailyIndex } from './core/daily';
 import { WEEKLY_DAYS, canClaimWeekly, weekStart, weekday } from './core/weekly';
@@ -262,6 +263,7 @@ export class Ui {
     side('#boost', 'x2', t('sideBoost'), () => actions.boost());
     side('#btn-adbox', 'goldcrate', t('sideBox'), () => actions.adBox());
     side('#btn-move', 'truck', t('sideMove'), () => this.showTab('move'));
+    $('#goal').addEventListener('click', () => this.goalClick());
 
     // улучшения
     $('#h-upgrades').textContent = t('hUpgrades');
@@ -491,6 +493,7 @@ export class Ui {
 
     this.renderBuffs(s, now);
     this.renderHeat(s, now);
+    this.renderGoal(s);
     this.renderSide(s, now);
     this.renderBadges(s, now);
 
@@ -600,6 +603,54 @@ export class Ui {
     f.classList.toggle('down', down);
     f.style.left = `${Math.round(x)}px`;
     f.style.top = `${Math.round(y)}px`;
+  }
+
+  // «Следующая цель» внизу улицы. Пока палец-подсказка ведёт новичка, табличка спрятана.
+  private goalKey = '';
+  private renderGoal(s: GameState) {
+    const box = $<HTMLButtonElement>('#goal');
+    const g = s.goal;
+    box.hidden = !g || !goalsOn(s) || !$('#hint').hidden;
+    if (box.hidden || !g) return;
+    const name = g.id ? t(`up_${g.id}`) : '';
+    let text = '';
+    if (g.kind === 'buy') text = t('goal_buy', name);
+    else if (g.kind === 'level') text = `${t('goal_level', name)} · ${s.levels[g.id ?? ''] ?? 0}/${g.target}`;
+    else if (g.kind === 'earn') text = t('goal_earn', `${fmt(Math.max(0, g.target - s.runEarned))} ₽`);
+    else text = t(`goal_${g.kind}`);
+    const ico = g.kind === 'buy' || g.kind === 'level' ? 'up' : g.kind === 'box' ? 'crate' : g.kind === 'move' ? 'truck' : g.kind === 'hot' ? 'frenzy' : 'coin';
+    const key = `${g.kind}:${g.id ?? ''}:${g.target}:${s.goalsDone}`;
+    if (key !== this.goalKey) {
+      this.goalKey = key;
+      (box.querySelector('.ico') as HTMLElement).innerHTML = ui(ico);
+      const box5 = (s.goalsDone + 1) % GOAL_BOX_EVERY === 0 && (s.location > 0 || s.stars > 0);
+      (box.querySelector('em') as HTMLElement).textContent = box5 ? t('goalBox') : t('goalTip');
+    }
+    const b = box.querySelector('b') as HTMLElement;
+    if (b.textContent !== text) b.textContent = text;
+    (box.querySelector('.goal-bar i') as HTMLElement).style.transform = `scaleX(${goalProgress(s, g).toFixed(3)})`;
+  }
+
+  // Цель выполнена: табличка подпрыгивает, всплывают чаевые.
+  goalDone(money: number) {
+    const box = $('#goal');
+    box.classList.remove('done');
+    void box.offsetWidth;
+    box.classList.add('done');
+    this.toast(t('goalDone', `${fmt(money)} ₽`), 'money');
+  }
+
+  // Нажатие на цель ведёт туда, где её выполнить.
+  private goalClick() {
+    const g = this.lastState?.goal;
+    if (!g) return;
+    if (g.kind === 'buy' || g.kind === 'level') {
+      this.showTab('upgrades');
+      const row = this.rows.get(g.id ?? '')?.root;
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      row?.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.04)' }, { transform: 'scale(1)' }], { duration: 400 });
+    } else if (g.kind === 'box') this.showTab('pets');
+    else if (g.kind === 'move') this.showTab('move');
   }
 
   // Шкала «Жаркой смены» под доходом: видна, как только игрок начал тапать.

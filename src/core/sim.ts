@@ -13,6 +13,7 @@ import { UPGRADES } from './upgrades';
 import * as PETS from './pets';
 import { ensureQuests, claimQuest, questDone } from './quests';
 import { claimDaily, dayKey } from './daily';
+import { checkGoal } from './goals';
 
 export interface Profile {
   tps: number; // тапов в секунду
@@ -89,7 +90,7 @@ export function simulate(p: Profile, palaceStars = 3, seed = 987654321, probe?: 
   const rand = () => (rs = (Math.imul(rs, 1103515245) + 12345) >>> 0) / 4294967296;
   let s: GameState = { ...E.newGame(START), lastSeen: START };
   s = ensureQuests(s, START, rand);
-  const src = { taps: 0, passive: 0, checks: 0, golden: 0, quests: 0, daily: 0, offline: 0 };
+  const src = { taps: 0, passive: 0, checks: 0, golden: 0, quests: 0, goals: 0, daily: 0, offline: 0 };
   const moves: Move[] = [];
   const earn = (k: keyof typeof src, f: () => GameState) => {
     const before = s.lifetimeEarned;
@@ -192,6 +193,13 @@ export function simulate(p: Profile, palaceStars = 3, seed = 987654321, probe?: 
       }
       break;
     }
+    // «Следующая цель»: чаевые и каждый пятый раз ящик
+    const g = checkGoal(s, now);
+    if (g.done) {
+      src.goals += g.done.money;
+      s = g.state;
+      if (g.done.box) open('common');
+    } else s = g.state;
     if (E.canRelocate(s)) {
       const fast = E.fastMove(s, now);
       s = E.relocate(s, now);

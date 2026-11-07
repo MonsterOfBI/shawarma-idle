@@ -114,6 +114,29 @@ export interface GameState {
   runStart: number; // мс; когда начался путь на текущей точке (для рекорда скорости переезда)
   moveBest: Record<string, number>; // лучшее время каждого переезда в мс, ключ — moveKey
   weekly: Weekly; // недельный сундук: в какие дни этой недели игрок заходил (версия 2.18)
+  goal: Goal | null; // «Следующая цель» внизу улицы (версия 2.21, логика в goals.ts)
+  goalsDone: number;
+}
+
+// «Следующая цель»: одна короткая цель на 30–90 секунд. Тип здесь, чтобы GameState не зависел от goals.ts.
+export type GoalKind = 'buy' | 'level' | 'box' | 'hot' | 'earn' | 'move';
+export const GOAL_KINDS: readonly GoalKind[] = ['buy', 'level', 'box', 'hot', 'earn', 'move'];
+export interface Goal {
+  kind: GoalKind;
+  id?: string; // улучшение для buy и level
+  target: number; // уровень, сумма заработанного на точке (runEarned) или 1
+  start: number; // с чего начали: уровень или runEarned
+  at: number; // точка × 1000 + звёзды в момент выдачи; после переезда цель меняется
+}
+export function validGoal(g: unknown): g is Goal {
+  const x = g as Goal;
+  return (
+    !!x &&
+    typeof x === 'object' &&
+    GOAL_KINDS.includes(x.kind) &&
+    [x.target, x.start, x.at].every((v) => typeof v === 'number' && Number.isFinite(v)) &&
+    (x.id === undefined || (typeof x.id === 'string' && !!UPGRADE_BY_ID[x.id]))
+  );
 }
 
 export type QuestKind = 'taps' | 'buy' | 'golden' | 'box' | 'earn' | 'combo';
@@ -169,6 +192,8 @@ export function newGame(now: number): GameState {
     runStart: now,
     moveBest: {},
     weekly: emptyWeekly(),
+    goal: null,
+    goalsDone: 0,
     sold: 0,
     week: { id: weekId(now), sold: 0 },
   };
@@ -238,6 +263,8 @@ export function normalize(raw: unknown, now: number): GameState {
     quests: Array.isArray(r.quests) ? r.quests.filter(validQuest) : [],
     questWait: Array.isArray(r.questWait) ? r.questWait.filter((x: unknown) => typeof x === 'number' && Number.isFinite(x)).slice(0, 3) : [],
     questsDone: Math.floor(num(r.questsDone, 0)),
+    goal: validGoal(r.goal) ? r.goal : null,
+    goalsDone: Math.floor(num(r.goalsDone, 0)),
     merges: Math.floor(num(r.merges, 0)),
     // до версии 2.9 продажи не считали: начинаем с числа тапов
     sold: Math.floor(num(r.sold, num(r.taps, 0))),
