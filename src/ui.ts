@@ -717,7 +717,8 @@ export class Ui {
     // новичок до первой покупки учится тапать: ящик не мигает и не зовёт значком
     ab.classList.toggle('ready', adReady && !isNewbie(s));
     ab.classList.toggle('wait', !adReady);
-    (ab.querySelector('.badge') as HTMLElement).hidden = !adReady || isNewbie(s);
+    // ящик за рекламу и так покачивается, когда готов: без лишнего значка
+    (ab.querySelector('.badge') as HTMLElement).hidden = true;
     $('#adbox-label').textContent = adReady ? t('sideBox') : adBoxDone(s, now) ? t('boxTomorrow') : formatDuration((s.adBoxAt - now) / 1000, lang());
 
     // переезд готов: на улице появляется кнопка с грузовиком, вкладка «Переезд» качается
@@ -730,11 +731,13 @@ export class Ui {
     const set = (tab: Tab, text: string) => {
       const b = $(`#tab-${tab}`).querySelector('.badge') as HTMLElement;
       b.hidden = !text || this.tab === tab;
-      b.textContent = text;
+      // v2.22: вместо красного «!» — маленькая точка, цифры остаются только у заданий
+      b.classList.toggle('dot', text === '!');
+      b.textContent = text === '!' ? '' : text;
     };
-    const canUp = UPGRADES.some((u) => isVisible(s, u) && !isMaxed(s, u) && canBuyN(s, u.id, 1));
-    set('upgrades', canUp ? '!' : '');
-    set('pets', !isNewbie(s) && (canBuyBox(s, now) || adBoxReady(s, now) || anyMerge(s)) ? '!' : '');
+    // что купить, подсказывает полоса цели внизу улицы; на вкладке улучшений значок не нужен
+    set('upgrades', '');
+    set('pets', !isNewbie(s) && (canBuyBox(s, now) || anyMerge(s)) ? '!' : '');
     const n = s.quests.filter((q) => questDone(s, q)).length + (canClaimDaily(s, today(), now) ? 1 : 0) + (canClaimWeekly(s, today()) ? 1 : 0);
     set('quests', n ? String(n) : '');
     set('move', canRelocate(s) ? '!' : '');

@@ -29,14 +29,13 @@
           <div id="buffs" class="buffs"></div>
         </header>
 
-        <nav class="side side-left">
-          <button id="btn-daily" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden>!</b></button>
-          <button id="btn-quests" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
-          <button id="btn-move" class="side-btn move-call" type="button" hidden><i class="ico"></i><span></span><b class="badge">!</b></button>
-        </nav>
+        <!-- v2.22: все боковые кнопки одной колонкой справа, улица слева свободна -->
         <nav class="side side-right">
+          <button id="btn-move" class="side-btn move-call" type="button" hidden><i class="ico"></i><span></span></button>
+          <button id="btn-daily" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge dot" hidden></b></button>
+          <button id="btn-quests" class="side-btn" type="button"><i class="ico"></i><span></span><b class="badge" hidden></b></button>
           <button id="boost" class="side-btn ad" type="button"><i class="ico"></i><span id="boost-label"></span></button>
-          <button id="btn-adbox" class="side-btn ad gold" type="button"><i class="ico"></i><span id="adbox-label"></span><b class="badge" hidden>!</b></button>
+          <button id="btn-adbox" class="side-btn ad gold" type="button"><i class="ico"></i><span id="adbox-label"></span><b class="badge" hidden></b></button>
         </nav>
         <div id="rush" class="rush" hidden><b id="rush-title"></b><span id="rush-text"></span></div>
         <div id="hint" class="hint"></div>
