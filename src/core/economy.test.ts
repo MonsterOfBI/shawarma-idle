@@ -208,7 +208,7 @@ describe('баланс', () => {
   });
 
   it('ни один источник денег, кроме тапов, пассива и чеков, не даёт больше 20 %', () => {
-    for (const k of ['golden', 'quests', 'daily', 'offline']) expect(run.share[k]).toBeLessThanOrEqual(20);
+    for (const k of ['golden', 'quests', 'goals', 'daily', 'offline']) expect(run.share[k]).toBeLessThanOrEqual(20);
   });
 
   it('комбо даёт от ×1 до ×2 к тапу', () => {

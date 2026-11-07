@@ -66,6 +66,7 @@ import {
 } from './core/economy';
 import { unlockAchievements } from './core/achievements';
 import { checkUnlocks } from './core/unlocks';
+import { checkGoal } from './core/goals';
 import { formatDuration, formatNumber } from './core/format';
 import { LOCATIONS } from './core/locations';
 import { UPGRADES, UPGRADE_BY_ID } from './core/upgrades';
@@ -242,6 +243,14 @@ export class Game {
       this.state = opened.state;
       this.ui.unlocked(opened.fresh);
       sfx.unlock();
+    }
+    // «Следующая цель»: выполнил — чаевые, каждая пятая ещё и ящик
+    const goal = checkGoal(this.state, now);
+    this.state = goal.state;
+    if (goal.done) {
+      sfx.claim();
+      this.ui.goalDone(goal.done.money);
+      if (goal.done.box) void this.openBox('common', 'free');
     }
     this.events(now);
     // «Жаркая смена» кончилась — музыка в обычном темпе; пока идёт — над ларьком летят искры
